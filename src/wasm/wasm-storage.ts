@@ -29,18 +29,32 @@ export interface PluginStoragePaths {
 
 /**
  * Get storage paths for a WASM plugin
+ *
+ * @param configPath - Server config directory path
+ * @param pluginId - Plugin ID (e.g., "hello-assemblyscript") - used for config file to match regular plugins
+ * @param packageName - NPM package name (e.g., "@signalk/hello-assemblyscript") - used for VFS directory
  */
 export function getPluginStoragePaths(
   configPath: string,
-  pluginId: string
+  pluginId: string,
+  packageName: string
 ): PluginStoragePaths {
-  const pluginDataRoot = path.join(configPath, 'plugin-config-data', pluginId)
+  // Config file goes directly in plugin-config-data/ like regular plugins
+  const configDataPath = path.join(configPath, 'plugin-config-data')
+
+  // Use plugin ID for config file (matches regular Node.js plugins)
+  const configFile = path.join(configDataPath, `${pluginId}.json`)
+
+  // Use sanitized package name for VFS directory (for isolation)
+  // @signalk/hello-assemblyscript -> @signalk-hello-assemblyscript
+  const sanitizedPackageName = packageName.replace(/\//g, '-')
+  const pluginDataRoot = path.join(configDataPath, sanitizedPackageName)
   const vfsRoot = path.join(pluginDataRoot, 'vfs')
 
   return {
     pluginDataRoot,
-    configFile: path.join(pluginDataRoot, `${pluginId}.json`),
-    vfsRoot,
+    configFile, // e.g., ~/.signalk/plugin-config-data/hello-assemblyscript.json (matches regular plugins)
+    vfsRoot,    // e.g., ~/.signalk/plugin-config-data/@signalk-hello-assemblyscript/vfs/ (isolated by package)
     vfsData: path.join(vfsRoot, 'data'),
     vfsConfig: path.join(vfsRoot, 'config'),
     vfsTmp: path.join(vfsRoot, 'tmp')

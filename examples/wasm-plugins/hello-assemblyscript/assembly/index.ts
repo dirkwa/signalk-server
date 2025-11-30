@@ -17,7 +17,7 @@ import {
   setError,
   debug,
   getCurrentTimestamp
-} from '@signalk/assemblyscript-plugin-sdk'
+} from '../../../../packages/assemblyscript-plugin-sdk/assembly/index'
 
 /**
  * Plugin configuration interface
@@ -168,9 +168,10 @@ export function plugin_schema(): string {
 
 export function plugin_start(configPtr: usize, configLen: usize): i32 {
   // Read config string from memory
-  const configBytes = new Uint8Array(configLen)
-  for (let i = 0; i < configLen; i++) {
-    configBytes[i] = load<u8>(configPtr + i)
+  const len = i32(configLen)
+  const configBytes = new Uint8Array(len)
+  for (let i: i32 = 0; i < len; i++) {
+    configBytes[i] = load<u8>(configPtr + <usize>i)
   }
   const configJson = String.UTF8.decode(configBytes.buffer)
 

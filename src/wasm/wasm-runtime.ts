@@ -7,7 +7,16 @@
 
 /// <reference lib="webworker" />
 
-import { WASI } from '@wasmer/wasi'
+// Try to use native Node.js WASI first, fall back to @wasmer/wasi
+let WASI: any
+try {
+  // Node.js 20+ has built-in WASI support
+  WASI = require('node:wasi').WASI
+} catch {
+  // Fall back to @wasmer/wasi for older Node versions
+  WASI = require('@wasmer/wasi').WASI
+}
+
 import * as fs from 'fs'
 import * as path from 'path'
 import Debug from 'debug'
@@ -28,7 +37,7 @@ export interface WasmPluginInstance {
   wasmPath: string
   vfsRoot: string
   capabilities: WasmCapabilities
-  wasi: WASI
+  wasi: any  // WASI type varies between Node.js and @wasmer/wasi
   module: WebAssembly.Module
   instance: WebAssembly.Instance
   exports: {
@@ -71,7 +80,8 @@ export class WasmRuntime {
     pluginId: string,
     wasmPath: string,
     vfsRoot: string,
-    capabilities: WasmCapabilities
+    capabilities: WasmCapabilities,
+    app?: any
   ): Promise<WasmPluginInstance> {
     if (!this.enabled) {
       throw new Error('WASM support is disabled')
@@ -86,7 +96,9 @@ export class WasmRuntime {
       }
 
       // Create WASI instance with VFS isolation
+      debug(`Creating WASI instance for ${pluginId}`)
       const wasi = new WASI({
+        version: 'preview1',
         env: {
           PLUGIN_ID: pluginId
         },
@@ -96,29 +108,198 @@ export class WasmRuntime {
         }
         // No network access by default
       })
+      debug(`WASI instance created`)
 
       // Load WASM module
+      debug(`Reading WASM file: ${wasmPath}`)
       const wasmBuffer = fs.readFileSync(wasmPath)
-      const module = await WebAssembly.compile(wasmBuffer)
+      debug(`WASM file size: ${wasmBuffer.length} bytes`)
+
+      debug(`Compiling WASM module...`)
+      let module: WebAssembly.Module
+      try {
+        module = await WebAssembly.compile(wasmBuffer)
+        debug(`WASM module compiled successfully`)
+      } catch (compileError) {
+        debug(`WASM compilation failed: ${compileError}`)
+        throw compileError
+      }
+
+      // Inspect module imports to determine what's needed
+      const imports = WebAssembly.Module.imports(module)
+      debug(`Module has ${imports.length} imports`)
+      debug(`Module imports: ${JSON.stringify(imports.map(i => `${i.module}.${i.name}`).slice(0, 20))}`)
 
       // Instantiate with WASI imports
       // Note: In Phase 1, we're using basic WASI without full WIT bindings
       // Full WIT integration will be added as we build out the FFI layer
-      const wasiImports = wasi.getImports(module) as any
+
+      // Node.js WASI uses getImportObject(), @wasmer/wasi uses getImports()
+      const wasiImports = (wasi.getImportObject ? wasi.getImportObject() : wasi.getImports(module)) as any
+      debug(`Got WASI imports`)
+
+      // Helper to read UTF-8 buffers from AssemblyScript - will be set after instance creation
+      let memoryRef: WebAssembly.Memory | null = null
+
+      const readUtf8String = (ptr: number, len: number): string => {
+        if (!memoryRef) {
+          throw new Error('AssemblyScript module memory not initialized')
+        }
+
+        // The AssemblyScript SDK passes UTF-8 encoded ArrayBuffers to our FFI functions
+        // Format: ptr points to UTF-8 bytes, len is the byte length
+        const bytes = new Uint8Array(memoryRef.buffer, ptr, len)
+        const decoder = new TextDecoder('utf-8')
+        return decoder.decode(bytes)
+      }
+
+      const readAssemblyScriptString = (ptr: number): string => {
+        if (!memoryRef) {
+          throw new Error('AssemblyScript module memory not initialized')
+        }
+
+        // For plugin metadata functions (id, name, schema), the plugin returns
+        // AssemblyScript String objects with this layout:
+        // ptr - 8: rtSize (4 bytes) - total allocation size
+        // ptr - 4: length (4 bytes) - string content length IN BYTES
+        // ptr: string data as UTF-16LE
+
+        const view = new DataView(memoryRef.buffer)
+        const lengthInBytes = view.getUint32(ptr - 4, true)
+
+        const bytes = new Uint8Array(memoryRef.buffer, ptr, lengthInBytes)
+        const decoder = new TextDecoder('utf-16le')
+        return decoder.decode(bytes)
+      }
+
+      // Create env imports - our Signal K API functions
+      const envImports: any = {
+        abort: (msg: number, file: number, line: number, column: number) => {
+          debug(`WASM abort called: ${msg} at ${file}:${line}:${column}`)
+        },
+        seed: () => {
+          return Date.now() * Math.random()
+        },
+        'console.log': (ptr: number, len: number) => {
+          try {
+            const message = readUtf8String(ptr, len)
+            debug(`[${pluginId}] ${message}`)
+          } catch (error) {
+            debug(`WASM console.log error: ${error}`)
+          }
+        },
+        // Signal K API functions that the plugin imports
+        sk_debug: (ptr: number, len: number) => {
+          try {
+            const message = readUtf8String(ptr, len)
+            debug(`[${pluginId}] ${message}`)
+          } catch (error) {
+            debug(`Plugin debug error: ${error}`)
+          }
+        },
+        sk_set_status: (ptr: number, len: number) => {
+          try {
+            const message = readUtf8String(ptr, len)
+            debug(`[${pluginId}] Status: ${message}`)
+          } catch (error) {
+            debug(`Plugin set status error: ${error}`)
+          }
+        },
+        sk_handle_message: (ptr: number, len: number) => {
+          try {
+            const deltaJson = readUtf8String(ptr, len)
+            debug(`[${pluginId}] Emitting delta: ${deltaJson.substring(0, 200)}...`)
+
+            // Parse and send delta to Signal K server if app is available
+            if (app && app.handleMessage) {
+              try {
+                const delta = JSON.parse(deltaJson)
+                app.handleMessage(pluginId, delta)
+                debug(`[${pluginId}] Delta processed by server`)
+              } catch (parseError) {
+                debug(`[${pluginId}] Failed to parse/process delta: ${parseError}`)
+              }
+            } else {
+              debug(`[${pluginId}] Warning: app.handleMessage not available, delta not processed`)
+            }
+          } catch (error) {
+            debug(`Plugin handle message error: ${error}`)
+          }
+        }
+      }
 
       const instance = await WebAssembly.instantiate(module, {
-        wasi_snapshot_preview1: wasiImports,
-        env: {
-          // Placeholder for future FFI imports
-          // These will be populated by wasm-serverapi.ts
-        }
+        wasi_snapshot_preview1: wasiImports.wasi_snapshot_preview1 || wasiImports,
+        env: envImports
       } as any)
+      debug(`WASM instance created`)
 
-      // Start WASI
-      wasi.start(instance)
+      // Extract raw exports first to check plugin type
+      const rawExports = instance.exports as any
 
-      // Extract exports (will be properly typed once WIT bindings are in place)
-      const exports = instance.exports as any
+      // Set memory reference for string reading
+      if (rawExports.memory) {
+        memoryRef = rawExports.memory as WebAssembly.Memory
+      }
+
+      // Detect plugin type and initialize accordingly
+      // Rust plugins have _start function, AssemblyScript plugins don't
+      const isRustPlugin = !!rawExports._start
+      const isAssemblyScriptPlugin = !!rawExports.plugin_id
+
+      if (isRustPlugin) {
+        // Rust plugin - start WASI
+        debug(`Detected Rust plugin: ${pluginId}`)
+        wasi.start(instance)
+      } else if (isAssemblyScriptPlugin) {
+        // AssemblyScript plugin - no _start needed, just use exports directly
+        debug(`Detected AssemblyScript plugin: ${pluginId}`)
+        // AssemblyScript plugins don't need WASI initialization
+        // They export functions directly that we can call
+      } else {
+        throw new Error(`Unknown WASM plugin format for ${pluginId}`)
+      }
+
+      // Create normalized export interface
+      // Maps both Rust-style (id, name, schema) and AssemblyScript-style (plugin_id, plugin_name, plugin_schema)
+
+      // Wrap functions based on plugin type
+      let idFunc: () => string
+      let nameFunc: () => string
+      let schemaFunc: () => string
+      let startFunc: (config: string) => number
+      let stopFunc: () => number
+
+      if (isAssemblyScriptPlugin) {
+        // AssemblyScript functions return pointers to strings in memory
+        idFunc = () => readAssemblyScriptString(rawExports.plugin_id())
+        nameFunc = () => readAssemblyScriptString(rawExports.plugin_name())
+        schemaFunc = () => readAssemblyScriptString(rawExports.plugin_schema())
+
+        // start/stop functions work differently - they take/return numbers
+        startFunc = (config: string) => {
+          // For now, we need to pass config as a pointer too
+          // This is a TODO - implement proper string passing
+          return rawExports.plugin_start(0, 0)
+        }
+        stopFunc = () => rawExports.plugin_stop()
+      } else {
+        // Rust plugins return JavaScript strings directly
+        idFunc = rawExports.id
+        nameFunc = rawExports.name
+        schemaFunc = rawExports.schema
+        startFunc = rawExports.start
+        stopFunc = rawExports.stop
+      }
+
+      const exports = {
+        id: idFunc,
+        name: nameFunc,
+        schema: schemaFunc,
+        start: startFunc,
+        stop: stopFunc,
+        memory: rawExports.memory
+      }
 
       const pluginInstance: WasmPluginInstance = {
         pluginId,

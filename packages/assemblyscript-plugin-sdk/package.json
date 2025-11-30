@@ -4,6 +4,12 @@
   "description": "AssemblyScript SDK for developing Signal K WASM plugins",
   "main": "index.js",
   "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./assembly/index.ts",
+      "types": "./index.d.ts"
+    }
+  },
   "keywords": [
     "signalk",
     "assemblyscript",

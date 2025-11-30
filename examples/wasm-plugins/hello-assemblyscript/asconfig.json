@@ -1,5 +1,4 @@
 {
-  "extends": "../../../packages/assemblyscript-plugin-sdk/asconfig.json",
   "targets": {
     "release": {
       "outFile": "plugin.wasm",
@@ -8,17 +7,16 @@
       "shrinkLevel": 2,
       "converge": true,
       "noAssert": true,
-      "runtime": "stub"
+      "runtime": "incremental"
     },
     "debug": {
       "outFile": "build/plugin.debug.wasm",
       "sourceMap": true,
       "debug": true,
-      "runtime": "stub"
+      "runtime": "incremental"
     }
   },
   "options": {
-    "bindings": "esm",
-    "exportRuntime": false
+    "bindings": "esm"
   }
 }
