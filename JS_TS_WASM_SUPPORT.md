@@ -580,26 +580,133 @@ export class MyPlugin extends Plugin {
 - **Demonstrates value**: WASM benefits without Rust learning curve
 - **Community growth**: More contributors
 
+## Phase 2: Network Capability with as-fetch
+
+### HTTP Client Support
+
+When implementing the `network` capability in Phase 2, integrate **[as-fetch](https://github.com/JairusSW/as-fetch)** for HTTP requests:
+
+**Library**: `as-fetch` - Fetch API for AssemblyScript
+**License**: MIT
+**Features**:
+- ✅ Async/sync fetch modes
+- ✅ Standard Fetch API (familiar to JS devs)
+- ✅ GET/POST/PUT/DELETE support
+- ✅ Response.text(), headers, status codes
+- ✅ CORS support
+
+**Integration Steps:**
+
+1. **Add to SDK dependencies**
+   ```json
+   {
+     "dependencies": {
+       "@signalk/assemblyscript-plugin-sdk": "^0.1.0",
+       "as-fetch": "^0.5.0"
+     }
+   }
+   ```
+
+2. **Add network API wrapper**
+   ```typescript
+   // assembly/network.ts
+   import { fetch } from 'as-fetch'
+
+   export function httpGet(url: string): string | null {
+     if (!hasNetworkCapability()) {
+       return null
+     }
+
+     const response = fetch(url)
+     if (response.status == 200) {
+       return response.text()
+     }
+     return null
+   }
+
+   export function httpPost(url: string, body: string): i32 {
+     if (!hasNetworkCapability()) {
+       return -1 // No permission
+     }
+
+     const response = fetch(url, {
+       method: 'POST',
+       body: body,
+       headers: {
+         'Content-Type': 'application/json'
+       }
+     })
+     return response.status
+   }
+   ```
+
+3. **Example: Weather plugin**
+   ```typescript
+   import { Plugin } from '@signalk/assemblyscript-plugin-sdk'
+   import { httpGet } from '@signalk/assemblyscript-plugin-sdk/network'
+
+   export class WeatherPlugin extends Plugin {
+     start(config: string): i32 {
+       // Fetch weather from OpenWeatherMap
+       const apiKey = '...'
+       const url = `https://api.openweathermap.org/data/2.5/weather?q=Helsinki&appid=${apiKey}`
+
+       const weatherJson = httpGet(url)
+       if (weatherJson !== null) {
+         // Parse and emit as Signal K delta
+         emitWeatherDelta(weatherJson)
+       }
+       return 0
+     }
+   }
+   ```
+
+**Requirements:**
+- Plugin must declare `"network": true` in wasmCapabilities
+- Server must provide fetch implementation via WASI or ESM bindings
+- Rate limiting and domain restrictions enforced by server
+
+**Benefits:**
+- Familiar Fetch API for JS/TS developers
+- No need to learn low-level HTTP in Rust
+- Easier to port Node.js plugins that use fetch/axios
+
 ## Next Steps
 
-1. **Start SDK Development**
-   - Create `packages/assemblyscript-plugin-sdk`
-   - Implement core bindings
+### Phase 1A (Complete ✅)
+
+1. ✅ **SDK Development**
+   - Created `packages/assemblyscript-plugin-sdk`
+   - Implemented core bindings
    - Set up build system
 
-2. **Update Documentation**
-   - Add AssemblyScript section to dev guide
-   - Create migration examples
-   - Update README
+2. ✅ **Documentation**
+   - Added AssemblyScript section to dev guide
+   - Created migration examples
+   - Updated README
 
-3. **Create Example**
-   - Build hello-world in AssemblyScript
-   - Test with server
-   - Verify hot-reload
+3. ✅ **Example**
+   - Built hello-world in AssemblyScript
+   - Ready for testing with server
+   - Hot-reload infrastructure ready
 
-4. **Enhance CLI**
+4. ⏳ **CLI Enhancement** (Future)
    - Add `--language` flag
    - AssemblyScript template
    - Build script generation
 
-Ready to implement AssemblyScript support alongside Rust?
+### Phase 2 (Planned)
+
+1. **Network Capability**
+   - Integrate `as-fetch` for HTTP client
+   - Add network API to SDK
+   - Create weather plugin example
+   - Implement rate limiting
+
+2. **Extended APIs**
+   - PUT handlers
+   - REST endpoint registration
+   - Resource providers
+   - Autopilot providers
+
+Ready to test Phase 1A AssemblyScript support!
