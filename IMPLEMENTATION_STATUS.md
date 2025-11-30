@@ -8,7 +8,36 @@
 ## Phase 1A: AssemblyScript Support - ✅ COMPLETE
 
 **Timeline**: December 2025
-**Status**: AssemblyScript SDK and tooling complete
+**Status**: AssemblyScript SDK and tooling complete, first plugin successfully deployed and running on Raspberry Pi 5
+
+---
+
+## Recent Achievements (Latest)
+
+### 🎉 First AssemblyScript WASM Plugin Running in Production!
+
+**Date**: December 2025
+
+The hello-assemblyscript example plugin has been successfully:
+- ✅ Built with AssemblyScript compiler (13 KB binary)
+- ✅ Loaded by Signal K Server 3.0-alpha.2
+- ✅ Deployed to Raspberry Pi 5 (ARM64 architecture)
+- ✅ Registered and configured via Web UI
+- ✅ Debug logging working correctly
+- ✅ Configuration save/load functional
+- ✅ Plugin metadata displayed properly
+
+**Key Technical Milestones:**
+1. **ARM Compatibility**: Resolved @wasmer/wasi incompatibility by switching to Node.js native WASI
+2. **AssemblyScript Runtime**: Successfully using "incremental" runtime for full functionality
+3. **String Memory Reading**: Implemented UTF-16LE string decoding from WASM memory
+4. **Web UI Integration**: Added REST API endpoints for plugin configuration
+5. **Debug Logging**: Plugin messages now properly routed to Node.js debug system
+
+**Binary Sizes Achieved:**
+- AssemblyScript hello-world: 13.2 KB
+- Includes full Signal K SDK and runtime helpers
+- 4-15x smaller than equivalent Rust plugins
 
 ---
 
@@ -41,15 +70,18 @@ Defines the type-safe API contract between WASM plugins and Signal K server:
 
 ### 3. WASM Runtime Management ✅
 
-**File**: [src/wasm/wasm-runtime.ts](../src/wasm/wasm-runtime.ts) (~300 lines)
+**File**: [src/wasm/wasm-runtime.ts](../src/wasm/wasm-runtime.ts) (~350 lines)
 
 **Features:**
-- Wasmer runtime initialization
+- Node.js native WASI support (with @wasmer/wasi fallback)
+- Dual-mode plugin detection (Rust vs AssemblyScript)
 - WASM module loading and compilation
 - Instance lifecycle management (load, unload, reload)
+- AssemblyScript string memory reading (UTF-16LE)
 - Capability-based security enforcement
 - VFS isolation configuration
 - Singleton runtime pattern
+- Debug logging with plugin name prefix
 - Graceful shutdown
 
 **Key Functions:**
@@ -90,16 +122,17 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 
 ### 5. Plugin Loader with Hot-Reload ✅
 
-**File**: [src/wasm/wasm-loader.ts](../src/wasm/wasm-loader.ts) (~400 lines)
+**File**: [src/wasm/wasm-loader.ts](../src/wasm/wasm-loader.ts) (~550 lines)
 
 **Features:**
 - Plugin registration and discovery
-- Type detection (Node.js vs WASM)
+- Type detection (Node.js vs WASM, Rust vs AssemblyScript)
 - Lifecycle management (start, stop, reload)
 - Hot-reload without server restart
 - Automatic crash recovery with exponential backoff
-- Configuration updates
+- Configuration updates via REST API
 - Enable/disable management
+- Web UI integration with keywords support
 
 **Plugin State Machine:**
 ```
@@ -276,7 +309,42 @@ TypeScript-like SDK for building WASM plugins without Rust:
 
 **Binary Size:** 3-10 KB (vs 50-200 KB for Rust)
 
-### 12. Example Plugins ✅
+### 12. Web UI Integration ✅
+
+**Files**: [src/wasm/wasm-loader.ts](../src/wasm/wasm-loader.ts)
+
+**Features:**
+- REST API endpoints for WASM plugins (`/plugins/:id/config`)
+- Plugin metadata with keywords for filtering
+- Configuration save/load via Web UI
+- Enable/disable plugins from admin interface
+- Status display in plugin list
+- Full integration with existing plugin management UI
+
+**API Endpoints:**
+- `GET /plugins/:id` - Get plugin metadata
+- `GET /plugins/:id/config` - Get plugin configuration
+- `POST /plugins/:id/config` - Save plugin configuration and restart
+
+### 13. Debug Logging Support ✅
+
+**File**: [src/wasm/wasm-runtime.ts](../src/wasm/wasm-runtime.ts)
+
+**Features:**
+- Read strings from AssemblyScript WASM memory (UTF-16LE decoding)
+- Plugin debug messages routed to Node.js debug system
+- Status messages logged with plugin name prefix
+- Delta emission logging
+- Error tracking and reporting
+- Compatible with `DEBUG=signalk:wasm:*` environment variable
+
+**API Functions Working:**
+- `sk_debug()` - Plugin debug messages
+- `sk_set_status()` - Status updates
+- `sk_handle_message()` - Delta emission logging
+- `console.log()` - Console output from AssemblyScript
+
+### 14. Example Plugins ✅
 
 **AssemblyScript Hello World**: [examples/wasm-plugins/hello-assemblyscript](../examples/wasm-plugins/hello-assemblyscript)
 
@@ -298,14 +366,14 @@ Demonstrates:
 
 ## File Summary
 
-### Core WASM Infrastructure (10 files, ~2,350 lines)
+### Core WASM Infrastructure (10 files, ~2,550 lines)
 
 | File | Lines | Purpose |
 |------|-------|---------|
 | `packages/server-api/wit/signalk.wit` | 100 | WIT interface definition |
-| `src/wasm/wasm-runtime.ts` | 300 | Runtime management |
+| `src/wasm/wasm-runtime.ts` | 350 | Runtime management + debug logging |
 | `src/wasm/wasm-storage.ts` | 200 | VFS storage layer |
-| `src/wasm/wasm-loader.ts` | 400 | Plugin loader & hot-reload |
+| `src/wasm/wasm-loader.ts` | 550 | Plugin loader + REST API + hot-reload |
 | `src/wasm/wasm-serverapi.ts` | 300 | FFI bridge |
 | `src/wasm/wasm-subscriptions.ts` | 250 | Delta subscriptions |
 | `src/wasm/index.ts` | 50 | Public API exports |
@@ -528,7 +596,12 @@ Demonstrates:
 - [x] ✅ Hot-reload working
 - [x] ✅ VFS isolation functional
 - [x] ✅ Capability system in place
-- [ ] 🔄 3+ example plugins created
+- [x] ✅ AssemblyScript SDK complete
+- [x] ✅ Web UI integration complete
+- [x] ✅ Debug logging working
+- [x] ✅ First plugin running on real hardware (Raspberry Pi 5)
+- [x] ✅ ARM architecture compatibility verified
+- [ ] 🔄 3+ example plugins created (1/3 complete)
 - [ ] 🔄 Zero Node.js plugin regressions
 - [ ] 🔄 Performance within 30% of baseline
 - [ ] 🔄 10+ developers testing
@@ -556,11 +629,11 @@ Demonstrates:
 
 ### Phase 1 Restrictions
 
-1. **Rust Only**: Other languages require additional work
-2. **Limited ServerAPI**: ~30% of full API available
-3. **No REST Endpoints**: Cannot register custom HTTP routes
-4. **No Serial Ports**: Direct hardware access not available
-5. **In-Process**: Plugins run in main process (memory shared)
+1. **Limited ServerAPI**: ~30% of full API available (read/write data, config, status)
+2. **No REST Endpoints**: Cannot register custom HTTP routes yet
+3. **No Serial Ports**: Direct hardware access not available
+4. **In-Process**: Plugins run in main process (memory shared)
+5. **No Network Access**: HTTP client not yet available (Phase 2)
 
 ### Technical Debt
 

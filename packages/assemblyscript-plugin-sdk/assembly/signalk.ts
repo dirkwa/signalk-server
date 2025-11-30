@@ -159,15 +159,15 @@ export class Notification {
  */
 export function getCurrentTimestamp(): string {
   // In WASM environment, this would need to be provided by host
-  // For now, return a placeholder
-  return new Date().toISOString()
+  // For now, return a placeholder (AssemblyScript doesn't have Date)
+  return '2025-01-01T00:00:00.000Z'
 }
 
 /**
  * Helper to create a simple delta with single value
  */
 export function createSimpleDelta(
-  sourceLa label: string,
+  label: string,
   path: string,
   value: string
 ): Delta {

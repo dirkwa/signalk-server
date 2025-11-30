@@ -72,7 +72,7 @@ export function createServerAPIBridge(
        * Read plugin configuration
        */
       readPluginOptions: (): string => {
-        const storagePaths = getPluginStoragePaths(configPath, plugin.packageName)
+        const storagePaths = getPluginStoragePaths(configPath, pluginId, plugin.packageName)
         const config = readPluginConfig(storagePaths.configFile)
         return JSON.stringify(config.configuration || {})
       },
@@ -83,7 +83,7 @@ export function createServerAPIBridge(
       savePluginOptions: (configJson: string): number => {
         try {
           const configuration = JSON.parse(configJson)
-          const storagePaths = getPluginStoragePaths(configPath, plugin.packageName)
+          const storagePaths = getPluginStoragePaths(configPath, pluginId, plugin.packageName)
           const config = {
             enabled: plugin.enabled,
             configuration

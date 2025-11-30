@@ -6,6 +6,9 @@
  */
 
 import * as path from 'path'
+import * as fs from 'fs'
+import * as express from 'express'
+import { Request, Response, Router } from 'express'
 import Debug from 'debug'
 import {
   getWasmRuntime,
@@ -18,8 +21,13 @@ import {
   readPluginConfig,
   writePluginConfig
 } from './wasm-storage'
+import { SERVERROUTESPREFIX } from '../constants'
 
 const debug = Debug('signalk:wasm:loader')
+
+function backwardsCompat(url: string) {
+  return [`${SERVERROUTESPREFIX}${url}`, url]
+}
 
 export interface WasmPluginMetadata {
   id: string
@@ -38,6 +46,8 @@ export interface WasmPlugin {
   packageName: string
   version: string
   enabled: boolean
+  keywords: string[]
+  packageLocation: string
   metadata: WasmPluginMetadata
   instance?: WasmPluginInstance
   status: 'stopped' | 'starting' | 'running' | 'error' | 'crashed'
@@ -86,28 +96,70 @@ export async function registerWasmPlugin(
       putHandlers: false
     }
 
-    // Get storage paths
-    const storagePaths = getPluginStoragePaths(configPath, packageName)
+    // Load WASM module first to get plugin ID
 
-    // Initialize VFS
-    initializePluginVfs(storagePaths)
+    // Create temporary VFS for initial load (to get plugin metadata)
+    const tempVfsRoot = path.join(configPath, 'plugin-config-data', '.temp-' + packageName.replace(/\//g, '-'))
+    if (!fs.existsSync(tempVfsRoot)) {
+      fs.mkdirSync(tempVfsRoot, { recursive: true })
+    }
 
-    // Read saved configuration
-    const savedConfig = readPluginConfig(storagePaths.configFile)
-
-    // Load WASM module to get plugin metadata
     const runtime = getWasmRuntime()
     const instance = await runtime.loadPlugin(
       packageName,
       wasmPath,
-      storagePaths.vfsRoot,
-      capabilities
+      tempVfsRoot,
+      capabilities,
+      app
     )
 
-    // Get plugin metadata from WASM exports
-    const pluginId = instance.exports.id()
-    const pluginName = instance.exports.name()
-    const schemaJson = instance.exports.schema()
+    // Get plugin metadata from WASM exports to determine plugin ID
+    let pluginId: string
+    let pluginName: string
+    let schemaJson: string
+
+    try {
+      debug(`Available exports: ${Object.keys(instance.exports).join(', ')}`)
+      debug(`Calling id() for ${packageName}`)
+      pluginId = instance.exports.id()
+      debug(`Got id: ${pluginId}`)
+
+      debug(`Calling name() for ${packageName}`)
+      pluginName = instance.exports.name()
+      debug(`Got name: ${pluginName}`)
+
+      debug(`Calling schema() for ${packageName}`)
+      schemaJson = instance.exports.schema()
+      debug(`Got schema: ${schemaJson?.substring(0, 100)}`)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      const stack = error instanceof Error ? error.stack : ''
+      debug(`Error calling WASM exports: ${errorMsg}`)
+      debug(`Stack trace: ${stack}`)
+      debug(`Error type: ${error?.constructor?.name}`)
+      throw error // Re-throw the original error to preserve stack trace
+    }
+
+    // Now we have plugin ID, set up proper storage paths
+    const storagePaths = getPluginStoragePaths(configPath, pluginId, packageName)
+
+    // Initialize VFS
+    initializePluginVfs(storagePaths)
+
+    // Clean up temp VFS
+    if (fs.existsSync(tempVfsRoot)) {
+      fs.rmSync(tempVfsRoot, { recursive: true, force: true })
+    }
+
+    // Read saved configuration (or create default if not exists)
+    const savedConfig = readPluginConfig(storagePaths.configFile)
+
+    // Write initial config file if it doesn't exist
+    if (!fs.existsSync(storagePaths.configFile)) {
+      debug(`Creating initial config file for ${packageName}`)
+      writePluginConfig(storagePaths.configFile, savedConfig)
+    }
+
     const schema = schemaJson ? JSON.parse(schemaJson) : {}
 
     // Create plugin object
@@ -118,6 +170,8 @@ export async function registerWasmPlugin(
       packageName,
       version: metadata.version || packageJson.version,
       enabled: savedConfig.enabled || false,
+      keywords: packageJson.keywords || [],
+      packageLocation: location,
       metadata: {
         id: pluginId,
         name: pluginName,
@@ -142,6 +196,9 @@ export async function registerWasmPlugin(
     if (app.plugins) {
       app.plugins.push(plugin)
     }
+
+    // Set up REST API routes for this plugin
+    setupWasmPluginRoutes(app, plugin, configPath)
 
     debug(`Registered WASM plugin: ${pluginId} (${pluginName})`)
 
@@ -362,26 +419,37 @@ export async function updateWasmPluginConfig(
     throw new Error(`WASM plugin ${pluginId} not found`)
   }
 
-  debug(`Updating configuration for WASM plugin: ${pluginId}`)
+  debug(`updateWasmPluginConfig: Starting for ${pluginId}`)
+  debug(`updateWasmPluginConfig: New configuration: ${JSON.stringify(configuration)}`)
 
   plugin.configuration = configuration
+  debug(`updateWasmPluginConfig: Updated in-memory configuration`)
 
   // Save to disk
-  const storagePaths = getPluginStoragePaths(configPath, plugin.packageName)
+  const storagePaths = getPluginStoragePaths(configPath, plugin.id, plugin.packageName)
+  debug(`updateWasmPluginConfig: Config file path: ${storagePaths.configFile}`)
+
   const config = {
     enabled: plugin.enabled,
     configuration
   }
+  debug(`updateWasmPluginConfig: Writing config to disk: ${JSON.stringify(config)}`)
   writePluginConfig(storagePaths.configFile, config)
+  debug(`updateWasmPluginConfig: Config written to disk`)
 
   // Restart plugin if running
   if (plugin.status === 'running') {
+    debug(`updateWasmPluginConfig: Plugin is running, restarting...`)
     await stopWasmPlugin(pluginId)
+    debug(`updateWasmPluginConfig: Plugin stopped`)
     await startWasmPlugin(app, pluginId)
+    debug(`updateWasmPluginConfig: Plugin started`)
     plugin.statusMessage = 'Configuration updated'
+  } else {
+    debug(`updateWasmPluginConfig: Plugin not running (status: ${plugin.status}), skipping restart`)
   }
 
-  debug(`Configuration updated for ${pluginId}`)
+  debug(`updateWasmPluginConfig: Configuration updated for ${pluginId}`)
 }
 
 /**
@@ -398,24 +466,38 @@ export async function setWasmPluginEnabled(
     throw new Error(`WASM plugin ${pluginId} not found`)
   }
 
+  debug(`setWasmPluginEnabled: Starting for ${pluginId}, enabled=${enabled}`)
+  debug(`setWasmPluginEnabled: Current state - enabled: ${plugin.enabled}, status: ${plugin.status}`)
+
   plugin.enabled = enabled
+  debug(`setWasmPluginEnabled: Updated in-memory enabled flag to ${enabled}`)
 
   // Save to disk
-  const storagePaths = getPluginStoragePaths(configPath, plugin.packageName)
+  const storagePaths = getPluginStoragePaths(configPath, plugin.id, plugin.packageName)
+  debug(`setWasmPluginEnabled: Config file path: ${storagePaths.configFile}`)
+
   const config = {
     enabled,
     configuration: plugin.configuration
   }
+  debug(`setWasmPluginEnabled: Writing config to disk: ${JSON.stringify(config)}`)
   writePluginConfig(storagePaths.configFile, config)
+  debug(`setWasmPluginEnabled: Config written to disk`)
 
   // Start or stop accordingly
   if (enabled && plugin.status !== 'running') {
+    debug(`setWasmPluginEnabled: Plugin should be enabled and is not running, starting...`)
     await startWasmPlugin(app, pluginId)
+    debug(`setWasmPluginEnabled: Plugin started, new status: ${plugin.status}`)
   } else if (!enabled && plugin.status === 'running') {
+    debug(`setWasmPluginEnabled: Plugin should be disabled and is running, stopping...`)
     await stopWasmPlugin(pluginId)
+    debug(`setWasmPluginEnabled: Plugin stopped, new status: ${plugin.status}`)
+  } else {
+    debug(`setWasmPluginEnabled: No action needed - enabled=${enabled}, status=${plugin.status}`)
   }
 
-  debug(`Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`)
+  debug(`setWasmPluginEnabled: Completed - Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`)
 }
 
 /**
@@ -462,4 +544,81 @@ export async function shutdownAllWasmPlugins(): Promise<void> {
 
   wasmPlugins.clear()
   debug('All WASM plugins shut down')
+}
+
+/**
+ * Set up REST API routes for a WASM plugin
+ */
+function setupWasmPluginRoutes(
+  app: any,
+  plugin: WasmPlugin,
+  configPath: string
+): void {
+  const router = express.Router()
+
+  // GET /plugins/:id - Get plugin info
+  router.get('/', (req: Request, res: Response) => {
+    res.json({
+      enabled: plugin.enabled,
+      enabledByDefault: false,
+      id: plugin.id,
+      name: plugin.name,
+      version: plugin.version
+    })
+  })
+
+  // POST /plugins/:id/config - Save plugin configuration
+  router.post('/config', async (req: Request, res: Response) => {
+    try {
+      debug(`POST /config received for WASM plugin: ${plugin.id}`)
+      debug(`Request body: ${JSON.stringify(req.body)}`)
+
+      const newConfig = req.body
+
+      debug(`Current plugin state - enabled: ${plugin.enabled}, configuration: ${JSON.stringify(plugin.configuration)}`)
+
+      // Update plugin configuration
+      debug(`Calling updateWasmPluginConfig with: ${JSON.stringify(newConfig.configuration)}`)
+      await updateWasmPluginConfig(app, plugin.id, newConfig.configuration, configPath)
+      debug(`updateWasmPluginConfig completed`)
+
+      // Update enabled state if changed
+      if (typeof newConfig.enabled === 'boolean' && newConfig.enabled !== plugin.enabled) {
+        debug(`Updating enabled state from ${plugin.enabled} to ${newConfig.enabled}`)
+        await setWasmPluginEnabled(app, plugin.id, newConfig.enabled, configPath)
+        debug(`setWasmPluginEnabled completed`)
+      } else {
+        debug(`Enabled state unchanged: ${plugin.enabled}`)
+      }
+
+      debug(`Final plugin state - enabled: ${plugin.enabled}, status: ${plugin.status}`)
+
+      const response = `Saved configuration for plugin ${plugin.id}`
+      debug(`Sending response: ${response}`)
+      res.json(response)
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      const stack = error instanceof Error ? error.stack : ''
+      debug(`ERROR saving WASM plugin config: ${errorMsg}`)
+      debug(`Stack trace: ${stack}`)
+      console.error(`Error saving WASM plugin config:`, error)
+      res.status(500).json({ error: errorMsg })
+    }
+  })
+
+  // GET /plugins/:id/config - Get plugin configuration
+  router.get('/config', (req: Request, res: Response) => {
+    const storagePaths = getPluginStoragePaths(configPath, plugin.id, plugin.packageName)
+    const config = readPluginConfig(storagePaths.configFile)
+
+    res.json({
+      enabled: plugin.enabled,
+      configuration: plugin.configuration,
+      ...config
+    })
+  })
+
+  // Register the router for this plugin
+  app.use(backwardsCompat(`/plugins/${plugin.id}`), router)
+  debug(`Set up REST API routes for WASM plugin: ${plugin.id}`)
 }
