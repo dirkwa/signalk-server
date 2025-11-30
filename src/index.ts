@@ -159,6 +159,19 @@ class Server {
     }
     Object.assign(app, pluginManager)
 
+    // Initialize WASM runtime for WASM/WASIX plugins
+    try {
+      const { initializeWasmRuntime, initializeSubscriptionManager } = require('./wasm')
+      const wasmRuntime = initializeWasmRuntime()
+      const subscriptionManager = initializeSubscriptionManager()
+      app.wasmRuntime = wasmRuntime
+      app.wasmSubscriptionManager = subscriptionManager
+      debug('WASM runtime initialized successfully')
+    } catch (error) {
+      debug('WASM runtime initialization skipped:', error)
+      // WASM support is optional - continue without it
+    }
+
     app.setPluginStatus = (providerId: string, statusMessage: string) => {
       doSetProviderStatus(providerId, statusMessage, 'status', 'plugin')
     }

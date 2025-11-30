@@ -69,7 +69,7 @@
     "packages/typedoc-theme"
   ],
   "dependencies": {
-    "@js-temporal/polyfill": "^0.5.1",
+    "@bytecodealliance/jco": "^1.4.0",
     "@signalk/course-provider": "^1.0.0",
     "@signalk/n2k-signalk": ">=4.1.0-beta",
     "@signalk/nmea0183-signalk": "^3.0.0",
@@ -78,6 +78,7 @@
     "@signalk/server-api": "2.10.x",
     "@signalk/signalk-schema": "^1.7.1",
     "@signalk/streams": "5.1.x",
+    "@wasmer/wasi": "^1.2.2",
     "api-schema-builder": "^2.0.11",
     "baconjs": "^1.0.1",
     "bcryptjs": "^2.4.3",
