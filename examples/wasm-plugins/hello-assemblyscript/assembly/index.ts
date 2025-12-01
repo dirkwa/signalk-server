@@ -72,7 +72,12 @@ export class HelloPlugin extends Plugin {
    * Start plugin with configuration
    */
   start(configJson: string): i32 {
-    debug('Hello plugin starting...')
+    debug('========================================')
+    debug('Hello AssemblyScript plugin starting...')
+    debug(`Plugin ID: ${this.id()}`)
+    debug(`Plugin Name: ${this.name()}`)
+    debug(`Configuration received: ${configJson}`)
+    debug('========================================')
 
     // Parse configuration
     // Note: AssemblyScript JSON parsing would need a JSON library
@@ -80,14 +85,19 @@ export class HelloPlugin extends Plugin {
     // In production, use a JSON parser like assemblyscript-json
 
     setStatus('Started successfully')
+    debug('Status set to: Started successfully')
 
     // Emit a welcome notification
+    debug('Emitting welcome notification...')
     this.emitWelcomeNotification()
 
     // Emit a test delta
+    debug('Emitting test delta with plugin info...')
     this.emitTestDelta()
 
-    debug('Hello plugin started')
+    debug('========================================')
+    debug('Hello AssemblyScript plugin started successfully!')
+    debug('========================================')
     return 0 // Success
   }
 
@@ -95,8 +105,13 @@ export class HelloPlugin extends Plugin {
    * Stop plugin
    */
   stop(): i32 {
-    debug('Hello plugin stopping...')
+    debug('========================================')
+    debug('Hello AssemblyScript plugin stopping...')
+    debug(`Plugin ID: ${this.id()}`)
     setStatus('Stopped')
+    debug('Status set to: Stopped')
+    debug('Hello AssemblyScript plugin stopped successfully!')
+    debug('========================================')
     return 0 // Success
   }
 
@@ -104,6 +119,7 @@ export class HelloPlugin extends Plugin {
    * Emit a welcome notification
    */
   private emitWelcomeNotification(): void {
+    debug('Building welcome notification...')
     const notification = new Notification(
       NotificationState.normal,
       this.config.message
@@ -111,6 +127,8 @@ export class HelloPlugin extends Plugin {
 
     const source = new Source(this.id(), 'plugin')
     const timestamp = getCurrentTimestamp()
+    debug(`Timestamp: ${timestamp}`)
+
     const pathValue = new PathValue(
       'notifications.hello',
       notification.toJSON()
@@ -120,13 +138,14 @@ export class HelloPlugin extends Plugin {
     const delta = new Delta('vessels.self', [update])
 
     emit(delta)
-    debug('Emitted welcome notification')
+    debug('✓ Welcome notification emitted to path: notifications.hello')
   }
 
   /**
    * Emit a test delta with plugin information
    */
   private emitTestDelta(): void {
+    debug('Building plugin info delta...')
     const pluginInfo = `{
       "name": "${this.name()}",
       "id": "${this.id()}",
@@ -136,6 +155,8 @@ export class HelloPlugin extends Plugin {
 
     const source = new Source(this.id(), 'plugin')
     const timestamp = getCurrentTimestamp()
+    debug(`Timestamp: ${timestamp}`)
+
     const pathValue = new PathValue(
       'plugins.hello-assemblyscript.info',
       pluginInfo
@@ -145,7 +166,7 @@ export class HelloPlugin extends Plugin {
     const delta = new Delta('vessels.self', [update])
 
     emit(delta)
-    debug('Emitted test delta')
+    debug('✓ Plugin info delta emitted to path: plugins.hello-assemblyscript.info')
   }
 }
 
