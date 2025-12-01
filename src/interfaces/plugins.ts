@@ -401,6 +401,21 @@ module.exports = (theApp: any) => {
   ) {
     debug('Registering plugin ' + pluginName)
     try {
+      // Check if this is a WASM plugin
+      const packageJsonPath = path.join(location, pluginName, 'package.json')
+      if (fs.existsSync(packageJsonPath)) {
+        const packageJson = require(packageJsonPath)
+
+        if (packageJson.wasmManifest) {
+          // This is a WASM plugin - route to WASM loader
+          debug(`Detected WASM plugin: ${pluginName}`)
+          const { registerWasmPlugin } = require('../wasm')
+          await registerWasmPlugin(app, pluginName, metadata, location, theApp.config.configPath)
+          return
+        }
+      }
+
+      // Standard Node.js plugin
       await doRegisterPlugin(app, pluginName, metadata, location)
     } catch (e) {
       console.error(e)

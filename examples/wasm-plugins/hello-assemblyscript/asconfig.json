@@ -1,0 +1,22 @@
+{
+  "targets": {
+    "release": {
+      "outFile": "plugin.wasm",
+      "sourceMap": false,
+      "optimize": true,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true,
+      "runtime": "incremental"
+    },
+    "debug": {
+      "outFile": "build/plugin.debug.wasm",
+      "sourceMap": true,
+      "debug": true,
+      "runtime": "incremental"
+    }
+  },
+  "options": {
+    "bindings": "esm"
+  }
+}
