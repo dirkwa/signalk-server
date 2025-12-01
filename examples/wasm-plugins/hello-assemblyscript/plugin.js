@@ -47,6 +47,18 @@ async function instantiate(module, imports = {}) {
       // assembly/index/plugin_schema() => ~lib/string/String
       return __liftString(exports.plugin_schema() >>> 0);
     },
+    http_endpoints() {
+      // assembly/index/http_endpoints() => ~lib/string/String
+      return __liftString(exports.http_endpoints() >>> 0);
+    },
+    handle_get_info(requestPtr, requestLen) {
+      // assembly/index/handle_get_info(usize, usize) => ~lib/string/String
+      return __liftString(exports.handle_get_info(requestPtr, requestLen) >>> 0);
+    },
+    handle_get_status(requestPtr, requestLen) {
+      // assembly/index/handle_get_status(usize, usize) => ~lib/string/String
+      return __liftString(exports.handle_get_status(requestPtr, requestLen) >>> 0);
+    },
   }, exports);
   function __liftString(pointer) {
     if (!pointer) return null;
@@ -63,11 +75,19 @@ async function instantiate(module, imports = {}) {
 }
 export const {
   memory,
+  __new,
+  __pin,
+  __unpin,
+  __collect,
+  __rtti_base,
   plugin_id,
   plugin_name,
   plugin_schema,
   plugin_start,
   plugin_stop,
+  http_endpoints,
+  handle_get_info,
+  handle_get_status,
 } = await (async url => instantiate(
   await (async () => {
     const isNodeOrBun = typeof process != "undefined" && process.versions != null && (process.versions.node != null || process.versions.bun != null);

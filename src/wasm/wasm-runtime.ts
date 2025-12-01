@@ -20,6 +20,7 @@ try {
 import * as fs from 'fs'
 import * as path from 'path'
 import Debug from 'debug'
+import loader from '@assemblyscript/loader'
 
 const debug = Debug('signalk:wasm:runtime')
 
@@ -30,6 +31,8 @@ export interface WasmCapabilities {
   dataWrite: boolean
   serialPorts: boolean
   putHandlers: boolean
+  httpEndpoints?: boolean
+  resourceProvider?: boolean
 }
 
 export interface WasmPluginInstance {
@@ -47,7 +50,11 @@ export interface WasmPluginInstance {
     start: (config: string) => number // 0 = success, non-zero = error
     stop: () => number
     memory?: WebAssembly.Memory
+    // Optional: HTTP endpoint registration
+    http_endpoints?: () => string // Returns JSON array of endpoint definitions
   }
+  // AssemblyScript loader instance (if AssemblyScript plugin)
+  asLoader?: any
 }
 
 export class WasmRuntime {
@@ -115,7 +122,8 @@ export class WasmRuntime {
       const wasmBuffer = fs.readFileSync(wasmPath)
       debug(`WASM file size: ${wasmBuffer.length} bytes`)
 
-      debug(`Compiling WASM module...`)
+      // First check if this is an AssemblyScript plugin by inspecting exports
+      debug(`Compiling WASM module for inspection...`)
       let module: WebAssembly.Module
       try {
         module = await WebAssembly.compile(wasmBuffer)
@@ -125,14 +133,16 @@ export class WasmRuntime {
         throw compileError
       }
 
-      // Inspect module imports to determine what's needed
+      // Inspect module imports and exports to determine plugin type
       const imports = WebAssembly.Module.imports(module)
-      debug(`Module has ${imports.length} imports`)
+      const moduleExports = WebAssembly.Module.exports(module)
+      debug(`Module has ${imports.length} imports, ${moduleExports.length} exports`)
       debug(`Module imports: ${JSON.stringify(imports.map(i => `${i.module}.${i.name}`).slice(0, 20))}`)
 
-      // Instantiate with WASI imports
-      // Note: In Phase 1, we're using basic WASI without full WIT bindings
-      // Full WIT integration will be added as we build out the FFI layer
+      const isAssemblyScriptPlugin = moduleExports.some(e => e.name === 'plugin_id')
+      const isRustPlugin = moduleExports.some(e => e.name === '_start')
+
+      debug(`Plugin type detection: AS=${isAssemblyScriptPlugin}, Rust=${isRustPlugin}`)
 
       // Node.js WASI uses getImportObject(), @wasmer/wasi uses getImports()
       const wasiImports = (wasi.getImportObject ? wasi.getImportObject() : wasi.getImports(module)) as any
@@ -150,25 +160,6 @@ export class WasmRuntime {
         // Format: ptr points to UTF-8 bytes, len is the byte length
         const bytes = new Uint8Array(memoryRef.buffer, ptr, len)
         const decoder = new TextDecoder('utf-8')
-        return decoder.decode(bytes)
-      }
-
-      const readAssemblyScriptString = (ptr: number): string => {
-        if (!memoryRef) {
-          throw new Error('AssemblyScript module memory not initialized')
-        }
-
-        // For plugin metadata functions (id, name, schema), the plugin returns
-        // AssemblyScript String objects with this layout:
-        // ptr - 8: rtSize (4 bytes) - total allocation size
-        // ptr - 4: length (4 bytes) - string content length IN BYTES
-        // ptr: string data as UTF-16LE
-
-        const view = new DataView(memoryRef.buffer)
-        const lengthInBytes = view.getUint32(ptr - 4, true)
-
-        const bytes = new Uint8Array(memoryRef.buffer, ptr, lengthInBytes)
-        const decoder = new TextDecoder('utf-16le')
         return decoder.decode(bytes)
       }
 
@@ -243,88 +234,130 @@ export class WasmRuntime {
           } catch (error) {
             debug(`Plugin handle message error: ${error}`)
           }
+        },
+        // Privileged operation: Execute shell command (for log reading, journalctl, etc.)
+        sk_exec_command: (cmdPtr: number, cmdLen: number, outPtr: number, outMaxLen: number): number => {
+          try {
+            const command = readUtf8String(cmdPtr, cmdLen)
+            debug(`[${pluginId}] Executing command: ${command}`)
+
+            // Security: Only allow specific whitelisted commands for logs
+            const allowedCommands = [
+              /^journalctl\s+-u\s+signalk/,  // journalctl for signalk service
+              /^cat\s+\/var\/log\//,         // Read log files
+              /^tail\s+-n\s+\d+\s+\//,       // Tail log files
+            ]
+
+            const isAllowed = allowedCommands.some(pattern => pattern.test(command))
+            if (!isAllowed) {
+              debug(`[${pluginId}] Command not allowed: ${command}`)
+              return 0 // Return 0 bytes written
+            }
+
+            // Execute command
+            const { execSync } = require('child_process')
+            const output = execSync(command, {
+              encoding: 'utf8',
+              maxBuffer: 10 * 1024 * 1024, // 10MB max
+              timeout: 30000 // 30 second timeout
+            })
+
+            // Write output to WASM memory
+            const outputBytes = Buffer.from(output, 'utf8')
+            const bytesToWrite = Math.min(outputBytes.length, outMaxLen)
+
+            if (rawExports.memory) {
+              const memory = rawExports.memory as WebAssembly.Memory
+              const memView = new Uint8Array(memory.buffer)
+              memView.set(outputBytes.slice(0, bytesToWrite), outPtr)
+            }
+
+            return bytesToWrite
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            debug(`[${pluginId}] Command execution error: ${errorMsg}`)
+            return 0
+          }
         }
       }
 
-      const instance = await WebAssembly.instantiate(module, {
-        wasi_snapshot_preview1: wasiImports.wasi_snapshot_preview1 || wasiImports,
-        env: envImports
-      } as any)
-      debug(`WASM instance created`)
+      // Use different instantiation methods based on plugin type
+      let instance: WebAssembly.Instance
+      let asLoaderInstance: any = null
+      let rawExports: any
 
-      // Extract raw exports first to check plugin type
-      const rawExports = instance.exports as any
+      if (isAssemblyScriptPlugin) {
+        // Use AssemblyScript loader for automatic string handling
+        debug(`Using AssemblyScript loader for ${pluginId}`)
 
-      // Set memory reference for string reading
+        asLoaderInstance = await loader.instantiate(module, {
+          wasi_snapshot_preview1: wasiImports.wasi_snapshot_preview1 || wasiImports,
+          env: envImports
+        })
+
+        instance = asLoaderInstance.instance
+        rawExports = asLoaderInstance.exports
+        debug(`AssemblyScript instance created with loader`)
+      } else {
+        // Standard WebAssembly instantiation for Rust plugins
+        instance = await WebAssembly.instantiate(module, {
+          wasi_snapshot_preview1: wasiImports.wasi_snapshot_preview1 || wasiImports,
+          env: envImports
+        } as any)
+        rawExports = instance.exports as any
+        debug(`Standard WASM instance created`)
+      }
+
+      // Set memory reference for UTF-8 string reading in FFI callbacks
       if (rawExports.memory) {
         memoryRef = rawExports.memory as WebAssembly.Memory
       }
 
-      // Detect plugin type and initialize accordingly
-      // Rust plugins have _start function, AssemblyScript plugins don't
-      const isRustPlugin = !!rawExports._start
-      const isAssemblyScriptPlugin = !!rawExports.plugin_id
-
+      // Initialize based on plugin type
       if (isRustPlugin) {
         // Rust plugin - start WASI
-        debug(`Detected Rust plugin: ${pluginId}`)
+        debug(`Initializing Rust plugin: ${pluginId}`)
         wasi.start(instance)
       } else if (isAssemblyScriptPlugin) {
-        // AssemblyScript plugin - no _start needed, just use exports directly
-        debug(`Detected AssemblyScript plugin: ${pluginId}`)
-        // AssemblyScript plugins don't need WASI initialization
-        // They export functions directly that we can call
+        // AssemblyScript plugin - no _start needed
+        debug(`Initialized AssemblyScript plugin: ${pluginId}`)
       } else {
         throw new Error(`Unknown WASM plugin format for ${pluginId}`)
       }
 
       // Create normalized export interface
-      // Maps both Rust-style (id, name, schema) and AssemblyScript-style (plugin_id, plugin_name, plugin_schema)
-
-      // Wrap functions based on plugin type
       let idFunc: () => string
       let nameFunc: () => string
       let schemaFunc: () => string
       let startFunc: (config: string) => number
       let stopFunc: () => number
 
-      if (isAssemblyScriptPlugin) {
-        // AssemblyScript functions return pointers to strings in memory
-        idFunc = () => readAssemblyScriptString(rawExports.plugin_id())
-        nameFunc = () => readAssemblyScriptString(rawExports.plugin_name())
-        schemaFunc = () => readAssemblyScriptString(rawExports.plugin_schema())
-
-        // start/stop functions work differently - they take/return numbers
-        startFunc = (config: string) => {
-          // The plugin_start wrapper expects pointer and length
-          // We need to write the config string to WASM memory first
-          const configBuffer = Buffer.from(config, 'utf8')
-          const memory = rawExports.memory as WebAssembly.Memory
-
-          // Check current memory size
-          const currentSize = memory.buffer.byteLength
-          debug(`Current WASM memory size: ${currentSize} bytes`)
-
-          // Use a small, safe offset in the first page (1KB from start)
-          // This is safe as AssemblyScript's heap starts much higher
-          const configPtr = 1024
-          debug(`Config buffer size: ${configBuffer.length} bytes, using offset: ${configPtr}`)
-
-          // Ensure we have enough space
-          if (configPtr + configBuffer.length > currentSize) {
-            const pagesNeeded = Math.ceil((configPtr + configBuffer.length - currentSize) / 65536) + 1
-            debug(`Growing memory by ${pagesNeeded} pages`)
-            memory.grow(pagesNeeded)
-          }
-
-          // Get fresh memory view AFTER any grow operation
-          const memView = new Uint8Array(memory.buffer)
-          memView.set(configBuffer, configPtr)
-          debug(`Wrote config to WASM memory at offset ${configPtr}`)
-
-          return rawExports.plugin_start(configPtr, configBuffer.length)
+      if (isAssemblyScriptPlugin && asLoaderInstance) {
+        // AssemblyScript loader provides __getString to decode string pointers
+        // The exported functions return pointers, we decode them with __getString
+        idFunc = () => {
+          const ptr = asLoaderInstance.exports.plugin_id()
+          return asLoaderInstance.exports.__getString(ptr)
         }
-        stopFunc = () => rawExports.plugin_stop()
+        nameFunc = () => {
+          const ptr = asLoaderInstance.exports.plugin_name()
+          return asLoaderInstance.exports.__getString(ptr)
+        }
+        schemaFunc = () => {
+          const ptr = asLoaderInstance.exports.plugin_schema()
+          return asLoaderInstance.exports.__getString(ptr)
+        }
+
+        // For plugin_start, the loader handles the string-to-pointer conversion
+        startFunc = (config: string) => {
+          debug(`Calling plugin_start with config: ${config.substring(0, 100)}...`)
+          // The loader's __newString allocates and copies the string to WASM memory
+          const configPtr = asLoaderInstance.exports.__newString(config)
+          const configLen = config.length
+          const result = asLoaderInstance.exports.plugin_start(configPtr, configLen)
+          return result
+        }
+        stopFunc = () => asLoaderInstance.exports.plugin_stop()
       } else {
         // Rust plugins return JavaScript strings directly
         idFunc = rawExports.id
@@ -334,13 +367,24 @@ export class WasmRuntime {
         stopFunc = rawExports.stop
       }
 
+      // Wrap http_endpoints if it exists
+      const httpEndpointsFunc = rawExports.http_endpoints
+        ? (isAssemblyScriptPlugin && asLoaderInstance
+            ? () => {
+                const ptr = asLoaderInstance.exports.http_endpoints()
+                return asLoaderInstance.exports.__getString(ptr)
+              }
+            : rawExports.http_endpoints)
+        : undefined
+
       const exports = {
         id: idFunc,
         name: nameFunc,
         schema: schemaFunc,
         start: startFunc,
         stop: stopFunc,
-        memory: rawExports.memory
+        memory: rawExports.memory,
+        ...(httpEndpointsFunc && { http_endpoints: httpEndpointsFunc })
       }
 
       const pluginInstance: WasmPluginInstance = {
@@ -351,7 +395,8 @@ export class WasmRuntime {
         wasi,
         module,
         instance,
-        exports
+        exports,
+        asLoader: asLoaderInstance
       }
 
       this.instances.set(pluginId, pluginInstance)

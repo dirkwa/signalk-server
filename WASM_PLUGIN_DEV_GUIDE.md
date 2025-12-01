@@ -36,11 +36,21 @@ Signal K Server 3.0 supports multiple languages for WASM plugin development:
 ✅ **Performance**: Near-native performance with WASM
 ✅ **Small binaries**: 3-200 KB depending on language
 
-### Limitations (Phase 1)
+### Current Capabilities (Phase 2)
 
-⚠️ **Limited API Surface**: Subset of ServerAPI (delta, config, status, data read)
-⚠️ **No REST APIs**: Cannot register custom HTTP endpoints yet (Phase 2)
-⚠️ **No Serial Ports**: Direct serial access not available yet (Phase 3)
+✅ **Delta Emission**: Send SignalK deltas to update vessel data
+✅ **Status & Error Reporting**: Set plugin status and error messages
+✅ **Configuration**: JSON schema-based configuration
+✅ **Data Storage**: VFS-isolated file storage
+✅ **HTTP Endpoints**: Register custom REST API endpoints
+✅ **Static Files**: Serve web UI from `public/` directory
+✅ **Command Execution**: Whitelisted shell commands (logs only)
+
+### Upcoming Features
+
+⏳ **Direct Serial Ports**: Serial device access (Phase 3)
+⏳ **Network Access**: HTTP client for external APIs (Phase 3)
+⏳ **Resource Providers**: Serve SignalK resources (Phase 3)
 
 ## Choose Your Language
 
@@ -180,11 +190,27 @@ Create `asconfig.json`:
     "release": {
       "outFile": "plugin.wasm",
       "optimize": true,
-      "shrinkLevel": 2
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": true,
+      "runtime": "incremental",
+      "exportRuntime": true
+    },
+    "debug": {
+      "outFile": "build/plugin.debug.wasm",
+      "sourceMap": true,
+      "debug": true,
+      "runtime": "incremental",
+      "exportRuntime": true
     }
+  },
+  "options": {
+    "bindings": "esm"
   }
 }
 ```
+
+**Important**: `exportRuntime: true` is **required** for the AssemblyScript loader to work. This exports runtime helper functions like `__newString` and `__getString` that the server uses for automatic string conversions.
 
 ### Step 4: Build
 
@@ -213,14 +239,370 @@ npx asc assembly/index.ts --target release
 
 ### Step 6: Install to Signal K
 
+**Option 1: Direct Copy (Recommended for Development)**
 ```bash
 mkdir -p ~/.signalk/node_modules/@signalk/my-plugin
 cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/my-plugin/
+
+# If your plugin has a public/ folder with web UI:
+cp -r public ~/.signalk/node_modules/@signalk/my-plugin/
 ```
+
+**Option 2: NPM Package Install**
+```bash
+# If you've packaged with `npm pack`
+npm install -g ./my-plugin-1.0.0.tgz
+
+# Or install from npm registry
+npm install -g @signalk/my-plugin
+```
+
+**Note**: For WASM plugins, both methods work identically. Direct copy is faster for development/testing. Use npm install for production deployments or when distributing plugins.
+
+**Important**: If your plugin includes static files (like a web UI in the `public/` folder), make sure to copy that folder as well. Static files are automatically served at `/plugins/your-plugin-id/` when the plugin is loaded.
 
 📚 **See [AssemblyScript SDK README](../packages/assemblyscript-plugin-sdk/README.md) for full API reference**
 
 📁 **See [hello-assemblyscript example](../examples/wasm-plugins/hello-assemblyscript/) for complete working code**
+
+### Step 7: Verify Plugin Configuration in Admin UI
+
+After installing your plugin, verify it appears in the Admin UI:
+
+1. **Navigate to Plugin Configuration**: Open the Admin UI at `http://your-server:3000/@signalk/server-admin-ui/` and go to **Server → Plugin Config**
+
+2. **Check Plugin List**: Your WASM plugin should appear in the list with:
+   - Plugin name (from `name()` export)
+   - Version (from `package.json`)
+   - Enable/Disable toggle
+   - Configuration form (based on `schema()` export)
+
+3. **Verify Configuration Persistence**:
+   - Configuration is saved to `~/.signalk/plugin-config-data/your-plugin-id.json`
+   - Changes are applied immediately (plugin restarts automatically)
+   - The file structure is:
+     ```json
+     {
+       "enabled": true,
+       "enableDebug": false,
+       "configuration": {
+         "updateRate": 1000
+       }
+     }
+     ```
+
+4. **Troubleshooting**:
+   - If plugin doesn't appear: Check `package.json` has both `signalk-node-server-plugin` and `signalk-wasm-plugin` keywords
+   - If configuration form is empty: Verify `schema()` export returns valid JSON Schema
+   - If settings don't persist: Check file permissions on `~/.signalk/plugin-config-data/`
+
+**Important**: The Admin UI shows all plugins (both Node.js and WASM) in a unified list. WASM plugins integrate seamlessly with the existing plugin configuration system.
+
+---
+
+## HTTP Endpoints (Phase 2)
+
+WASM plugins can register custom HTTP endpoints to provide REST APIs or serve dynamic content. This is useful for:
+- Providing plugin-specific APIs
+- Implementing webhook receivers
+- Creating custom data queries
+- Building interactive dashboards
+
+### Registering HTTP Endpoints
+
+Export an `http_endpoints()` function that returns a JSON array of endpoint definitions:
+
+```typescript
+// assembly/index.ts
+export function http_endpoints(): string {
+  return `[
+    {
+      "method": "GET",
+      "path": "/api/data",
+      "handler": "handle_get_data"
+    },
+    {
+      "method": "POST",
+      "path": "/api/update",
+      "handler": "handle_post_update"
+    }
+  ]`
+}
+```
+
+### Implementing HTTP Handlers
+
+Handler functions receive a request context and return an HTTP response:
+
+```typescript
+export function handle_get_data(requestPtr: usize, requestLen: usize): string {
+  // 1. Decode request from WASM memory
+  const requestBytes = new Uint8Array(i32(requestLen))
+  for (let i: i32 = 0; i < i32(requestLen); i++) {
+    requestBytes[i] = load<u8>(requestPtr + <usize>i)
+  }
+  const requestJson = String.UTF8.decode(requestBytes.buffer)
+
+  // 2. Parse request (contains method, path, query, params, body, headers)
+  // Simple example: extract query parameter
+  let filter = ''
+  const filterIndex = requestJson.indexOf('"filter"')
+  if (filterIndex >= 0) {
+    // Extract the filter value from JSON
+    // (In production, use proper JSON parsing)
+  }
+
+  // 3. Process request and build response data
+  const data = {
+    "items": [
+      {"id": 1, "value": "Item 1"},
+      {"id": 2, "value": "Item 2"}
+    ],
+    "count": 2
+  }
+  const bodyJson = JSON.stringify(data)
+
+  // 4. Escape JSON for embedding in response string
+  const escapedBody = bodyJson
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+
+  // 5. Return HTTP response (status, headers, body)
+  return `{
+    "statusCode": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "${escapedBody}"
+  }`
+}
+
+export function handle_post_update(requestPtr: usize, requestLen: usize): string {
+  const requestBytes = new Uint8Array(i32(requestLen))
+  for (let i: i32 = 0; i < i32(requestLen); i++) {
+    requestBytes[i] = load<u8>(requestPtr + <usize>i)
+  }
+  const requestJson = String.UTF8.decode(requestBytes.buffer)
+
+  // Process POST body and update state
+  // ...
+
+  return `{
+    "statusCode": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "{\\"success\\":true}"
+  }`
+}
+```
+
+### Request Context Format
+
+The request context is a JSON object with:
+
+```json
+{
+  "method": "GET",
+  "path": "/api/logs",
+  "query": {
+    "lines": "100",
+    "filter": "error"
+  },
+  "params": {},
+  "body": null,
+  "headers": {
+    "user-agent": "Mozilla/5.0...",
+    "accept": "application/json"
+  }
+}
+```
+
+### Response Format
+
+Handler functions must return a JSON string with:
+
+```json
+{
+  "statusCode": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-cache"
+  },
+  "body": "{\"data\": \"value\"}"
+}
+```
+
+**Important Notes:**
+- The `body` field must be a JSON-escaped string
+- Use double escaping for quotes: `\\"` not `"`
+- Endpoints are mounted at `/plugins/your-plugin-id/api/...`
+- From browser, fetch from absolute path: `/plugins/your-plugin-id/api/logs`
+
+### String Memory Management
+
+The server uses the **AssemblyScript loader** for automatic string handling:
+
+**For plugin metadata (id, name, schema, http_endpoints):**
+- Return AssemblyScript strings directly
+- Server automatically decodes with `__getString()`
+
+**For HTTP handlers:**
+- Receive: `(requestPtr: usize, requestLen: usize)` - raw memory pointer
+- Manually decode UTF-8 bytes from WASM memory
+- Return: AssemblyScript string with escaped JSON
+- Server automatically decodes with `__getString()`
+
+**Why manual decoding for handlers?**
+The request is passed as raw UTF-8 bytes for efficiency, but the response is returned as an AssemblyScript string (UTF-16LE) which the loader decodes automatically.
+
+### Complete Example
+
+See [signalk-logviewer](../../../signalk-logviewer) for a complete real-world example:
+- HTTP endpoint registration
+- Shell command execution (journalctl, tail)
+- Large response handling
+- Web UI integration
+
+### Testing Your Endpoints
+
+```bash
+# Test GET endpoint
+curl http://localhost:3000/plugins/my-plugin/api/data?filter=test
+
+# Test POST endpoint
+curl -X POST http://localhost:3000/plugins/my-plugin/api/update \
+  -H "Content-Type: application/json" \
+  -d '{"value": 123}'
+```
+
+### Security Considerations
+
+- ✅ Endpoints are sandboxed - no direct file system access
+- ✅ Shell commands are whitelisted (only journalctl, tail allowed)
+- ✅ Memory is isolated - cannot access other plugins
+- ⚠️ Validate all input from requests
+- ⚠️ Implement authentication if handling sensitive data
+- ⚠️ Set appropriate CORS headers if needed
+
+---
+
+## WASM Memory Limitations and Hybrid Architecture
+
+### Understanding WASM Memory Constraints
+
+WASM plugins running in Node.js have **~64KB buffer limitations** for stdin/stdout operations. This is a fundamental limitation of the Node.js WASI implementation, not a Signal K restriction.
+
+**Impact:**
+- ✅ Small JSON responses (< 64KB): Work fine in pure WASM
+- ⚠️ Medium data (64KB - 1MB): May freeze or fail
+- ❌ Large data (> 1MB): Will fail or freeze the server
+
+### Hybrid Architecture Pattern
+
+For plugins that need to handle large data volumes (logs, file streaming, large JSON responses), use a **hybrid approach**:
+
+**Architecture:**
+- **WASM Plugin**: Registers HTTP endpoints and provides configuration UI
+- **Node.js Handler**: Server intercepts specific endpoints and handles I/O directly in Node.js
+- **Result**: Can handle unlimited data without memory constraints
+
+### When to Use Hybrid Architecture
+
+Use this pattern when your plugin needs to:
+- Stream large log files (journalctl, syslog)
+- Return large JSON responses (> 64KB)
+- Process large file uploads
+- Handle streaming data
+
+### Implementation Example
+
+**Step 1: Register Endpoint in WASM**
+
+Your WASM plugin registers the endpoint normally:
+
+```typescript
+// assembly/index.ts
+export function http_endpoints(): string {
+  return `[
+    {
+      "method": "GET",
+      "path": "/api/logs",
+      "handler": "handle_get_logs"
+    }
+  ]`
+}
+
+export function handle_get_logs(requestPtr: usize, requestLen: usize): string {
+  // This handler will be intercepted by Node.js
+  // But we need to export it for the WASM module to be valid
+  return `{
+    "statusCode": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "{\\"error\\":\\"Not implemented\\"}"
+  }`
+}
+```
+
+**Step 2: Node.js Interception in wasm-loader.ts**
+
+The server intercepts the endpoint before it reaches WASM:
+
+```typescript
+// In src/wasm/wasm-loader.ts
+async function handleLogViewerRequest(req: Request, res: Response): Promise<void> {
+  const lines = parseInt(req.query.lines as string) || 2000
+  const maxLines = Math.min(lines, 50000)
+
+  // Use Node.js spawn for streaming
+  const p = spawn('journalctl', ['-u', 'signalk', '-n', maxLines.toString()])
+
+  const logLines: string[] = []
+  const rl = readline.createInterface({
+    input: p.stdout,
+    crlfDelay: Infinity
+  })
+
+  rl.on('line', (line) => {
+    logLines.push(line)
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    rl.on('close', () => resolve())
+    p.on('error', reject)
+  })
+
+  res.json({ lines: logLines, count: logLines.length })
+}
+
+// Add interception logic in endpoint handler
+if (plugin.id === 'my-plugin' && endpointPath === '/api/logs' && method === 'GET') {
+  debug(`Intercepting /api/logs - handling in Node.js`)
+  return handleLogViewerRequest(req, res)
+}
+```
+
+### Real-World Example
+
+See [signalk-logviewer](https://github.com/dirkwa/signalk-logviewer/tree/WASM) for a complete implementation:
+
+- **WASM Plugin**: Registers `/api/logs` endpoint and serves web UI
+- **Node.js Handler**: Intercepts requests and streams 2,000-50,000 log lines
+- **No memory issues**: Can handle multi-megabyte responses smoothly
+
+### Key Benefits
+
+✅ **No memory limits**: Node.js handles large I/O operations
+✅ **Simple WASM code**: Plugin just registers endpoints
+✅ **Best of both worlds**: WASM security + Node.js performance
+✅ **Transparent to users**: Works like any other plugin
+
+### When NOT to Use This Pattern
+
+Don't use hybrid architecture for:
+- Small responses (< 10KB)
+- Simple data processing
+- Standard delta emissions
+- Configuration handling
+
+Pure WASM is faster and simpler for these cases.
 
 ---
 
@@ -380,13 +762,23 @@ cp target/wasm32-wasi/release/signalk_example_wasm.wasm plugin.wasm
 
 ### Step 6: Install
 
-Copy to Signal K plugins directory:
-
+**Option 1: Direct Copy (Recommended for Development)**
 ```bash
 mkdir -p ~/.signalk/node_modules/@signalk/example-wasm
-cp plugin.wasm ~/.signalk/node_modules/@signalk/example-wasm/
-cp package.json ~/.signalk/node_modules/@signalk/example-wasm/
+cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/example-wasm/
+
+# If your plugin has a public/ folder:
+cp -r public ~/.signalk/node_modules/@signalk/example-wasm/
 ```
+
+**Option 2: NPM Package Install**
+```bash
+# Package and install
+npm pack
+npm install -g ./signalk-example-wasm-1.0.0.tgz
+```
+
+**Note**: Direct copy is faster for development. Use npm install for production deployments.
 
 ### Step 7: Enable in Admin UI
 
@@ -407,6 +799,8 @@ Declare required capabilities in `package.json`:
 | `dataRead` | Read Signal K data model | ✅ |
 | `dataWrite` | Emit delta messages | ✅ |
 | `storage` | Write to VFS (`vfs-only`) | ✅ |
+| `httpEndpoints` | Register custom HTTP endpoints | ✅ |
+| `staticFiles` | Serve HTML/CSS/JS from `public/` folder | ✅ |
 | `network` | HTTP requests | ❌ Phase 2 |
 | `serialPorts` | Serial port access | ❌ Phase 3 |
 | `putHandlers` | Register PUT handlers | ❌ Phase 2 |
@@ -722,6 +1116,171 @@ fn calculate_true_wind() {
     }
 }
 ```
+
+## Advanced Features
+
+### Static File Serving
+
+Plugins can serve HTML, CSS, JavaScript and other static files:
+
+**Structure:**
+```
+@signalk/my-plugin/
+├── public/           # Automatically served at /plugins/my-plugin/
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
+├── plugin.wasm
+└── package.json
+```
+
+**Access:** `http://localhost:3000/plugins/my-plugin/` serves `public/index.html`
+
+### Custom HTTP Endpoints
+
+Register custom REST API endpoints:
+
+**Important**: Custom endpoints are mounted at `/plugins/your-plugin-id/`. For example:
+- Plugin registers: `/api/logs`
+- Actual endpoint: `http://localhost:3000/plugins/my-plugin/api/logs`
+- In your web UI: Use absolute paths like `/plugins/my-plugin/api/logs` or relative paths will resolve correctly from your plugin's static files
+
+**AssemblyScript Example:**
+```typescript
+export function http_endpoints(): string {
+  return JSON.stringify([
+    { method: "GET", path: "/api/logs", handler: "handle_get_logs" },
+    { method: "POST", path: "/api/clear", handler: "handle_clear_logs" }
+  ])
+}
+
+export function handle_get_logs(requestJson: string): string {
+  const request = JSON.parse(requestJson)
+  const query = request.query
+
+  // Read logs from system
+  const logs = readLogs(query.lines || 100)
+
+  // Build body JSON as a string
+  const bodyJson = `{"logs":${JSON.stringify(logs)},"count":${logs.length}}`
+
+  // Escape the body string for embedding in JSON
+  const escapedBody = bodyJson.replaceAll('"', '\\"')
+
+  // Return HTTP response
+  return `{"statusCode":200,"headers":{"Content-Type":"application/json"},"body":"${escapedBody}"}`
+}
+```
+
+**Rust Example:**
+```rust
+#[no_mangle]
+pub extern "C" fn http_endpoints() -> *const u8 {
+    let endpoints = json!([
+        { "method": "GET", "path": "/api/status", "handler": "handle_status" }
+    ]).to_string() + "\0";
+    Box::into_raw(endpoints.into_boxed_str()) as *const u8
+}
+
+#[no_mangle]
+pub extern "C" fn handle_status(req_ptr: *const u8, req_len: usize) -> *const u8 {
+    let response = json!({
+        "statusCode": 200,
+        "headers": { "Content-Type": "application/json" },
+        "body": json!({ "status": "running" }).to_string()
+    }).to_string() + "\0";
+    Box::into_raw(response.into_boxed_str()) as *const u8
+}
+```
+
+**Request Context:**
+```json
+{
+  "method": "GET",
+  "path": "/api/logs",
+  "query": { "lines": "100", "filter": "error" },
+  "params": {},
+  "body": {},
+  "headers": { "user-agent": "..." }
+}
+```
+
+**Response Format:**
+```json
+{
+  "statusCode": 200,
+  "headers": { "Content-Type": "application/json" },
+  "body": "{ \"result\": \"success\" }"
+}
+```
+
+### Privileged Operations (Optional)
+
+**⚠️ Only required if your plugin needs to execute shell commands**
+
+If your plugin needs to read logs or execute system commands, follow these steps:
+
+#### 1. Add FFI Declaration
+
+Add this **at the top** of your AssemblyScript plugin file:
+
+```typescript
+// FFI import from Signal K server (only if you need shell commands)
+@external("env", "sk_exec_command")
+declare function sk_exec_command_ffi(
+  cmdPtr: usize,
+  cmdLen: usize,
+  outPtr: usize,
+  outMaxLen: usize
+): i32
+```
+
+#### 2. Create Helper Function
+
+Add a helper to call the FFI function safely:
+
+```typescript
+function execCommand(command: string, maxOutput: i32 = 102400): string {
+  const cmdBuffer = String.UTF8.encode(command)
+  const outputBuffer = new ArrayBuffer(maxOutput)
+
+  const bytesRead = sk_exec_command_ffi(
+    changetype<usize>(cmdBuffer),
+    cmdBuffer.byteLength,
+    changetype<usize>(outputBuffer),
+    maxOutput
+  )
+
+  if (bytesRead === 0) {
+    return '' // Command failed or not allowed
+  }
+
+  return String.UTF8.decode(outputBuffer, bytesRead)
+}
+```
+
+#### 3. Use It
+
+```typescript
+// Example: Read logs with journalctl
+function readSystemLogs(lines: i32 = 100): string {
+  return execCommand(`journalctl -u signalk -n ${lines}`)
+}
+```
+
+#### 4. Recompile
+
+After adding the FFI declaration, **recompile your WASM module**:
+```bash
+npm run asbuild
+```
+
+**Allowed Commands (Whitelisted for Security):**
+- `journalctl -u signalk*` - Read SignalK service logs
+- `cat /var/log/*` - Read log files
+- `tail -n <N> /*` - Tail log files
+
+⚠️ Other commands return empty string for security. If you need additional commands, request them via GitHub issue.
 
 ## Resources
 

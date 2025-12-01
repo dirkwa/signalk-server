@@ -69,6 +69,7 @@
     "packages/typedoc-theme"
   ],
   "dependencies": {
+    "@assemblyscript/loader": "^0.28.9",
     "@bytecodealliance/jco": "^1.4.0",
     "@signalk/course-provider": "^1.0.0",
     "@signalk/n2k-signalk": ">=4.1.0-beta",

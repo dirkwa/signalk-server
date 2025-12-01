@@ -218,3 +218,85 @@ export function plugin_start(configPtr: usize, configLen: usize): i32 {
 export function plugin_stop(): i32 {
   return plugin.stop()
 }
+
+/**
+ * HTTP Endpoints (Phase 2)
+ * Register custom REST API endpoints
+ */
+export function http_endpoints(): string {
+  return `[
+    {
+      "method": "GET",
+      "path": "/api/info",
+      "handler": "handle_get_info"
+    },
+    {
+      "method": "GET",
+      "path": "/api/status",
+      "handler": "handle_get_status"
+    }
+  ]`
+}
+
+/**
+ * Handle GET /api/info
+ * Returns plugin information
+ */
+export function handle_get_info(requestPtr: usize, requestLen: usize): string {
+  // Decode request from memory (not used in this simple example)
+  const requestBytes = new Uint8Array(i32(requestLen))
+  for (let i: i32 = 0; i < i32(requestLen); i++) {
+    requestBytes[i] = load<u8>(requestPtr + <usize>i)
+  }
+  const requestJson = String.UTF8.decode(requestBytes.buffer)
+
+  // Build response data
+  const bodyJson = `{
+    "pluginId": "${plugin.id()}",
+    "pluginName": "${plugin.name()}",
+    "language": "AssemblyScript",
+    "version": "0.1.0",
+    "message": "Hello from WASM!",
+    "capabilities": ["delta", "notifications", "http-endpoints"]
+  }`
+
+  // Escape for embedding in JSON response
+  const escapedBody = bodyJson
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+
+  // Return HTTP response
+  return `{
+    "statusCode": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "${escapedBody}"
+  }`
+}
+
+/**
+ * Handle GET /api/status
+ * Returns runtime status
+ */
+export function handle_get_status(requestPtr: usize, requestLen: usize): string {
+  const requestBytes = new Uint8Array(i32(requestLen))
+  for (let i: i32 = 0; i < i32(requestLen); i++) {
+    requestBytes[i] = load<u8>(requestPtr + <usize>i)
+  }
+  const requestJson = String.UTF8.decode(requestBytes.buffer)
+
+  const bodyJson = `{
+    "status": "running",
+    "uptime": "N/A",
+    "memory": "sandboxed"
+  }`
+
+  const escapedBody = bodyJson
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+
+  return `{
+    "statusCode": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "${escapedBody}"
+  }`
+}
