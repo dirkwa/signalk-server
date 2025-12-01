@@ -8,6 +8,7 @@ import {
   Delta
 } from '.'
 import { CourseApi } from './course'
+import { HistoryApiRegistry, WithHistoryApi } from './history'
 import { StreamBundle } from './streambundle'
 import { SubscriptionManager } from './subscriptionmanager'
 
@@ -27,10 +28,13 @@ import { SubscriptionManager } from './subscriptionmanager'
  * @category Server API
  */
 export interface ServerAPI
-  extends PropertyValuesEmitter,
+  extends
+    PropertyValuesEmitter,
     ResourceProviderRegistry,
     AutopilotProviderRegistry,
     WeatherProviderRegistry,
+    WithHistoryApi,
+    HistoryApiRegistry,
     WithFeatures,
     CourseApi,
     SelfIdentity {
