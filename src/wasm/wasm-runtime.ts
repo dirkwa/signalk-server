@@ -201,8 +201,26 @@ export class WasmRuntime {
           try {
             const message = readUtf8String(ptr, len)
             debug(`[${pluginId}] Status: ${message}`)
+
+            // Update plugin status in Signal K server
+            if (app && app.setPluginStatus) {
+              app.setPluginStatus(pluginId, message)
+            }
           } catch (error) {
             debug(`Plugin set status error: ${error}`)
+          }
+        },
+        sk_set_error: (ptr: number, len: number) => {
+          try {
+            const message = readUtf8String(ptr, len)
+            debug(`[${pluginId}] Error: ${message}`)
+
+            // Update plugin error in Signal K server
+            if (app && app.setPluginError) {
+              app.setPluginError(pluginId, message)
+            }
+          } catch (error) {
+            debug(`Plugin set error error: ${error}`)
           }
         },
         sk_handle_message: (ptr: number, len: number) => {
@@ -278,9 +296,33 @@ export class WasmRuntime {
 
         // start/stop functions work differently - they take/return numbers
         startFunc = (config: string) => {
-          // For now, we need to pass config as a pointer too
-          // This is a TODO - implement proper string passing
-          return rawExports.plugin_start(0, 0)
+          // The plugin_start wrapper expects pointer and length
+          // We need to write the config string to WASM memory first
+          const configBuffer = Buffer.from(config, 'utf8')
+          const memory = rawExports.memory as WebAssembly.Memory
+
+          // Check current memory size
+          const currentSize = memory.buffer.byteLength
+          debug(`Current WASM memory size: ${currentSize} bytes`)
+
+          // Use a small, safe offset in the first page (1KB from start)
+          // This is safe as AssemblyScript's heap starts much higher
+          const configPtr = 1024
+          debug(`Config buffer size: ${configBuffer.length} bytes, using offset: ${configPtr}`)
+
+          // Ensure we have enough space
+          if (configPtr + configBuffer.length > currentSize) {
+            const pagesNeeded = Math.ceil((configPtr + configBuffer.length - currentSize) / 65536) + 1
+            debug(`Growing memory by ${pagesNeeded} pages`)
+            memory.grow(pagesNeeded)
+          }
+
+          // Get fresh memory view AFTER any grow operation
+          const memView = new Uint8Array(memory.buffer)
+          memView.set(configBuffer, configPtr)
+          debug(`Wrote config to WASM memory at offset ${configPtr}`)
+
+          return rawExports.plugin_start(configPtr, configBuffer.length)
         }
         stopFunc = () => rawExports.plugin_stop()
       } else {

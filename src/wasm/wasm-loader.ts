@@ -46,6 +46,7 @@ export interface WasmPlugin {
   packageName: string
   version: string
   enabled: boolean
+  enableDebug: boolean
   keywords: string[]
   packageLocation: string
   metadata: WasmPluginMetadata
@@ -170,6 +171,7 @@ export async function registerWasmPlugin(
       packageName,
       version: metadata.version || packageJson.version,
       enabled: savedConfig.enabled || false,
+      enableDebug: savedConfig.enableDebug || false,
       keywords: packageJson.keywords || [],
       packageLocation: location,
       metadata: {
@@ -239,7 +241,13 @@ export async function startWasmPlugin(app: any, pluginId: string): Promise<void>
     }
 
     // Call plugin start() with configuration
-    const configJson = JSON.stringify(plugin.configuration)
+    // Pass the entire configuration object including enableDebug at root level
+    const startConfig = {
+      ...plugin.configuration,
+      enableDebug: plugin.enableDebug
+    }
+    const configJson = JSON.stringify(startConfig)
+    debug(`Starting plugin with config: ${configJson}`)
     const result = plugin.instance.exports.start(configJson)
 
     if (result !== 0) {
@@ -431,6 +439,7 @@ export async function updateWasmPluginConfig(
 
   const config = {
     enabled: plugin.enabled,
+    enableDebug: plugin.enableDebug,
     configuration
   }
   debug(`updateWasmPluginConfig: Writing config to disk: ${JSON.stringify(config)}`)
@@ -478,6 +487,7 @@ export async function setWasmPluginEnabled(
 
   const config = {
     enabled,
+    enableDebug: plugin.enableDebug,
     configuration: plugin.configuration
   }
   debug(`setWasmPluginEnabled: Writing config to disk: ${JSON.stringify(config)}`)
@@ -575,20 +585,35 @@ function setupWasmPluginRoutes(
 
       const newConfig = req.body
 
-      debug(`Current plugin state - enabled: ${plugin.enabled}, configuration: ${JSON.stringify(plugin.configuration)}`)
+      debug(`Current plugin state - enabled: ${plugin.enabled}, enableDebug: ${plugin.enableDebug}, configuration: ${JSON.stringify(plugin.configuration)}`)
 
-      // Update plugin configuration
+      // Update enableDebug FIRST (before saving config)
+      if (typeof newConfig.enableDebug === 'boolean') {
+        debug(`Updating enableDebug from ${plugin.enableDebug} to ${newConfig.enableDebug}`)
+        plugin.enableDebug = newConfig.enableDebug
+      }
+
+      // Update enabled state SECOND (before saving config)
+      const enabledChanged = typeof newConfig.enabled === 'boolean' && newConfig.enabled !== plugin.enabled
+      if (enabledChanged) {
+        debug(`Updating enabled from ${plugin.enabled} to ${newConfig.enabled}`)
+        plugin.enabled = newConfig.enabled
+      }
+
+      // Update plugin configuration and save everything to disk
       debug(`Calling updateWasmPluginConfig with: ${JSON.stringify(newConfig.configuration)}`)
       await updateWasmPluginConfig(app, plugin.id, newConfig.configuration, configPath)
       debug(`updateWasmPluginConfig completed`)
 
-      // Update enabled state if changed
-      if (typeof newConfig.enabled === 'boolean' && newConfig.enabled !== plugin.enabled) {
-        debug(`Updating enabled state from ${plugin.enabled} to ${newConfig.enabled}`)
-        await setWasmPluginEnabled(app, plugin.id, newConfig.enabled, configPath)
-        debug(`setWasmPluginEnabled completed`)
-      } else {
-        debug(`Enabled state unchanged: ${plugin.enabled}`)
+      // Start or stop plugin if enabled state changed
+      if (enabledChanged) {
+        if (plugin.enabled && plugin.status !== 'running') {
+          debug(`Plugin enabled, starting...`)
+          await startWasmPlugin(app, plugin.id)
+        } else if (!plugin.enabled && plugin.status === 'running') {
+          debug(`Plugin disabled, stopping...`)
+          await stopWasmPlugin(plugin.id)
+        }
       }
 
       debug(`Final plugin state - enabled: ${plugin.enabled}, status: ${plugin.status}`)
@@ -613,6 +638,7 @@ function setupWasmPluginRoutes(
 
     res.json({
       enabled: plugin.enabled,
+      enableDebug: plugin.enableDebug,
       configuration: plugin.configuration,
       ...config
     })
