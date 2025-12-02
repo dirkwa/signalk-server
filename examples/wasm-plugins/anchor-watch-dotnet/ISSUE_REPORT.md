@@ -135,13 +135,16 @@ Adding .NET support would greatly benefit the enterprise/marine industry develop
 
 - [componentize-dotnet README](https://github.com/bytecodealliance/componentize-dotnet) - States "works with Wasmtime and WAMR"
 - [jco repository](https://github.com/bytecodealliance/jco)
-- [Our Signal K WASM implementation](https://github.com/SignalK/signalk-server)
+- [Our Signal K WASM implementation](https://github.com/dirkwa/signalk-server/tree/WASM_WASIX)
 
 ## Complete Reproduction Repository
 
 A complete working example demonstrating this issue is available at:
-https://github.com/SignalK/signalk-server/tree/WASM_WASIX_DEVTREE/examples/wasm-plugins/anchor-watch-dotnet
+https://github.com/dirkwa/signalk-server/tree/WASM_WASIX/examples/wasm-plugins/anchor-watch-dotnet
 
 ---
 
 **Labels suggestion**: `enhancement`, `runtime-support`, `jco`
+
+# Issue Filed
+https://github.com/bytecodealliance/componentize-dotnet/issues/103
