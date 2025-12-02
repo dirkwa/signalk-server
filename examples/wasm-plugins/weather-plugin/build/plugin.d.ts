@@ -33,22 +33,3 @@ export declare function plugin_start(configPtr: number, configLen: number): numb
  * @returns `i32`
  */
 export declare function plugin_stop(): number;
-/**
- * assembly/index/http_endpoints
- * @returns `~lib/string/String`
- */
-export declare function http_endpoints(): string;
-/**
- * assembly/index/handle_get_info
- * @param requestPtr `usize`
- * @param requestLen `usize`
- * @returns `~lib/string/String`
- */
-export declare function handle_get_info(requestPtr: number, requestLen: number): string;
-/**
- * assembly/index/handle_get_status
- * @param requestPtr `usize`
- * @param requestLen `usize`
- * @returns `~lib/string/String`
- */
-export declare function handle_get_status(requestPtr: number, requestLen: number): string;

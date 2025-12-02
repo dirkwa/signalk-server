@@ -17,7 +17,7 @@ import {
   setError,
   debug,
   getCurrentTimestamp
-} from '../../../../packages/assemblyscript-plugin-sdk/assembly/index'
+} from 'signalk-assemblyscript-plugin-sdk/assembly'
 
 /**
  * Plugin configuration interface
@@ -25,13 +25,23 @@ import {
 class HelloConfig {
   message: string = 'Hello from AssemblyScript!'
   updateInterval: i32 = 5000
+  enableDebugLogging: boolean = false
 }
 
 /**
  * Hello World Plugin Implementation
  */
-export class HelloPlugin extends Plugin {
+class HelloPlugin extends Plugin {
   private config: HelloConfig = new HelloConfig()
+
+  /**
+   * Helper to conditionally log debug messages
+   */
+  private logDebug(message: string): void {
+    if (this.config.enableDebugLogging) {
+      debug(message)
+    }
+  }
 
   /**
    * Plugin ID - must be unique
@@ -72,32 +82,38 @@ export class HelloPlugin extends Plugin {
    * Start plugin with configuration
    */
   start(configJson: string): i32 {
-    debug('========================================')
-    debug('Hello AssemblyScript plugin starting...')
-    debug(`Plugin ID: ${this.id()}`)
-    debug(`Plugin Name: ${this.name()}`)
-    debug(`Configuration received: ${configJson}`)
-    debug('========================================')
-
     // Parse configuration
-    // Note: AssemblyScript JSON parsing would need a JSON library
-    // For now, using default config
-    // In production, use a JSON parser like assemblyscript-json
+    // Note: For production, use a JSON parser like assemblyscript-json
+    // For this example, we do basic string parsing
+
+    // Check enableDebug at root level (matches regular plugin config structure)
+    if (configJson.includes('"enableDebug":true') ||
+        configJson.includes('"enableDebug": true')) {
+      this.config.enableDebugLogging = true
+    }
+
+    this.logDebug('========================================')
+    this.logDebug('Hello AssemblyScript plugin starting...')
+    this.logDebug(`Plugin ID: ${this.id()}`)
+    this.logDebug(`Plugin Name: ${this.name()}`)
+    this.logDebug(`Configuration received: ${configJson}`)
+    this.logDebug(`Debug logging: ${this.config.enableDebugLogging ? 'ENABLED' : 'DISABLED'}`)
+    this.logDebug('========================================')
 
     setStatus('Started successfully')
-    debug('Status set to: Started successfully')
+    this.logDebug('Status set to: Started successfully')
 
     // Emit a welcome notification
-    debug('Emitting welcome notification...')
+    this.logDebug('Emitting welcome notification...')
     this.emitWelcomeNotification()
 
     // Emit a test delta
-    debug('Emitting test delta with plugin info...')
+    this.logDebug('Emitting test delta with plugin info...')
     this.emitTestDelta()
 
-    debug('========================================')
-    debug('Hello AssemblyScript plugin started successfully!')
-    debug('========================================')
+    this.logDebug('========================================')
+    this.logDebug('Hello AssemblyScript plugin started successfully!')
+    this.logDebug('========================================')
     return 0 // Success
   }
 
@@ -105,13 +121,13 @@ export class HelloPlugin extends Plugin {
    * Stop plugin
    */
   stop(): i32 {
-    debug('========================================')
-    debug('Hello AssemblyScript plugin stopping...')
-    debug(`Plugin ID: ${this.id()}`)
+    this.logDebug('========================================')
+    this.logDebug('Hello AssemblyScript plugin stopping...')
+    this.logDebug(`Plugin ID: ${this.id()}`)
     setStatus('Stopped')
-    debug('Status set to: Stopped')
-    debug('Hello AssemblyScript plugin stopped successfully!')
-    debug('========================================')
+    this.logDebug('Status set to: Stopped')
+    this.logDebug('Hello AssemblyScript plugin stopped successfully!')
+    this.logDebug('========================================')
     return 0 // Success
   }
 
@@ -119,7 +135,7 @@ export class HelloPlugin extends Plugin {
    * Emit a welcome notification
    */
   private emitWelcomeNotification(): void {
-    debug('Building welcome notification...')
+    this.logDebug('Building welcome notification...')
     const notification = new Notification(
       NotificationState.normal,
       this.config.message
@@ -127,7 +143,7 @@ export class HelloPlugin extends Plugin {
 
     const source = new Source(this.id(), 'plugin')
     const timestamp = getCurrentTimestamp()
-    debug(`Timestamp: ${timestamp}`)
+    this.logDebug(`Timestamp: ${timestamp}`)
 
     const pathValue = new PathValue(
       'notifications.hello',
@@ -138,14 +154,14 @@ export class HelloPlugin extends Plugin {
     const delta = new Delta('vessels.self', [update])
 
     emit(delta)
-    debug('✓ Welcome notification emitted to path: notifications.hello')
+    this.logDebug('✓ Welcome notification emitted to path: notifications.hello')
   }
 
   /**
    * Emit a test delta with plugin information
    */
   private emitTestDelta(): void {
-    debug('Building plugin info delta...')
+    this.logDebug('Building plugin info delta...')
     const pluginInfo = `{
       "name": "${this.name()}",
       "id": "${this.id()}",
@@ -155,7 +171,7 @@ export class HelloPlugin extends Plugin {
 
     const source = new Source(this.id(), 'plugin')
     const timestamp = getCurrentTimestamp()
-    debug(`Timestamp: ${timestamp}`)
+    this.logDebug(`Timestamp: ${timestamp}`)
 
     const pathValue = new PathValue(
       'plugins.hello-assemblyscript.info',
@@ -166,7 +182,7 @@ export class HelloPlugin extends Plugin {
     const delta = new Delta('vessels.self', [update])
 
     emit(delta)
-    debug('✓ Plugin info delta emitted to path: plugins.hello-assemblyscript.info')
+    this.logDebug('✓ Plugin info delta emitted to path: plugins.hello-assemblyscript.info')
   }
 }
 
@@ -201,4 +217,86 @@ export function plugin_start(configPtr: usize, configLen: usize): i32 {
 
 export function plugin_stop(): i32 {
   return plugin.stop()
+}
+
+/**
+ * HTTP Endpoints (Phase 2)
+ * Register custom REST API endpoints
+ */
+export function http_endpoints(): string {
+  return `[
+    {
+      "method": "GET",
+      "path": "/api/info",
+      "handler": "handle_get_info"
+    },
+    {
+      "method": "GET",
+      "path": "/api/status",
+      "handler": "handle_get_status"
+    }
+  ]`
+}
+
+/**
+ * Handle GET /api/info
+ * Returns plugin information
+ */
+export function handle_get_info(requestPtr: usize, requestLen: usize): string {
+  // Decode request from memory (not used in this simple example)
+  const requestBytes = new Uint8Array(i32(requestLen))
+  for (let i: i32 = 0; i < i32(requestLen); i++) {
+    requestBytes[i] = load<u8>(requestPtr + <usize>i)
+  }
+  const requestJson = String.UTF8.decode(requestBytes.buffer)
+
+  // Build response data
+  const bodyJson = `{
+    "pluginId": "${plugin.id()}",
+    "pluginName": "${plugin.name()}",
+    "language": "AssemblyScript",
+    "version": "0.1.0",
+    "message": "Hello from WASM!",
+    "capabilities": ["delta", "notifications", "http-endpoints"]
+  }`
+
+  // Escape for embedding in JSON response
+  const escapedBody = bodyJson
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+
+  // Return HTTP response
+  return `{
+    "statusCode": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "${escapedBody}"
+  }`
+}
+
+/**
+ * Handle GET /api/status
+ * Returns runtime status
+ */
+export function handle_get_status(requestPtr: usize, requestLen: usize): string {
+  const requestBytes = new Uint8Array(i32(requestLen))
+  for (let i: i32 = 0; i < i32(requestLen); i++) {
+    requestBytes[i] = load<u8>(requestPtr + <usize>i)
+  }
+  const requestJson = String.UTF8.decode(requestBytes.buffer)
+
+  const bodyJson = `{
+    "status": "running",
+    "uptime": "N/A",
+    "memory": "sandboxed"
+  }`
+
+  const escapedBody = bodyJson
+    .replaceAll('"', '\\"')
+    .replaceAll('\n', '\\n')
+
+  return `{
+    "statusCode": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "${escapedBody}"
+  }`
 }

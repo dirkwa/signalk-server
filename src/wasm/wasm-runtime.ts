@@ -20,8 +20,83 @@ try {
 import * as fs from 'fs'
 import * as path from 'path'
 import Debug from 'debug'
+import loader from '@assemblyscript/loader'
+import { FetchHandler } from 'as-fetch/bindings.raw.esm.js'
 
 const debug = Debug('signalk:wasm:runtime')
+
+// Initialize fetch for as-fetch integration
+// Node.js 18+ has native fetch, fallback to node-fetch for older versions
+let nodeFetch: typeof fetch
+try {
+  // Try to use native Node.js fetch (Node 18+)
+  const nativeFetch = globalThis.fetch
+  if (!nativeFetch) {
+    throw new Error('Native fetch not available')
+  }
+
+  // Wrap native fetch to handle headers properly for as-fetch
+  // as-fetch may pass headers in formats that Node.js fetch doesn't accept
+  nodeFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const sanitizedInit = init ? { ...init } : {}
+
+    // Ensure headers are in a format Node.js fetch accepts
+    if (sanitizedInit.headers) {
+      // Convert headers to plain object if needed
+      const headers = sanitizedInit.headers
+
+      // Check if it's already a plain object with string keys
+      if (typeof headers === 'object' && !Array.isArray(headers) && !(headers instanceof Headers)) {
+        // Check if it's a plain object by looking at constructor
+        if (Object.getPrototypeOf(headers) === Object.prototype || Object.getPrototypeOf(headers) === null) {
+          // It's already a plain object, keep it as-is
+          sanitizedInit.headers = headers as Record<string, string>
+        } else {
+          // It's some other object type, try to convert it
+          const headersObj: Record<string, string> = {}
+          try {
+            for (const [key, value] of Object.entries(headers)) {
+              headersObj[key] = String(value)
+            }
+            sanitizedInit.headers = headersObj
+          } catch (err) {
+            debug('Error converting headers:', err)
+            sanitizedInit.headers = {}
+          }
+        }
+      } else if (Array.isArray(headers)) {
+        // Convert array of arrays to object
+        const headersObj: Record<string, string> = {}
+        for (const [key, value] of headers) {
+          headersObj[key] = value
+        }
+        sanitizedInit.headers = headersObj
+      } else if (headers instanceof Headers) {
+        // Convert Headers instance to plain object
+        const headersObj: Record<string, string> = {}
+        headers.forEach((value, key) => {
+          headersObj[key] = value
+        })
+        sanitizedInit.headers = headersObj
+      } else {
+        // Unknown format, start fresh
+        sanitizedInit.headers = {}
+      }
+    } else {
+      // Provide default headers if none specified
+      sanitizedInit.headers = {}
+    }
+
+    return nativeFetch(input, sanitizedInit)
+  }
+} catch {
+  // If native fetch not available, could use node-fetch polyfill
+  // For now, we'll just use a stub that logs an error
+  debug('Warning: Native fetch not available, network capability will be limited')
+  nodeFetch = async () => {
+    throw new Error('Fetch not available - Node.js 18+ required for network capability')
+  }
+}
 
 export interface WasmCapabilities {
   network: boolean
@@ -30,6 +105,8 @@ export interface WasmCapabilities {
   dataWrite: boolean
   serialPorts: boolean
   putHandlers: boolean
+  httpEndpoints?: boolean
+  resourceProvider?: boolean
 }
 
 export interface WasmPluginInstance {
@@ -44,10 +121,14 @@ export interface WasmPluginInstance {
     id: () => string
     name: () => string
     schema: () => string
-    start: (config: string) => number // 0 = success, non-zero = error
+    start: (config: string) => number | Promise<number> // 0 = success, non-zero = error (async for Asyncify support)
     stop: () => number
     memory?: WebAssembly.Memory
+    // Optional: HTTP endpoint registration
+    http_endpoints?: () => string // Returns JSON array of endpoint definitions
   }
+  // AssemblyScript loader instance (if AssemblyScript plugin)
+  asLoader?: any
 }
 
 export class WasmRuntime {
@@ -115,7 +196,8 @@ export class WasmRuntime {
       const wasmBuffer = fs.readFileSync(wasmPath)
       debug(`WASM file size: ${wasmBuffer.length} bytes`)
 
-      debug(`Compiling WASM module...`)
+      // First check if this is an AssemblyScript plugin by inspecting exports
+      debug(`Compiling WASM module for inspection...`)
       let module: WebAssembly.Module
       try {
         module = await WebAssembly.compile(wasmBuffer)
@@ -125,14 +207,16 @@ export class WasmRuntime {
         throw compileError
       }
 
-      // Inspect module imports to determine what's needed
+      // Inspect module imports and exports to determine plugin type
       const imports = WebAssembly.Module.imports(module)
-      debug(`Module has ${imports.length} imports`)
+      const moduleExports = WebAssembly.Module.exports(module)
+      debug(`Module has ${imports.length} imports, ${moduleExports.length} exports`)
       debug(`Module imports: ${JSON.stringify(imports.map(i => `${i.module}.${i.name}`).slice(0, 20))}`)
 
-      // Instantiate with WASI imports
-      // Note: In Phase 1, we're using basic WASI without full WIT bindings
-      // Full WIT integration will be added as we build out the FFI layer
+      const isAssemblyScriptPlugin = moduleExports.some(e => e.name === 'plugin_id')
+      const isRustPlugin = moduleExports.some(e => e.name === '_start')
+
+      debug(`Plugin type detection: AS=${isAssemblyScriptPlugin}, Rust=${isRustPlugin}`)
 
       // Node.js WASI uses getImportObject(), @wasmer/wasi uses getImports()
       const wasiImports = (wasi.getImportObject ? wasi.getImportObject() : wasi.getImports(module)) as any
@@ -150,25 +234,6 @@ export class WasmRuntime {
         // Format: ptr points to UTF-8 bytes, len is the byte length
         const bytes = new Uint8Array(memoryRef.buffer, ptr, len)
         const decoder = new TextDecoder('utf-8')
-        return decoder.decode(bytes)
-      }
-
-      const readAssemblyScriptString = (ptr: number): string => {
-        if (!memoryRef) {
-          throw new Error('AssemblyScript module memory not initialized')
-        }
-
-        // For plugin metadata functions (id, name, schema), the plugin returns
-        // AssemblyScript String objects with this layout:
-        // ptr - 8: rtSize (4 bytes) - total allocation size
-        // ptr - 4: length (4 bytes) - string content length IN BYTES
-        // ptr: string data as UTF-16LE
-
-        const view = new DataView(memoryRef.buffer)
-        const lengthInBytes = view.getUint32(ptr - 4, true)
-
-        const bytes = new Uint8Array(memoryRef.buffer, ptr, lengthInBytes)
-        const decoder = new TextDecoder('utf-16le')
         return decoder.decode(bytes)
       }
 
@@ -201,8 +266,26 @@ export class WasmRuntime {
           try {
             const message = readUtf8String(ptr, len)
             debug(`[${pluginId}] Status: ${message}`)
+
+            // Update plugin status in Signal K server
+            if (app && app.setPluginStatus) {
+              app.setPluginStatus(pluginId, message)
+            }
           } catch (error) {
             debug(`Plugin set status error: ${error}`)
+          }
+        },
+        sk_set_error: (ptr: number, len: number) => {
+          try {
+            const message = readUtf8String(ptr, len)
+            debug(`[${pluginId}] Error: ${message}`)
+
+            // Update plugin error in Signal K server
+            if (app && app.setPluginError) {
+              app.setPluginError(pluginId, message)
+            }
+          } catch (error) {
+            debug(`Plugin set error error: ${error}`)
           }
         },
         sk_handle_message: (ptr: number, len: number) => {
@@ -225,64 +308,263 @@ export class WasmRuntime {
           } catch (error) {
             debug(`Plugin handle message error: ${error}`)
           }
+        },
+        // Privileged operation: Execute shell command (for log reading, journalctl, etc.)
+        sk_exec_command: (cmdPtr: number, cmdLen: number, outPtr: number, outMaxLen: number): number => {
+          try {
+            const command = readUtf8String(cmdPtr, cmdLen)
+            debug(`[${pluginId}] Executing command: ${command}`)
+
+            // Security: Only allow specific whitelisted commands for logs
+            const allowedCommands = [
+              /^journalctl\s+-u\s+signalk/,  // journalctl for signalk service
+              /^cat\s+\/var\/log\//,         // Read log files
+              /^tail\s+-n\s+\d+\s+\//,       // Tail log files
+            ]
+
+            const isAllowed = allowedCommands.some(pattern => pattern.test(command))
+            if (!isAllowed) {
+              debug(`[${pluginId}] Command not allowed: ${command}`)
+              return 0 // Return 0 bytes written
+            }
+
+            // Execute command
+            const { execSync } = require('child_process')
+            const output = execSync(command, {
+              encoding: 'utf8',
+              maxBuffer: 10 * 1024 * 1024, // 10MB max
+              timeout: 30000 // 30 second timeout
+            })
+
+            // Write output to WASM memory
+            const outputBytes = Buffer.from(output, 'utf8')
+            const bytesToWrite = Math.min(outputBytes.length, outMaxLen)
+
+            if (rawExports.memory) {
+              const memory = rawExports.memory as WebAssembly.Memory
+              const memView = new Uint8Array(memory.buffer)
+              memView.set(outputBytes.slice(0, bytesToWrite), outPtr)
+            }
+
+            return bytesToWrite
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            debug(`[${pluginId}] Command execution error: ${errorMsg}`)
+            return 0
+          }
+        },
+        // Capability checking - used by network API
+        sk_has_capability: (capPtr: number, capLen: number): number => {
+          try {
+            const capability = readUtf8String(capPtr, capLen)
+            debug(`[${pluginId}] Checking capability: ${capability}`)
+
+            // Check if plugin has requested capability
+            if (capability === 'network') {
+              return capabilities.network ? 1 : 0
+            }
+            // Add more capabilities as needed
+            return 0
+          } catch (error) {
+            debug(`Plugin capability check error: ${error}`)
+            return 0
+          }
         }
       }
 
-      const instance = await WebAssembly.instantiate(module, {
-        wasi_snapshot_preview1: wasiImports.wasi_snapshot_preview1 || wasiImports,
-        env: envImports
-      } as any)
-      debug(`WASM instance created`)
+      // Initialize as-fetch handler for network capability
+      let fetchHandler: any = null
+      let fetchImports = {}
 
-      // Extract raw exports first to check plugin type
-      const rawExports = instance.exports as any
+      if (capabilities.network) {
+        debug(`Setting up as-fetch handler for network capability`)
 
-      // Set memory reference for string reading
+        // Create a wrapper that reads strings from WASM memory
+        const fetchWrapper = async (urlPtr: number | string | URL | RequestInfo, init?: RequestInit) => {
+          let url: string
+
+          // If urlPtr is a number, it's a WASM memory pointer - read the string
+          if (typeof urlPtr === 'number') {
+            if (!memoryRef) {
+              throw new Error('WASM memory not available for string conversion')
+            }
+
+            // Read the string from WASM memory using AssemblyScript string layout
+            // AssemblyScript stores strings as UTF-16LE with metadata before the pointer
+            // SIZE_OFFSET = -4 means the byte length is stored 4 bytes before ptr
+            const SIZE_OFFSET = -4
+            const memView = new Uint32Array(memoryRef.buffer)
+
+            // Get byte length from SIZE_OFFSET, then convert to UTF-16 char count
+            const strLengthInBytes = memView[(urlPtr + SIZE_OFFSET) >>> 2]
+            const strLengthInChars = strLengthInBytes >>> 1  // Divide by 2 for UTF-16
+
+            // String data starts at ptr (not ptr+4)
+            const strView = new Uint16Array(memoryRef.buffer, urlPtr, strLengthInChars)
+            url = String.fromCharCode(...Array.from(strView))
+            debug(`Converted WASM string pointer ${urlPtr} to URL: ${url}`)
+          } else {
+            url = String(urlPtr)
+          }
+
+          return nodeFetch(url, init)
+        }
+
+        fetchHandler = new FetchHandler(fetchWrapper)
+        fetchImports = fetchHandler.imports
+      }
+
+      // Use different instantiation methods based on plugin type
+      let instance: WebAssembly.Instance
+      let asLoaderInstance: any = null
+      let rawExports: any
+
+      if (isAssemblyScriptPlugin) {
+        // Use AssemblyScript loader for automatic string handling
+        debug(`Using AssemblyScript loader for ${pluginId}`)
+
+        asLoaderInstance = await loader.instantiate(module, {
+          wasi_snapshot_preview1: wasiImports.wasi_snapshot_preview1 || wasiImports,
+          env: envImports,
+          ...fetchImports
+        })
+
+        instance = asLoaderInstance.instance
+        rawExports = asLoaderInstance.exports
+        debug(`AssemblyScript instance created with loader`)
+      } else {
+        // Standard WebAssembly instantiation for Rust plugins
+        instance = await WebAssembly.instantiate(module, {
+          wasi_snapshot_preview1: wasiImports.wasi_snapshot_preview1 || wasiImports,
+          env: envImports,
+          ...fetchImports
+        } as any)
+        rawExports = instance.exports as any
+        debug(`Standard WASM instance created`)
+      }
+
+      // Set memory reference for UTF-8 string reading in FFI callbacks
       if (rawExports.memory) {
         memoryRef = rawExports.memory as WebAssembly.Memory
       }
 
-      // Detect plugin type and initialize accordingly
-      // Rust plugins have _start function, AssemblyScript plugins don't
-      const isRustPlugin = !!rawExports._start
-      const isAssemblyScriptPlugin = !!rawExports.plugin_id
+      // Store reference to the function that needs to be resumed
+      let asyncifyResumeFunction: (() => any) | null = null
 
+      // Initialize as-fetch handler if network capability is enabled
+      if (fetchHandler && capabilities.network) {
+        debug(`Initializing as-fetch handler with exports`)
+        // The second parameter is the "main function" that gets called after async operations complete
+        // This function needs to re-call the WASM function to continue execution in rewind state
+        fetchHandler.init(rawExports, () => {
+          debug(`FetchHandler calling main function to resume execution`)
+          if (asyncifyResumeFunction) {
+            asyncifyResumeFunction()
+          }
+        })
+      }
+
+      // Initialize based on plugin type
       if (isRustPlugin) {
         // Rust plugin - start WASI
-        debug(`Detected Rust plugin: ${pluginId}`)
+        debug(`Initializing Rust plugin: ${pluginId}`)
         wasi.start(instance)
       } else if (isAssemblyScriptPlugin) {
-        // AssemblyScript plugin - no _start needed, just use exports directly
-        debug(`Detected AssemblyScript plugin: ${pluginId}`)
-        // AssemblyScript plugins don't need WASI initialization
-        // They export functions directly that we can call
+        // AssemblyScript plugin - no _start needed
+        debug(`Initialized AssemblyScript plugin: ${pluginId}`)
       } else {
         throw new Error(`Unknown WASM plugin format for ${pluginId}`)
       }
 
       // Create normalized export interface
-      // Maps both Rust-style (id, name, schema) and AssemblyScript-style (plugin_id, plugin_name, plugin_schema)
-
-      // Wrap functions based on plugin type
       let idFunc: () => string
       let nameFunc: () => string
       let schemaFunc: () => string
-      let startFunc: (config: string) => number
+      let startFunc: (config: string) => number | Promise<number>
       let stopFunc: () => number
 
-      if (isAssemblyScriptPlugin) {
-        // AssemblyScript functions return pointers to strings in memory
-        idFunc = () => readAssemblyScriptString(rawExports.plugin_id())
-        nameFunc = () => readAssemblyScriptString(rawExports.plugin_name())
-        schemaFunc = () => readAssemblyScriptString(rawExports.plugin_schema())
-
-        // start/stop functions work differently - they take/return numbers
-        startFunc = (config: string) => {
-          // For now, we need to pass config as a pointer too
-          // This is a TODO - implement proper string passing
-          return rawExports.plugin_start(0, 0)
+      if (isAssemblyScriptPlugin && asLoaderInstance) {
+        // AssemblyScript loader provides __getString to decode string pointers
+        // The exported functions return pointers, we decode them with __getString
+        idFunc = () => {
+          const ptr = asLoaderInstance.exports.plugin_id()
+          return asLoaderInstance.exports.__getString(ptr)
         }
-        stopFunc = () => rawExports.plugin_stop()
+        nameFunc = () => {
+          const ptr = asLoaderInstance.exports.plugin_name()
+          return asLoaderInstance.exports.__getString(ptr)
+        }
+        schemaFunc = () => {
+          const ptr = asLoaderInstance.exports.plugin_schema()
+          return asLoaderInstance.exports.__getString(ptr)
+        }
+
+        // For plugin_start, encode config as UTF-8 bytes and copy to WASM memory
+        // This function now supports Asyncify for async operations like fetchSync()
+        startFunc = async (config: string) => {
+          debug(`Calling plugin_start with config: ${config.substring(0, 100)}...`)
+          // Encode string as UTF-8 bytes
+          const encoder = new TextEncoder()
+          const configBytes = encoder.encode(config)
+          const configLen = configBytes.length
+
+          // Allocate memory in WASM for the UTF-8 bytes
+          const configPtr = asLoaderInstance.exports.__new(configLen, 0) // id=0 for ArrayBuffer
+
+          // Copy UTF-8 bytes to WASM memory
+          const memory = asLoaderInstance.exports.memory.buffer
+          const memoryView = new Uint8Array(memory)
+          memoryView.set(configBytes, configPtr)
+
+          // Set up the resume function BEFORE calling plugin_start to avoid race condition
+          // The FetchHandler might complete very quickly and call the main function immediately
+          let resumePromiseResolve: (() => void) | null = null
+          const resumePromise = new Promise<void>((resolve) => {
+            resumePromiseResolve = resolve
+          })
+
+          asyncifyResumeFunction = () => {
+            // Re-call plugin_start to continue execution in rewind state (state 2)
+            debug(`Re-calling plugin_start to resume from rewind state`)
+            const resumeResult = asLoaderInstance.exports.plugin_start(configPtr, configLen)
+            if (resumePromiseResolve) {
+              resumePromiseResolve()
+            }
+            return resumeResult
+          }
+
+          // Call plugin_start - this may trigger Asyncify
+          let result = asLoaderInstance.exports.plugin_start(configPtr, configLen)
+
+          // Check if Asyncify is available and the function is in unwound state
+          if (typeof asLoaderInstance.exports.asyncify_get_state === 'function') {
+            const state = asLoaderInstance.exports.asyncify_get_state()
+            debug(`Asyncify state after plugin_start: ${state}`)
+
+            if (state === 1) {
+              // State 1 = unwound (async operation in progress)
+              // The FetchHandler will handle the async operation and call the main function to resume
+              debug(`Plugin is in unwound state - waiting for async operation to complete`)
+
+              // Wait for the FetchHandler to complete the async operation and call the resume function
+              await resumePromise
+
+              debug(`Async operation completed, plugin execution resumed`)
+            } else {
+              // Clear the resume function if we didn't need it
+              asyncifyResumeFunction = null
+            }
+          }
+
+          // Free the allocated memory if __free is available
+          // Note: Some AS builds may not export __free
+          if (typeof asLoaderInstance.exports.__free === 'function') {
+            asLoaderInstance.exports.__free(configPtr)
+          }
+
+          return result
+        }
+        stopFunc = () => asLoaderInstance.exports.plugin_stop()
       } else {
         // Rust plugins return JavaScript strings directly
         idFunc = rawExports.id
@@ -292,13 +574,24 @@ export class WasmRuntime {
         stopFunc = rawExports.stop
       }
 
+      // Wrap http_endpoints if it exists
+      const httpEndpointsFunc = rawExports.http_endpoints
+        ? (isAssemblyScriptPlugin && asLoaderInstance
+            ? () => {
+                const ptr = asLoaderInstance.exports.http_endpoints()
+                return asLoaderInstance.exports.__getString(ptr)
+              }
+            : rawExports.http_endpoints)
+        : undefined
+
       const exports = {
         id: idFunc,
         name: nameFunc,
         schema: schemaFunc,
         start: startFunc,
         stop: stopFunc,
-        memory: rawExports.memory
+        memory: rawExports.memory,
+        ...(httpEndpointsFunc && { http_endpoints: httpEndpointsFunc })
       }
 
       const pluginInstance: WasmPluginInstance = {
@@ -309,7 +602,8 @@ export class WasmRuntime {
         wasi,
         module,
         instance,
-        exports
+        exports,
+        asLoader: asLoaderInstance
       }
 
       this.instances.set(pluginId, pluginInstance)
