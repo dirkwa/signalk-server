@@ -17,7 +17,7 @@ import {
   setError,
   debug,
   getCurrentTimestamp
-} from '../../../../packages/assemblyscript-plugin-sdk/assembly/index'
+} from 'signalk-assemblyscript-plugin-sdk/assembly'
 
 /**
  * Plugin configuration interface
@@ -31,7 +31,7 @@ class HelloConfig {
 /**
  * Hello World Plugin Implementation
  */
-export class HelloPlugin extends Plugin {
+class HelloPlugin extends Plugin {
   private config: HelloConfig = new HelloConfig()
 
   /**
