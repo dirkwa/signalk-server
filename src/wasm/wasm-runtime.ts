@@ -109,11 +109,44 @@ export interface WasmCapabilities {
   resourceProvider?: boolean
 }
 
+/**
+ * WASM binary format types
+ */
+export type WasmFormat = 'wasi-p1' | 'component-model' | 'unknown'
+
+/**
+ * Detect the format of a WASM binary by inspecting the magic bytes
+ * - WASI P1 modules start with: 0x00 0x61 0x73 0x6D 0x01 0x00 0x00 0x00 (version 1)
+ * - Component Model starts with: 0x00 0x61 0x73 0x6D 0x0d 0x00 0x01 0x00 (version 13/0x0d)
+ */
+export function detectWasmFormat(buffer: Buffer): WasmFormat {
+  if (buffer.length < 8) {
+    return 'unknown'
+  }
+
+  // Check WASM magic number: \0asm
+  if (buffer[0] !== 0x00 || buffer[1] !== 0x61 || buffer[2] !== 0x73 || buffer[3] !== 0x6d) {
+    return 'unknown'
+  }
+
+  // Check version byte (byte 4)
+  const version = buffer[4]
+
+  if (version === 0x01) {
+    return 'wasi-p1'
+  } else if (version === 0x0d) {
+    return 'component-model'
+  }
+
+  return 'unknown'
+}
+
 export interface WasmPluginInstance {
   pluginId: string
   wasmPath: string
   vfsRoot: string
   capabilities: WasmCapabilities
+  format: WasmFormat  // Binary format: wasi-p1 or component-model
   wasi: any  // WASI type varies between Node.js and @wasmer/wasi
   module: WebAssembly.Module
   instance: WebAssembly.Instance
@@ -129,6 +162,8 @@ export interface WasmPluginInstance {
   }
   // AssemblyScript loader instance (if AssemblyScript plugin)
   asLoader?: any
+  // Component Model transpiled module (if Component Model plugin)
+  componentModule?: any
 }
 
 export class WasmRuntime {
@@ -176,6 +211,12 @@ export class WasmRuntime {
         fs.mkdirSync(vfsRoot, { recursive: true })
       }
 
+      // Check if wasmPath points to a pre-transpiled jco JavaScript module
+      if (wasmPath.endsWith('.js')) {
+        debug(`Detected pre-transpiled jco module: ${wasmPath}`)
+        return await this.loadPreTranspiledPlugin(pluginId, wasmPath, vfsRoot, capabilities, app)
+      }
+
       // Create WASI instance with VFS isolation
       debug(`Creating WASI instance for ${pluginId}`)
       const wasi = new WASI({
@@ -195,6 +236,16 @@ export class WasmRuntime {
       debug(`Reading WASM file: ${wasmPath}`)
       const wasmBuffer = fs.readFileSync(wasmPath)
       debug(`WASM file size: ${wasmBuffer.length} bytes`)
+
+      // Detect WASM binary format (WASI P1 vs Component Model)
+      const wasmFormat = detectWasmFormat(wasmBuffer)
+      debug(`Detected WASM format: ${wasmFormat}`)
+
+      // Handle Component Model binaries (e.g., from .NET)
+      if (wasmFormat === 'component-model') {
+        debug(`Component Model detected - using jco transpilation`)
+        return await this.loadComponentModelPlugin(pluginId, wasmPath, wasmBuffer, vfsRoot, capabilities, app)
+      }
 
       // First check if this is an AssemblyScript plugin by inspecting exports
       debug(`Compiling WASM module for inspection...`)
@@ -367,6 +418,76 @@ export class WasmRuntime {
             return 0
           } catch (error) {
             debug(`Plugin capability check error: ${error}`)
+            return 0
+          }
+        },
+        // PUT Handler Registration - allows plugins to handle PUT requests
+        sk_register_put_handler: (contextPtr: number, contextLen: number, pathPtr: number, pathLen: number): number => {
+          try {
+            const context = readUtf8String(contextPtr, contextLen)
+            const path = readUtf8String(pathPtr, pathLen)
+            debug(`[${pluginId}] Registering PUT handler: context=${context}, path=${path}`)
+
+            // Check if plugin has putHandlers capability
+            if (!capabilities.putHandlers) {
+              debug(`[${pluginId}] PUT handlers capability not granted`)
+              return 0 // Failure
+            }
+
+            // Register PUT handler with Signal K server
+            if (app && app.registerPutHandler) {
+              // The callback will be invoked when a PUT request arrives
+              const callback = (context: string, path: string, value: any, cb: (result: any) => void) => {
+                debug(`[${pluginId}] PUT request received: ${context}.${path} = ${JSON.stringify(value)}`)
+
+                // Find the corresponding handler function in WASM exports
+                // Handler function name format: handle_put_<context>_<path> (sanitized)
+                const handlerName = `handle_put_${context.replace(/\./g, '_')}_${path.replace(/\./g, '_')}`
+
+                if (asLoaderInstance && asLoaderInstance.exports[handlerName]) {
+                  debug(`[${pluginId}] Calling WASM handler: ${handlerName}`)
+
+                  // Prepare request JSON
+                  const requestJson = JSON.stringify({
+                    context,
+                    path,
+                    value
+                  })
+
+                  try {
+                    // Call WASM handler and get response JSON
+                    const responseJson = asLoaderInstance.exports[handlerName](requestJson)
+                    const response = JSON.parse(responseJson)
+
+                    debug(`[${pluginId}] PUT handler response: ${JSON.stringify(response)}`)
+                    cb(response)
+                  } catch (error) {
+                    debug(`[${pluginId}] PUT handler error: ${error}`)
+                    cb({
+                      state: 'COMPLETED',
+                      statusCode: 500,
+                      message: `Handler error: ${error}`
+                    })
+                  }
+                } else {
+                  debug(`[${pluginId}] Warning: Handler function not found: ${handlerName}`)
+                  cb({
+                    state: 'COMPLETED',
+                    statusCode: 501,
+                    message: 'Handler not implemented'
+                  })
+                }
+              }
+
+              app.registerPutHandler(context, path, callback, pluginId)
+              debug(`[${pluginId}] PUT handler registered successfully`)
+              return 1 // Success
+            } else {
+              debug(`[${pluginId}] app.registerPutHandler not available`)
+              return 0
+            }
+          } catch (error) {
+            debug(`Plugin register PUT handler error: ${error}`)
             return 0
           }
         }
@@ -599,6 +720,7 @@ export class WasmRuntime {
         wasmPath,
         vfsRoot,
         capabilities,
+        format: 'wasi-p1',
         wasi,
         module,
         instance,
@@ -614,6 +736,445 @@ export class WasmRuntime {
       const errorMsg = error instanceof Error ? error.message : String(error)
       debug(`Failed to load WASM plugin ${pluginId}: ${errorMsg}`)
       throw new Error(`Failed to load WASM plugin ${pluginId}: ${errorMsg}`)
+    }
+  }
+
+  /**
+   * Load a pre-transpiled jco plugin (JavaScript module)
+   *
+   * When wasmManifest points to a .js file, it's a pre-transpiled jco output
+   * that we can load directly as a JavaScript module.
+   */
+  private async loadPreTranspiledPlugin(
+    pluginId: string,
+    jsPath: string,
+    vfsRoot: string,
+    capabilities: WasmCapabilities,
+    app?: any
+  ): Promise<WasmPluginInstance> {
+    debug(`Loading pre-transpiled jco plugin: ${pluginId} from ${jsPath}`)
+
+    try {
+      // Convert to file:// URL for dynamic import on Windows/Unix
+      const jsUrl = `file://${jsPath.replace(/\\/g, '/')}`
+      debug(`Importing module from: ${jsUrl}`)
+
+      // Create Signal K API callbacks for the plugin
+      const signalkApi = this.createComponentSignalkApi(pluginId, app)
+
+      // Try to load and inject callbacks into signalk-api.js before loading main module
+      const signalkApiPath = path.join(path.dirname(jsPath), 'signalk-api.js')
+      if (fs.existsSync(signalkApiPath)) {
+        const signalkApiUrl = `file://${signalkApiPath.replace(/\\/g, '/')}`
+        debug(`Injecting Signal K API callbacks from: ${signalkApiUrl}`)
+        try {
+          const signalkApiModule = await import(signalkApiUrl)
+          if (typeof signalkApiModule._setCallbacks === 'function') {
+            signalkApiModule._setCallbacks({
+              debug: signalkApi.skDebug || signalkApi['sk-debug'],
+              setStatus: signalkApi.skSetStatus || signalkApi['sk-set-status'],
+              setError: signalkApi.skSetError || signalkApi['sk-set-error'],
+              handleMessage: signalkApi.skHandleMessage || signalkApi['sk-handle-message'],
+              registerPutHandler: signalkApi.skRegisterPutHandler || signalkApi['sk-register-put-handler']
+            })
+            debug(`Signal K API callbacks injected successfully`)
+          }
+        } catch (apiErr) {
+          debug(`Could not inject signalk-api callbacks: ${apiErr}`)
+        }
+      }
+
+      // Import the pre-transpiled module
+      const componentModule = await import(jsUrl)
+      debug(`Module imported, exports: ${Object.keys(componentModule).join(', ')}`)
+
+      // Wait for WASM initialization if $init is exported (jco --tla-compat mode)
+      if (componentModule.$init && typeof componentModule.$init.then === 'function') {
+        debug(`Waiting for WASM $init promise...`)
+        try {
+          await componentModule.$init
+          debug(`WASM $init completed successfully`)
+        } catch (initError) {
+          debug(`WASM $init failed: ${initError}`)
+          throw initError
+        }
+      }
+
+      // Debug: Log all exports from the componentModule after $init
+      debug(`After $init, componentModule keys: ${Object.keys(componentModule).join(', ')}`)
+      if (componentModule.plugin) {
+        debug(`componentModule.plugin keys: ${Object.keys(componentModule.plugin).join(', ')}`)
+        // Check if the plugin functions are actually defined
+        const pluginFuncs = componentModule.plugin
+        debug(`pluginId type: ${typeof pluginFuncs.pluginId}, value: ${pluginFuncs.pluginId}`)
+        debug(`pluginName type: ${typeof pluginFuncs.pluginName}, value: ${pluginFuncs.pluginName}`)
+        debug(`pluginStart type: ${typeof pluginFuncs.pluginStart}, value: ${pluginFuncs.pluginStart}`)
+      }
+
+      // Instantiate the component
+      let componentInstance: any
+
+      if (typeof componentModule.instantiate === 'function') {
+        debug(`Instantiating via instantiate() function`)
+        // jco generates an instantiate function that takes an import resolver
+        componentInstance = await componentModule.instantiate(
+          (name: string) => {
+            debug(`Import resolver called for: ${name}`)
+            // Provide our Signal K API for signalk:plugin imports
+            if (name.includes('signalk')) {
+              return signalkApi
+            }
+            // WASI imports are handled by the shims bundled in jco output
+            return {}
+          },
+          // Provide core WASM files resolver if needed
+          async (coreModule: string) => {
+            const corePath = path.join(path.dirname(jsPath), coreModule)
+            debug(`Loading core module: ${corePath}`)
+            const coreBuffer = fs.readFileSync(corePath)
+            return WebAssembly.compile(coreBuffer)
+          }
+        )
+      } else if (componentModule.default) {
+        // Some jco outputs export default
+        componentInstance = componentModule.default
+      } else {
+        // Direct exports
+        componentInstance = componentModule
+      }
+
+      debug(`Component instance created, keys: ${Object.keys(componentInstance || {}).join(', ')}`)
+
+      // Find the plugin exports - jco uses various naming conventions
+      let pluginExports = componentInstance?.['signalk:plugin/plugin@1.0.0']
+        || componentInstance?.plugin
+        || componentInstance?.['signalk:plugin/plugin']
+        || componentInstance
+
+      debug(`Plugin exports found, keys: ${Object.keys(pluginExports || {}).join(', ')}`)
+
+      // Map Component Model exports to our standard interface
+      const exports = {
+        id: () => {
+          const fn = pluginExports?.pluginId || pluginExports?.['plugin-id']
+          debug(`Calling pluginId, fn type: ${typeof fn}`)
+          try {
+            const result = typeof fn === 'function' ? fn() : fn
+            debug(`plugin_id() = ${result}`)
+            return result || pluginId
+          } catch (err) {
+            debug(`plugin_id() threw error: ${err}`)
+            throw err
+          }
+        },
+        name: () => {
+          const fn = pluginExports?.pluginName || pluginExports?.['plugin-name']
+          const result = typeof fn === 'function' ? fn() : fn
+          debug(`plugin_name() = ${result}`)
+          return result || pluginId
+        },
+        schema: () => {
+          const fn = pluginExports?.pluginSchema || pluginExports?.['plugin-schema']
+          const result = typeof fn === 'function' ? fn() : fn
+          debug(`plugin_schema() = ${result}`)
+          return result || '{}'
+        },
+        start: async (config: string) => {
+          const fn = pluginExports?.pluginStart || pluginExports?.['plugin-start']
+          if (typeof fn === 'function') {
+            debug(`Calling plugin_start with config: ${config.substring(0, 100)}...`)
+            const result = await fn(config)
+            debug(`plugin_start() = ${result}`)
+            return typeof result === 'number' ? result : 0
+          }
+          debug(`No plugin_start function found`)
+          return 0
+        },
+        stop: () => {
+          const fn = pluginExports?.pluginStop || pluginExports?.['plugin-stop']
+          if (typeof fn === 'function') {
+            debug(`Calling plugin_stop`)
+            const result = fn()
+            debug(`plugin_stop() = ${result}`)
+            return typeof result === 'number' ? result : 0
+          }
+          debug(`No plugin_stop function found`)
+          return 0
+        }
+      }
+
+      // Create a minimal WASI instance for compatibility tracking
+      const wasi = new WASI({
+        version: 'preview1',
+        env: { PLUGIN_ID: pluginId },
+        args: [],
+        preopens: { '/': vfsRoot }
+      })
+
+      // Create plugin instance
+      const pluginInstance: WasmPluginInstance = {
+        pluginId,
+        wasmPath: jsPath,
+        vfsRoot,
+        capabilities,
+        format: 'component-model',
+        wasi,
+        module: null as any,
+        instance: null as any,
+        exports,
+        componentModule: componentInstance
+      }
+
+      this.instances.set(pluginId, pluginInstance)
+      debug(`Successfully loaded pre-transpiled jco plugin: ${pluginId}`)
+
+      return pluginInstance
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      debug(`Failed to load pre-transpiled plugin ${pluginId}: ${errorMsg}`)
+      if (error instanceof Error && error.stack) {
+        debug(`Stack: ${error.stack}`)
+      }
+      throw new Error(`Failed to load pre-transpiled plugin ${pluginId}: ${errorMsg}`)
+    }
+  }
+
+  /**
+   * Load a WASI Component Model plugin using jco transpilation
+   *
+   * Component Model binaries (e.g., from .NET 10) cannot be loaded directly
+   * by Node.js WASI. We use jco to transpile them to JavaScript + WASI P1.
+   */
+  private async loadComponentModelPlugin(
+    pluginId: string,
+    wasmPath: string,
+    wasmBuffer: Buffer,
+    vfsRoot: string,
+    capabilities: WasmCapabilities,
+    app?: any
+  ): Promise<WasmPluginInstance> {
+    debug(`Loading Component Model plugin: ${pluginId}`)
+
+    try {
+      // Import jco transpile dynamically
+      const { transpile } = await import('@bytecodealliance/jco')
+
+      // Transpile the Component Model WASM to JavaScript bindings
+      debug(`Transpiling Component Model to JavaScript...`)
+
+      // Get the output directory for transpiled files
+      const transpiledDir = path.join(path.dirname(wasmPath), '.jco-transpiled', pluginId)
+      if (!fs.existsSync(transpiledDir)) {
+        fs.mkdirSync(transpiledDir, { recursive: true })
+      }
+
+      // Transpile the component
+      const { files } = await transpile(wasmBuffer, {
+        name: pluginId.replace(/[^a-zA-Z0-9]/g, '_'),
+        instantiation: 'async',
+        map: {
+          // Map WASI imports to preview2-shim
+          'wasi:cli/*': '@bytecodealliance/preview2-shim/cli#*',
+          'wasi:clocks/*': '@bytecodealliance/preview2-shim/clocks#*',
+          'wasi:filesystem/*': '@bytecodealliance/preview2-shim/filesystem#*',
+          'wasi:io/*': '@bytecodealliance/preview2-shim/io#*',
+          'wasi:random/*': '@bytecodealliance/preview2-shim/random#*',
+          'wasi:sockets/*': '@bytecodealliance/preview2-shim/sockets#*'
+        }
+      })
+
+      // Write transpiled files to disk
+      for (const [filename, content] of Object.entries(files)) {
+        const filePath = path.join(transpiledDir, filename)
+        const fileDir = path.dirname(filePath)
+        if (!fs.existsSync(fileDir)) {
+          fs.mkdirSync(fileDir, { recursive: true })
+        }
+        fs.writeFileSync(filePath, content as Uint8Array)
+        debug(`Wrote transpiled file: ${filePath}`)
+      }
+
+      // Find the main module file
+      const mainModulePath = path.join(transpiledDir, `${pluginId.replace(/[^a-zA-Z0-9]/g, '_')}.js`)
+      if (!fs.existsSync(mainModulePath)) {
+        // Try to find any .js file
+        const jsFiles = Object.keys(files).filter(f => f.endsWith('.js') && !f.endsWith('.d.ts'))
+        if (jsFiles.length === 0) {
+          throw new Error('No JavaScript module found in transpiled output')
+        }
+        debug(`Available JS files: ${jsFiles.join(', ')}`)
+      }
+
+      // Import the transpiled module
+      debug(`Importing transpiled module from: ${mainModulePath}`)
+      const componentModule = await import(`file://${mainModulePath}`)
+
+      // Create imports for the component - provide Signal K API
+      const signalkApi = this.createComponentSignalkApi(pluginId, app)
+
+      // Instantiate the component with imports
+      debug(`Instantiating component...`)
+      let componentInstance: any
+
+      // Check if it's an instantiate function or direct exports
+      if (typeof componentModule.instantiate === 'function') {
+        componentInstance = await componentModule.instantiate(
+          (name: string) => {
+            // Import resolver - return our Signal K API for signalk:plugin imports
+            if (name.startsWith('signalk:plugin/signalk-api')) {
+              return signalkApi
+            }
+            // Return empty object for other imports (WASI shims handle those)
+            return {}
+          }
+        )
+      } else {
+        // Direct exports - assume it's already instantiated
+        componentInstance = componentModule
+      }
+
+      debug(`Component instance created`)
+
+      // Extract plugin interface exports
+      // Component Model exports are under 'signalk:plugin/plugin@1.0.0'
+      let pluginExports = componentInstance['signalk:plugin/plugin@1.0.0']
+        || componentInstance.plugin
+        || componentInstance
+
+      // Map Component Model exports to our standard interface
+      const exports = {
+        id: () => {
+          const result = pluginExports.pluginId?.() || pluginExports['plugin-id']?.()
+          return result || pluginId
+        },
+        name: () => {
+          const result = pluginExports.pluginName?.() || pluginExports['plugin-name']?.()
+          return result || pluginId
+        },
+        schema: () => {
+          const result = pluginExports.pluginSchema?.() || pluginExports['plugin-schema']?.()
+          return result || '{}'
+        },
+        start: async (config: string) => {
+          const fn = pluginExports.pluginStart || pluginExports['plugin-start']
+          if (fn) {
+            const result = await fn(config)
+            return typeof result === 'number' ? result : 0
+          }
+          return 0
+        },
+        stop: () => {
+          const fn = pluginExports.pluginStop || pluginExports['plugin-stop']
+          if (fn) {
+            const result = fn()
+            return typeof result === 'number' ? result : 0
+          }
+          return 0
+        }
+      }
+
+      // Create a minimal WASI instance for compatibility (not actually used for Component Model)
+      const wasi = new WASI({
+        version: 'preview1',
+        env: { PLUGIN_ID: pluginId },
+        args: [],
+        preopens: { '/': vfsRoot }
+      })
+
+      // Create plugin instance
+      const pluginInstance: WasmPluginInstance = {
+        pluginId,
+        wasmPath,
+        vfsRoot,
+        capabilities,
+        format: 'component-model',
+        wasi,
+        module: null as any, // Component Model doesn't use WebAssembly.Module directly
+        instance: null as any, // Component Model doesn't use WebAssembly.Instance directly
+        exports,
+        componentModule: componentInstance
+      }
+
+      this.instances.set(pluginId, pluginInstance)
+      debug(`Successfully loaded Component Model plugin: ${pluginId}`)
+
+      return pluginInstance
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      debug(`Failed to load Component Model plugin ${pluginId}: ${errorMsg}`)
+      if (error instanceof Error && error.stack) {
+        debug(`Stack trace: ${error.stack}`)
+      }
+      throw new Error(`Failed to load Component Model plugin ${pluginId}: ${errorMsg}`)
+    }
+  }
+
+  /**
+   * Create Signal K API imports for a Component Model plugin
+   */
+  private createComponentSignalkApi(pluginId: string, app?: any) {
+    return {
+      skDebug: (message: string) => {
+        debug(`[${pluginId}] ${message}`)
+      },
+      'sk-debug': (message: string) => {
+        debug(`[${pluginId}] ${message}`)
+      },
+      skSetStatus: (message: string) => {
+        debug(`[${pluginId}] Status: ${message}`)
+        if (app && app.setPluginStatus) {
+          app.setPluginStatus(pluginId, message)
+        }
+      },
+      'sk-set-status': (message: string) => {
+        debug(`[${pluginId}] Status: ${message}`)
+        if (app && app.setPluginStatus) {
+          app.setPluginStatus(pluginId, message)
+        }
+      },
+      skSetError: (message: string) => {
+        debug(`[${pluginId}] Error: ${message}`)
+        if (app && app.setPluginError) {
+          app.setPluginError(pluginId, message)
+        }
+      },
+      'sk-set-error': (message: string) => {
+        debug(`[${pluginId}] Error: ${message}`)
+        if (app && app.setPluginError) {
+          app.setPluginError(pluginId, message)
+        }
+      },
+      skHandleMessage: (deltaJson: string) => {
+        debug(`[${pluginId}] Emitting delta: ${deltaJson.substring(0, 200)}...`)
+        if (app && app.handleMessage) {
+          try {
+            const delta = JSON.parse(deltaJson)
+            app.handleMessage(pluginId, delta)
+          } catch (error) {
+            debug(`Failed to parse delta JSON: ${error}`)
+          }
+        }
+      },
+      'sk-handle-message': (deltaJson: string) => {
+        debug(`[${pluginId}] Emitting delta: ${deltaJson.substring(0, 200)}...`)
+        if (app && app.handleMessage) {
+          try {
+            const delta = JSON.parse(deltaJson)
+            app.handleMessage(pluginId, delta)
+          } catch (error) {
+            debug(`Failed to parse delta JSON: ${error}`)
+          }
+        }
+      },
+      skRegisterPutHandler: (context: string, path: string) => {
+        debug(`[${pluginId}] Registering PUT handler: ${context} ${path}`)
+        // PUT handler registration would need additional implementation
+        return 0
+      },
+      'sk-register-put-handler': (context: string, path: string) => {
+        debug(`[${pluginId}] Registering PUT handler: ${context} ${path}`)
+        return 0
+      }
     }
   }
 

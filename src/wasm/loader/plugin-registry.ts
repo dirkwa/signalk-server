@@ -30,6 +30,7 @@ export const restartTimers: Map<string, NodeJS.Timeout> = new Map()
 let _startWasmPlugin: (app: any, pluginId: string) => Promise<void>
 let _updateWasmPluginConfig: (app: any, pluginId: string, configuration: any, configPath: string) => Promise<void>
 let _unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>
+let _stopWasmPlugin: (pluginId: string) => Promise<void>
 
 /**
  * Initialize lifecycle function references (called from index.ts to resolve circular dependencies)
@@ -37,11 +38,13 @@ let _unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>
 export function initializeLifecycleFunctions(
   startWasmPlugin: (app: any, pluginId: string) => Promise<void>,
   updateWasmPluginConfig: (app: any, pluginId: string, configuration: any, configPath: string) => Promise<void>,
-  unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>
+  unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>,
+  stopWasmPlugin: (pluginId: string) => Promise<void>
 ) {
   _startWasmPlugin = startWasmPlugin
   _updateWasmPluginConfig = updateWasmPluginConfig
   _unloadWasmPlugin = unloadWasmPlugin
+  _stopWasmPlugin = stopWasmPlugin
 }
 
 /**
@@ -73,13 +76,13 @@ export async function registerWasmPlugin(
     }
 
     const wasmPath = path.join(location, packageName, packageJson.wasmManifest)
-    const capabilities: WasmCapabilities = packageJson.wasmCapabilities || {
-      network: false,
-      storage: 'vfs-only',
-      dataRead: true,
-      dataWrite: true,
-      serialPorts: false,
-      putHandlers: false
+    const capabilities: WasmCapabilities = {
+      network: packageJson.wasmCapabilities?.network || false,
+      storage: packageJson.wasmCapabilities?.storage || 'vfs-only',
+      dataRead: packageJson.wasmCapabilities?.dataRead !== false, // default true
+      dataWrite: packageJson.wasmCapabilities?.dataWrite !== false, // default true
+      serialPorts: packageJson.wasmCapabilities?.serialPorts || false,
+      putHandlers: packageJson.wasmCapabilities?.putHandlers || false
     }
 
     // Load WASM module temporarily just to get the plugin ID
@@ -139,7 +142,8 @@ export async function registerWasmPlugin(
         crashCount: 0,
         restartBackoff: 1000,
         description: packageJson.description || '',
-        state: 'stopped'
+        state: 'stopped',
+        format: tempInstance.format // Preserve format from temp instance
       }
 
       // Register minimal plugin in global map
@@ -157,7 +161,7 @@ export async function registerWasmPlugin(
 
       // Set up basic REST API routes even though plugin is disabled
       // This allows Plugin Config UI to read/write config and enable the plugin
-      setupWasmPluginRoutes(app, plugin, configPath, _updateWasmPluginConfig, _startWasmPlugin, _unloadWasmPlugin)
+      setupWasmPluginRoutes(app, plugin, configPath, _updateWasmPluginConfig, _startWasmPlugin, _unloadWasmPlugin, _stopWasmPlugin)
 
       debug(`Registered disabled WASM plugin: ${pluginId} (${pluginName}) - schema available, instance not loaded`)
       return plugin
@@ -210,7 +214,8 @@ export async function registerWasmPlugin(
       crashCount: 0,
       restartBackoff: 1000, // Start with 1 second
       description: packageJson.description || '',
-      state: 'stopped'
+      state: 'stopped',
+      format: instance.format // WASM binary format (wasi-p1 or component-model)
     }
 
     // Register in global map
@@ -227,7 +232,7 @@ export async function registerWasmPlugin(
     }
 
     // Set up REST API routes for this plugin
-    setupWasmPluginRoutes(app, plugin, configPath, _updateWasmPluginConfig, _startWasmPlugin, _unloadWasmPlugin)
+    setupWasmPluginRoutes(app, plugin, configPath, _updateWasmPluginConfig, _startWasmPlugin, _unloadWasmPlugin, _stopWasmPlugin)
 
     debug(`Registered WASM plugin: ${pluginId} (${pluginName})`)
 
