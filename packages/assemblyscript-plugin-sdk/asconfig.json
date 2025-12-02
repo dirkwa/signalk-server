@@ -19,7 +19,6 @@
   },
   "options": {
     "bindings": "esm",
-    "exportRuntime": true,
-    "transform": ["as-fetch/transform"]
+    "exportRuntime": false
   }
 }

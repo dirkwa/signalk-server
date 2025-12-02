@@ -8,7 +8,6 @@ A minimal example of a Signal K WASM plugin written in AssemblyScript.
 - ✅ Emits delta messages
 - ✅ Creates notifications
 - ✅ Uses configuration
-- ✅ **HTTP Endpoints** (Phase 2) - Custom REST API
 - ✅ Tiny binary size (~5-10 KB)
 
 ## Prerequisites
@@ -54,54 +53,7 @@ When started, the plugin:
 
 1. Emits a welcome notification to `notifications.hello`
 2. Emits plugin information to `plugins.hello-assemblyscript.info`
-3. Registers HTTP endpoints for REST API access
-4. Logs debug messages to server logs
-
-### HTTP Endpoints
-
-The plugin exposes two REST API endpoints:
-
-**GET /plugins/hello-assemblyscript/api/info**
-```bash
-curl http://localhost:3000/plugins/hello-assemblyscript/api/info
-```
-
-Returns:
-```json
-{
-  "pluginId": "hello-assemblyscript",
-  "pluginName": "Hello AssemblyScript Plugin",
-  "language": "AssemblyScript",
-  "version": "0.1.0",
-  "message": "Hello from WASM!",
-  "capabilities": ["delta", "notifications", "http-endpoints"]
-}
-```
-
-**GET /plugins/hello-assemblyscript/api/status**
-```bash
-curl http://localhost:3000/plugins/hello-assemblyscript/api/status
-```
-
-Returns:
-```json
-{
-  "status": "running",
-  "uptime": "N/A",
-  "memory": "sandboxed"
-}
-```
-
-## Important Notes
-
-### WASM Memory Limitations
-
-WASM plugins have a **~64KB buffer limitation** for stdin/memory operations in Node.js. For handling large data volumes (like log files), use a **hybrid approach**:
-
-- **WASM Plugin**: Registers endpoints and handles configuration
-- **Node.js Handler**: Server intercepts specific endpoints and handles I/O directly
-
-See [signalk-logviewer](https://github.com/SignalK/signalk-server/tree/master/packages/signalk-logviewer) for a real-world example of this pattern.
+3. Logs debug messages to server logs
 
 ## Configuration
 
