@@ -23,7 +23,7 @@ import {
 
 // Initialize circular dependency resolution
 import { initializeLifecycleFunctions } from './plugin-registry'
-initializeLifecycleFunctions(startWasmPlugin, updateWasmPluginConfig, unloadWasmPlugin)
+initializeLifecycleFunctions(startWasmPlugin, updateWasmPluginConfig, unloadWasmPlugin, stopWasmPlugin)
 
 // Export types
 export * from './types'

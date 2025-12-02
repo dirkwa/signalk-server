@@ -329,7 +329,8 @@ export function setupWasmPluginRoutes(
   configPath: string,
   updateWasmPluginConfig: (app: any, pluginId: string, configuration: any, configPath: string) => Promise<void>,
   startWasmPlugin: (app: any, pluginId: string) => Promise<void>,
-  unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>
+  unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>,
+  stopWasmPlugin: (pluginId: string) => Promise<void>
 ): void {
   const router = express.Router()
 
@@ -416,9 +417,10 @@ export function setupWasmPluginRoutes(
 
           debug(`Plugin enabled, starting...`)
           await startWasmPlugin(app, plugin.id)
-        } else if (!plugin.enabled && (plugin.status === 'running' || plugin.instance)) {
-          debug(`Plugin disabled, unloading...`)
-          await unloadWasmPlugin(app, plugin.id)
+        } else if (!plugin.enabled && plugin.status === 'running') {
+          // Only stop the plugin, don't unload it - keep routes intact for re-enabling
+          debug(`Plugin disabled, stopping (keeping routes for re-enable)...`)
+          await stopWasmPlugin(plugin.id)
         }
       }
 
