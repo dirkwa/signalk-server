@@ -5,7 +5,7 @@
  */
 
 import { Router } from 'express'
-import { WasmPluginInstance, WasmCapabilities } from '../wasm-runtime'
+import { WasmPluginInstance, WasmCapabilities, WasmFormat } from '../wasm-runtime'
 
 /**
  * Plugin metadata extracted from package.json and manifest
@@ -46,4 +46,5 @@ export interface WasmPlugin {
   restartBackoff: number // milliseconds
   description?: string
   state?: string
+  format?: WasmFormat // Binary format: wasi-p1 or component-model
 }

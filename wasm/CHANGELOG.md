@@ -2,6 +2,56 @@
 
 All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
+## [3.0.0-alpha.5] - 2025-12-03
+
+### Investigated - C#/.NET WASM Support
+
+#### Status: NOT CURRENTLY WORKING
+
+Attempted to add C#/.NET as a third WASM plugin language option using componentize-dotnet. After extensive investigation, discovered fundamental incompatibility between componentize-dotnet and Node.js/V8 (via jco transpilation).
+
+**What Was Tested:**
+- .NET 10.0 Preview with `BytecodeAlliance.Componentize.DotNet.Wasm.SDK` 0.7.0-preview00010
+- WASI Component Model (P2) compilation target
+- jco 1.10.0 for JavaScript transpilation
+
+**What Works:**
+- Building .NET WASI Component: ✅
+- Transpiling with jco to JavaScript: ✅
+- Plugin initialization (`$init`): ✅
+- Plugin registration in Signal K: ✅
+
+**What Fails:**
+- Calling any exported function results in: `RuntimeError: null function or function signature mismatch`
+- Root cause: .NET NativeAOT uses indirect call tables (`call_indirect`) that are initialized by `_initialize()`. This works in Wasmtime but table entries remain null in V8.
+
+**Workarounds Attempted (None Successful):**
+1. Manual `_initialize()` call - No effect
+2. Manual `InitializeModules()` call - Crashes (already called by `_initialize`)
+3. Various jco flags (`--instantiation sync`, `--tla-compat`) - No effect
+4. Removing `[ThreadStatic]` attribute - Fixed build issues but not runtime
+
+**Conclusion:**
+componentize-dotnet explicitly only supports Wasmtime and WAMR runtimes, not V8/JavaScript. This is a known limitation documented in their README. The issue is deeply embedded in how .NET NativeAOT-LLVM structures WASM output.
+
+**Issue Filed:**
+https://github.com/bytecodealliance/componentize-dotnet/issues/103
+
+**Files Created:**
+- `examples/wasm-plugins/anchor-watch-dotnet/` - Complete example with documentation
+- `examples/wasm-plugins/anchor-watch-dotnet/ISSUE_REPORT.md` - Detailed technical report
+
+**Documentation Updated:**
+- `wasm/WASM_PLUGIN_DEV_GUIDE.md` - C#/.NET section marked as NOT WORKING
+- `examples/wasm-plugins/anchor-watch-dotnet/README.md` - Marked as NOT WORKING with explanation
+
+**Future Possibilities:**
+- Wait for componentize-dotnet to add V8/jco support
+- Alternative: Mono interpreter approach (different compilation strategy)
+- Alternative: Direct Wasmtime embedding in Node.js (if/when available)
+
+---
+
 ## [3.0.0-alpha.4] - 2025-01-02
 
 ### Added - Asyncify Support for Network Requests
