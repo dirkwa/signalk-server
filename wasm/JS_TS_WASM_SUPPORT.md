@@ -67,7 +67,7 @@ packages/assemblyscript-plugin-sdk/
 // assembly/index.ts
 import { Plugin, Delta, emit } from '@signalk/assemblyscript-plugin-sdk'
 
-export class MyPlugin extends Plugin {
+class MyPlugin extends Plugin {
   id(): string {
     return 'my-ts-plugin'
   }
@@ -265,7 +265,7 @@ my-plugin/
 ```typescript
 import { Plugin, Delta, Update, PathValue, Source, emit, setStatus } from '@signalk/assemblyscript-plugin-sdk'
 
-export class HelloPlugin extends Plugin {
+class HelloPlugin extends Plugin {
   id(): string {
     return 'hello-assemblyscript'
   }
@@ -322,7 +322,7 @@ export class HelloPlugin extends Plugin {
 import { Plugin, getSelfPath, setStatus } from '@signalk/assemblyscript-plugin-sdk'
 import { Console } from 'as-wasi'
 
-export class LoggerPlugin extends Plugin {
+class LoggerPlugin extends Plugin {
   private updateRate: i32 = 1000
   private intervalId: i32 = 0
 
@@ -480,7 +480,7 @@ module.exports = function(app) {
 
 ### AssemblyScript Plugin (After)
 ```typescript
-export class MyPlugin extends Plugin {
+class MyPlugin extends Plugin {
   id(): string { return 'my-plugin' }
   name(): string { return 'My Plugin' }
 
@@ -645,7 +645,7 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
    import { Plugin } from '@signalk/assemblyscript-plugin-sdk'
    import { httpGet } from '@signalk/assemblyscript-plugin-sdk/network'
 
-   export class WeatherPlugin extends Plugin {
+   class WeatherPlugin extends Plugin {
      start(config: string): i32 {
        // Fetch weather from OpenWeatherMap
        const apiKey = '...'
@@ -695,7 +695,7 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
    - AssemblyScript template
    - Build script generation
 
-### Phase 2 (Planned)
+### Phase 2 (Implemented ✅)
 
 1. **Network Capability**
    - Integrate `as-fetch` for HTTP client
@@ -709,4 +709,35 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
    - Resource providers
    - Autopilot providers
 
-Ready to test Phase 1A AssemblyScript support!
+## Phase 2 Status: Complete ✅
+
+Network capability with as-fetch has been successfully implemented:
+
+✅ **as-fetch Integration**
+- Added as-fetch ^2.1.4 dependency to AssemblyScript SDK
+- Created network.ts API wrapper with HTTP helper functions
+- Integrated FetchHandler bindings in wasm-runtime.ts
+- Added transform support in asconfig.json
+
+✅ **Capability Enforcement**
+- Implemented `sk_has_capability` FFI function
+- Network capability checked at runtime before HTTP requests
+- Plugins must declare `"network": true` in manifest
+
+✅ **Example Plugin**
+- Created weather-plugin example in packages/wasm-examples/
+- Fetches real weather data from OpenWeatherMap API
+- Demonstrates proper error handling and capability checks
+- Full documentation and usage guide included
+
+✅ **Documentation**
+- Updated WASM_PLUGIN_DEV_GUIDE.md with Network API section
+- Updated capability tables to reflect network support
+- Added usage examples and security notes
+- Referenced weather plugin example
+
+**Requirements:**
+- Server must run on Node.js 18+ for native fetch support
+- Plugins must use AssemblyScript (Rust support planned for Phase 3)
+
+Ready to test and deploy!

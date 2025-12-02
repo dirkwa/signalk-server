@@ -34,14 +34,16 @@ export {
   registerWasmPlugin,
   startWasmPlugin,
   stopWasmPlugin,
+  unloadWasmPlugin,
   reloadWasmPlugin,
   handleWasmPluginCrash,
   updateWasmPluginConfig,
   setWasmPluginEnabled,
   getAllWasmPlugins,
   getWasmPlugin,
-  shutdownAllWasmPlugins
-} from './wasm-loader'
+  shutdownAllWasmPlugins,
+  filterDisabledWasmWebapps
+} from './loader'
 
 // ServerAPI Bridge
 export {

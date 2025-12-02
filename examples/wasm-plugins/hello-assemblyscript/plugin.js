@@ -13,19 +13,19 @@ async function instantiate(module, imports = {}) {
         })();
       },
       sk_debug(msgPtr, msgLen) {
-        // ../../../packages/assemblyscript-plugin-sdk/assembly/api/sk_debug_ffi(usize, usize) => void
+        // ~lib/signalk-assemblyscript-plugin-sdk/assembly/api/sk_debug_ffi(usize, usize) => void
         msgPtr = msgPtr >>> 0;
         msgLen = msgLen >>> 0;
         sk_debug(msgPtr, msgLen);
       },
       sk_set_status(msgPtr, msgLen) {
-        // ../../../packages/assemblyscript-plugin-sdk/assembly/api/sk_set_status_ffi(usize, usize) => void
+        // ~lib/signalk-assemblyscript-plugin-sdk/assembly/api/sk_set_status_ffi(usize, usize) => void
         msgPtr = msgPtr >>> 0;
         msgLen = msgLen >>> 0;
         sk_set_status(msgPtr, msgLen);
       },
       sk_handle_message(deltaPtr, deltaLen) {
-        // ../../../packages/assemblyscript-plugin-sdk/assembly/api/sk_handle_message_ffi(usize, usize) => void
+        // ~lib/signalk-assemblyscript-plugin-sdk/assembly/api/sk_handle_message_ffi(usize, usize) => void
         deltaPtr = deltaPtr >>> 0;
         deltaLen = deltaLen >>> 0;
         sk_handle_message(deltaPtr, deltaLen);

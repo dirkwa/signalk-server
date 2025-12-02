@@ -45,6 +45,7 @@ Signal K Server 3.0 supports multiple languages for WASM plugin development:
 ✅ **HTTP Endpoints**: Register custom REST API endpoints
 ✅ **Static Files**: Serve web UI from `public/` directory
 ✅ **Command Execution**: Whitelisted shell commands (logs only)
+✅ **Network Access**: HTTP requests via as-fetch (AssemblyScript)
 
 ### Upcoming Features
 
@@ -103,7 +104,7 @@ Signal K Server 3.0 supports multiple languages for WASM plugin development:
 ### Step 1: Install SDK
 
 ```bash
-npm install @signalk/assemblyscript-plugin-sdk
+npm install signalk-assemblyscript-plugin-sdk
 npm install --save-dev assemblyscript
 ```
 
@@ -121,9 +122,9 @@ import {
   emit,
   setStatus,
   getCurrentTimestamp
-} from '@signalk/assemblyscript-plugin-sdk'
+} from 'signalk-assemblyscript-plugin-sdk/assembly'
 
-export class MyPlugin extends Plugin {
+class MyPlugin extends Plugin {
   id(): string {
     return 'my-plugin'
   }
@@ -794,16 +795,135 @@ npm install -g ./signalk-example-wasm-1.0.0.tgz
 
 Declare required capabilities in `package.json`:
 
-| Capability | Description | Phase 1 |
-|------------|-------------|---------|
-| `dataRead` | Read Signal K data model | ✅ |
-| `dataWrite` | Emit delta messages | ✅ |
-| `storage` | Write to VFS (`vfs-only`) | ✅ |
-| `httpEndpoints` | Register custom HTTP endpoints | ✅ |
-| `staticFiles` | Serve HTML/CSS/JS from `public/` folder | ✅ |
-| `network` | HTTP requests | ❌ Phase 2 |
-| `serialPorts` | Serial port access | ❌ Phase 3 |
-| `putHandlers` | Register PUT handlers | ❌ Phase 2 |
+| Capability | Description | Status |
+|------------|-------------|--------|
+| `dataRead` | Read Signal K data model | ✅ Supported |
+| `dataWrite` | Emit delta messages | ✅ Supported |
+| `storage` | Write to VFS (`vfs-only`) | ✅ Supported |
+| `httpEndpoints` | Register custom HTTP endpoints | ✅ Supported |
+| `staticFiles` | Serve HTML/CSS/JS from `public/` folder | ✅ Supported |
+| `network` | HTTP requests (via as-fetch) | ✅ Supported (AssemblyScript only) |
+| `serialPorts` | Serial port access | ⏳ Planned (Phase 3) |
+| `putHandlers` | Register PUT handlers | ⏳ Planned (Phase 3) |
+
+### Network API (AssemblyScript)
+
+AssemblyScript plugins can make HTTP requests using the `as-fetch` library integrated into the SDK:
+
+**Requirements:**
+- Plugin must declare `"network": true` in manifest
+- Server must be running Node.js 18+ (for native fetch support)
+- Import network functions from SDK
+- Must add `"transform": ["as-fetch/transform"]` to `asconfig.json` options
+- Must set `"exportRuntime": true` in `asconfig.json` options
+
+**Example: HTTP GET Request**
+
+```typescript
+import { httpGet, hasNetworkCapability } from 'signalk-assemblyscript-plugin-sdk/assembly/network'
+import { debug, setError } from 'signalk-assemblyscript-plugin-sdk/assembly'
+
+class MyPlugin extends Plugin {
+  start(config: string): i32 {
+    // Always check capability first
+    if (!hasNetworkCapability()) {
+      setError('Network capability not granted')
+      return 1
+    }
+
+    // Make HTTP GET request
+    const response = httpGet('https://api.example.com/data')
+    if (response === null) {
+      setError('HTTP request failed')
+      return 1
+    }
+
+    debug('Received: ' + response)
+    return 0
+  }
+}
+```
+
+**Available Network Functions:**
+
+```typescript
+// Check if network capability is granted
+hasNetworkCapability(): boolean
+
+// HTTP GET request - returns response body or null on error
+httpGet(url: string): string | null
+
+// HTTP POST request - returns status code or -1 on error
+httpPost(url: string, body: string): i32
+
+// HTTP POST with response - returns response body or null
+httpPostWithResponse(url: string, body: string): string | null
+
+// HTTP PUT request - returns status code or -1 on error
+httpPut(url: string, body: string): i32
+
+// HTTP DELETE request - returns status code or -1 on error
+httpDelete(url: string): i32
+
+// Advanced HTTP request with full control
+httpRequest(
+  url: string,
+  method: string,
+  body: string | null,
+  contentType: string | null
+): HttpResponse | null
+```
+
+**Build Configuration (asconfig.json):**
+
+For plugins using network capability, your `asconfig.json` must include:
+
+```json
+{
+  "targets": {
+    "release": {
+      "outFile": "build/plugin.wasm",
+      "optimize": true,
+      "shrinkLevel": 2,
+      "runtime": "stub"
+    }
+  },
+  "options": {
+    "bindings": "esm",
+    "exportRuntime": true,
+    "transform": ["as-fetch/transform"]
+  }
+}
+```
+
+**Key requirements:**
+- `"exportRuntime": true` - Required for AssemblyScript loader string handling
+- `"transform": ["as-fetch/transform"]` - Required for as-fetch HTTP support
+
+**Manifest Configuration:**
+
+```json
+{
+  "name": "my-plugin",
+  "wasmCapabilities": {
+    "network": true
+  },
+  "dependencies": {
+    "signalk-assemblyscript-plugin-sdk": "^0.1.0",
+    "as-fetch": "^2.1.4"
+  }
+}
+```
+
+**Complete Example:**
+
+See [examples/wasm-plugins/weather-plugin](examples/wasm-plugins/weather-plugin/) for a full working example that fetches weather data from OpenWeatherMap.
+
+**Security Notes:**
+- Requests are subject to standard browser/Node.js security policies
+- CORS applies for cross-origin requests
+- No rate limiting enforced by server (implement in your plugin)
+- Network capability cannot be bypassed - enforced at runtime
 
 ### Storage API
 
@@ -1285,7 +1405,7 @@ npm run asbuild
 ## Resources
 
 - **WIT Interface**: `packages/server-api/wit/signalk.wit`
-- **Example Plugins**: `examples/wasm/` (coming soon)
+- **Example Plugins**: `examples/wasm-plugins/`
 - **Rust WASM Book**: https://rustwasm.github.io/docs/book/
 - **Signal K Documentation**: https://signalk.org/
 
