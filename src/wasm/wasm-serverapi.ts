@@ -9,7 +9,7 @@
 /// <reference lib="webworker" />
 
 import Debug from 'debug'
-import { getWasmPlugin } from './wasm-loader'
+import { getWasmPlugin } from './loader'
 import { getPluginStoragePaths, readPluginConfig, writePluginConfig } from './wasm-storage'
 
 const debug = Debug('signalk:wasm:serverapi')
