@@ -3,6 +3,7 @@
 A Signal K WASM plugin written in Rust demonstrating:
 - Rust WASM compilation for Signal K (wasm32-wasip1 target)
 - PUT handler registration and handling
+- **Custom HTTP endpoints** (REST API)
 - Delta message emission
 - Plugin configuration via JSON schema
 - Buffer-based FFI string passing
@@ -16,6 +17,7 @@ This plugin is fully functional and tested on Signal K Server 3.0+ running on Ra
 - **Anchor Position Tracking** - Set and monitor anchor position via PUT requests
 - **Radius Alarm** - Configure maximum swing radius (10-1000 meters)
 - **PUT Handlers** - Control anchor watch via Signal K PUT requests
+- **Custom HTTP REST API** - Query status and drop anchor via HTTP endpoints
 - **Real-time Updates** - Emits delta messages for state changes
 - **Plugin State Control** - Anchor watch state tied to plugin enable/disable
 
@@ -135,6 +137,88 @@ curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/
 
 **Note**: The anchor watch state is actually controlled by enabling/disabling the plugin itself. The PUT handler returns a success response but the actual state change requires toggling the plugin.
 
+## HTTP Endpoints (REST API)
+
+The plugin exposes custom HTTP endpoints for status queries and anchor control. These are mounted at `/plugins/anchor-watch-rust/`.
+
+### GET /api/status
+
+Returns current anchor watch status:
+
+```bash
+curl http://localhost:3000/plugins/anchor-watch-rust/api/status
+```
+
+**Response:**
+```json
+{
+  "running": true,
+  "alarmActive": false,
+  "position": {"latitude": 52.1234, "longitude": 4.5678},
+  "maxRadius": 50,
+  "checkInterval": 10
+}
+```
+
+### GET /api/position
+
+Returns current anchor position:
+
+```bash
+curl http://localhost:3000/plugins/anchor-watch-rust/api/position
+```
+
+**Response:**
+```json
+{
+  "latitude": 52.1234,
+  "longitude": 4.5678,
+  "maxRadius": 50
+}
+```
+
+### POST /api/drop
+
+Drop anchor at a specified position:
+
+```bash
+curl -X POST http://localhost:3000/plugins/anchor-watch-rust/api/drop \
+  -H "Content-Type: application/json" \
+  -d '{"latitude": 52.1234, "longitude": 4.5678, "maxRadius": 75}'
+```
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `latitude` | number | Yes | Latitude in degrees (-90 to 90) |
+| `longitude` | number | Yes | Longitude in degrees (-180 to 180) |
+| `maxRadius` | number | No | Max swing radius in meters (default: 50) |
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Anchor dropped",
+  "position": {"latitude": 52.1234, "longitude": 4.5678},
+  "maxRadius": 75
+}
+```
+
+### HTTP Authentication
+
+Note: If Signal K server security is enabled, you need to authenticate first:
+
+```bash
+# Login and save cookie
+curl -X POST http://localhost:3000/signalk/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"yourpassword"}' \
+  -c cookies.txt
+
+# Use cookie for API requests
+curl -b cookies.txt http://localhost:3000/plugins/anchor-watch-rust/api/status
+```
+
 ## Source Parameter
 
 When multiple plugins/providers write to the same Signal K path, PUT requests require a `source` parameter to identify which handler should process the request.
@@ -191,6 +275,12 @@ The plugin uses raw FFI to communicate with the Signal K server:
 - `handle_put_vessels_self_navigation_anchor_position(value_ptr, value_len, response_ptr, response_max_len) -> len`
 - `handle_put_vessels_self_navigation_anchor_maxRadius(value_ptr, value_len, response_ptr, response_max_len) -> len`
 - `handle_put_vessels_self_navigation_anchor_state(value_ptr, value_len, response_ptr, response_max_len) -> len`
+
+**HTTP Endpoints:**
+- `http_endpoints(out_ptr, max_len) -> len` - Return JSON array of endpoint definitions
+- `http_get_status(request_ptr, request_len, response_ptr, response_max_len) -> len` - GET /api/status
+- `http_get_position(request_ptr, request_len, response_ptr, response_max_len) -> len` - GET /api/position
+- `http_post_drop(request_ptr, request_len, response_ptr, response_max_len) -> len` - POST /api/drop
 
 ### PUT Handler Naming Convention
 
@@ -276,6 +366,12 @@ wasm-opt -Oz plugin.wasm -o plugin.optimized.wasm
 - Check `"putHandlers": true` in `wasmCapabilities`
 - Verify handler function names match the pattern exactly
 - Check server logs for registration messages
+
+### HTTP endpoints returning 404
+- Check `"httpEndpoints": true` in `wasmCapabilities`
+- Verify `http_endpoints()` export returns valid JSON array
+- Check that handler function names match exactly
+- Enable debug logging: `DEBUG=signalk:wasm:*`
 
 ### PUT requests return "multiple sources" error
 - Add `"source": "@signalk/anchor-watch-rust"` to the request body

@@ -1574,6 +1574,228 @@ See [examples/wasm-plugins/weather-plugin](examples/wasm-plugins/weather-plugin/
 - No rate limiting enforced by server (implement in your plugin)
 - Network capability cannot be bypassed - enforced at runtime
 
+### Custom HTTP Endpoints API
+
+WASM plugins can register custom HTTP endpoints to expose REST APIs. This enables:
+- Custom data APIs for dashboards
+- Configuration endpoints
+- Integration with external services
+- Serving static content or generated data
+
+#### Enabling HTTP Endpoints
+
+**Requirements:**
+- Plugin must declare `"httpEndpoints": true` in manifest
+- Export `http_endpoints()` function returning JSON array of endpoint definitions
+- Export handler functions for each endpoint
+
+#### Manifest Configuration
+
+```json
+{
+  "name": "@signalk/my-api-plugin",
+  "wasmCapabilities": {
+    "httpEndpoints": true
+  }
+}
+```
+
+#### How It Works
+
+1. Plugin exports `http_endpoints()` returning a JSON array of endpoint definitions
+2. Server registers routes at `/plugins/{plugin-id}/{path}`
+3. When a request arrives, server calls the handler function with request context
+4. Handler returns JSON response with status code, headers, and body
+
+#### AssemblyScript Example
+
+```typescript
+// Export endpoint definitions
+export function http_endpoints(): string {
+  return JSON.stringify([
+    { method: "GET", path: "/api/data", handler: "handle_get_data" },
+    { method: "POST", path: "/api/submit", handler: "handle_post_submit" },
+    { method: "GET", path: "/api/status", handler: "handle_get_status" }
+  ])
+}
+
+// Handler receives request context as JSON string
+// Returns response as JSON string
+export function handle_get_data(requestPtr: i32, requestLen: i32): string {
+  // Request context includes: method, path, query, params, body, headers
+  const requestJson = String.UTF8.decodeUnsafe(requestPtr, requestLen)
+  const request = JSON.parse<RequestContext>(requestJson)
+
+  // Process request and return response
+  return JSON.stringify({
+    statusCode: 200,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: "Hello from WASM!", timestamp: Date.now() })
+  })
+}
+
+export function handle_post_submit(requestPtr: i32, requestLen: i32): string {
+  const requestJson = String.UTF8.decodeUnsafe(requestPtr, requestLen)
+  const request = JSON.parse<RequestContext>(requestJson)
+
+  // Access POST body
+  const body = request.body
+
+  return JSON.stringify({
+    statusCode: 200,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ received: true, data: body })
+  })
+}
+```
+
+#### Rust Example
+
+```rust
+/// Export HTTP endpoint definitions
+#[no_mangle]
+pub extern "C" fn http_endpoints(out_ptr: *mut u8, out_max_len: usize) -> i32 {
+    let endpoints = r#"[
+        {"method": "GET", "path": "/api/data", "handler": "handle_get_data"},
+        {"method": "POST", "path": "/api/submit", "handler": "handle_post_submit"}
+    ]"#;
+    write_string(endpoints, out_ptr, out_max_len)
+}
+
+/// Handle GET /api/data
+/// Signature: (request_ptr, request_len, response_ptr, response_max_len) -> written_len
+#[no_mangle]
+pub extern "C" fn handle_get_data(
+    request_ptr: *const u8,
+    request_len: usize,
+    response_ptr: *mut u8,
+    response_max_len: usize,
+) -> i32 {
+    // Read request context
+    let request_json = unsafe {
+        let slice = std::slice::from_raw_parts(request_ptr, request_len);
+        String::from_utf8_lossy(slice).to_string()
+    };
+
+    // Parse request if needed
+    // let request: RequestContext = serde_json::from_str(&request_json).unwrap();
+
+    // Build response
+    let response = r#"{
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": "{\"message\": \"Hello from Rust WASM!\", \"status\": \"ok\"}"
+    }"#;
+
+    write_string(response, response_ptr, response_max_len)
+}
+
+/// Handle POST /api/submit
+#[no_mangle]
+pub extern "C" fn handle_post_submit(
+    request_ptr: *const u8,
+    request_len: usize,
+    response_ptr: *mut u8,
+    response_max_len: usize,
+) -> i32 {
+    let request_json = unsafe {
+        let slice = std::slice::from_raw_parts(request_ptr, request_len);
+        String::from_utf8_lossy(slice).to_string()
+    };
+
+    // Parse request to access body
+    #[derive(Deserialize)]
+    struct RequestContext {
+        method: String,
+        path: String,
+        body: serde_json::Value,
+    }
+
+    let request: RequestContext = serde_json::from_str(&request_json).unwrap_or_else(|_| {
+        RequestContext {
+            method: String::new(),
+            path: String::new(),
+            body: serde_json::Value::Null,
+        }
+    });
+
+    let response = format!(
+        r#"{{"statusCode": 200, "headers": {{"Content-Type": "application/json"}}, "body": "{{\"received\": true, \"bodyType\": \"{}\"}}" }}"#,
+        if request.body.is_null() { "null" } else { "object" }
+    );
+
+    write_string(&response, response_ptr, response_max_len)
+}
+```
+
+#### Request Context
+
+The handler receives a JSON object with:
+
+```json
+{
+  "method": "GET",
+  "path": "/api/data",
+  "query": { "param1": "value1" },
+  "params": {},
+  "body": { ... },
+  "headers": { "content-type": "application/json", ... }
+}
+```
+
+#### Response Format
+
+Handlers must return a JSON object:
+
+```json
+{
+  "statusCode": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Custom-Header": "value"
+  },
+  "body": "string or JSON"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `statusCode` | number | HTTP status code (200, 400, 404, 500, etc.) |
+| `headers` | object | Optional response headers |
+| `body` | string/object | Response body (string for text, object for JSON) |
+
+#### URL Routing
+
+Endpoints are mounted under `/plugins/{plugin-id}/`:
+
+| Plugin ID | Endpoint Path | Full URL |
+|-----------|--------------|----------|
+| `my-plugin` | `/api/data` | `http://localhost:3000/plugins/my-plugin/api/data` |
+| `my-plugin` | `/status` | `http://localhost:3000/plugins/my-plugin/status` |
+
+#### Testing HTTP Endpoints
+
+```bash
+# GET request
+curl http://localhost:3000/plugins/my-plugin/api/data
+
+# POST request with JSON body
+curl -X POST http://localhost:3000/plugins/my-plugin/api/submit \
+  -H "Content-Type: application/json" \
+  -d '{"name": "test", "value": 123}'
+
+# GET with query parameters
+curl "http://localhost:3000/plugins/my-plugin/api/data?format=json&limit=10"
+```
+
+#### Best Practices
+
+1. **Validate Input**: Always validate request body and query parameters
+2. **Return Appropriate Status Codes**: Use 400 for bad requests, 404 for not found, 500 for server errors
+3. **Set Content-Type**: Always set the Content-Type header in responses
+4. **Handle Errors Gracefully**: Return error messages in a consistent format
+5. **Keep Handlers Fast**: HTTP handlers have a 10-second timeout
+
 ### PUT Handlers API
 
 WASM plugins can register PUT handlers to respond to PUT requests from clients, enabling vessel control and configuration management. This is useful for:

@@ -24,6 +24,45 @@
 
 ## Recent Achievements (Latest First)
 
+### 🎉 Custom HTTP Endpoints Working for Rust WASM Plugins! (December 2025)
+
+**Major Milestone**: Rust WASM plugins can now expose custom REST APIs!
+
+**What Was Fixed:**
+- ✅ **Root Cause Found**: `http_endpoints()` assumed AssemblyScript string return, but Rust uses buffer-based FFI
+- ✅ **Solution**: Added dual-mode detection in plugin-routes.ts for both plugin types
+- ✅ **Rust FFI Pattern**: `(out_ptr, out_max_len) -> written_len` with allocate/deallocate memory management
+- ✅ **Verified Working**: anchor-watch-rust plugin HTTP endpoints tested successfully
+
+**Rust Plugin HTTP Endpoints Example:**
+```rust
+#[no_mangle]
+pub extern "C" fn http_endpoints(out_ptr: *mut u8, out_max_len: usize) -> i32 {
+    let endpoints = r#"[
+        {"method": "GET", "path": "/api/status", "handler": "http_get_status"},
+        {"method": "POST", "path": "/api/drop", "handler": "http_post_drop"}
+    ]"#;
+    write_string(endpoints, out_ptr, out_max_len)
+}
+
+#[no_mangle]
+pub extern "C" fn http_get_status(
+    _request_ptr: *const u8, _request_len: usize,
+    response_ptr: *mut u8, response_max_len: usize,
+) -> i32 {
+    let response = r#"{"statusCode":200,"body":"{\"status\":\"running\"}"}"#;
+    write_string(response, response_ptr, response_max_len)
+}
+```
+
+**Test Results:**
+```bash
+curl -b cookies.txt http://localhost:3000/plugins/anchor-watch-rust/api/status
+{"running":true,"alarmActive":false,"position":{"latitude":0,"longitude":0},"maxRadius":50,"checkInterval":10}
+```
+
+---
+
 ### 🎉 PUT Handlers Working for WASM Plugins! (December 2025)
 
 **Major Milestone**: WASM plugins can now register PUT handlers for vessel control!
@@ -423,16 +462,17 @@ if (hasNetworkCapability()) {
 
 **Binary Size**: 13.2 KB
 
-#### Anchor Watch Rust (PUT Handlers Example) ✅
+#### Anchor Watch Rust (PUT Handlers + HTTP Endpoints Example) ✅
 
 **Location**: [examples/wasm-plugins/anchor-watch-rust](../examples/wasm-plugins/anchor-watch-rust)
-**Version**: 0.1.0
+**Version**: 0.2.0
 **Status**: Deployed and tested on Raspberry Pi 5
 
 **Demonstrates:**
 - ✅ Rust WASM plugin development (`wasm32-wasip1` target)
 - ✅ Buffer-based FFI with `allocate`/`deallocate` exports
 - ✅ PUT handler registration and handling
+- ✅ **Custom HTTP endpoints (REST API)**
 - ✅ Delta message emission
 - ✅ JSON configuration schema
 - ✅ State management with `thread_local!`
@@ -442,13 +482,18 @@ if (hasNetworkCapability()) {
 - `navigation.anchor.maxRadius` - Set alarm radius (10-1000m)
 - `navigation.anchor.state` - Query state (informational)
 
+**HTTP Endpoints:**
+- `GET /api/status` - Return anchor watch status
+- `GET /api/position` - Return current anchor position
+- `POST /api/drop` - Drop anchor at specified coordinates
+
 **Files:**
-- `src/lib.rs` - Rust implementation (~400 lines)
+- `src/lib.rs` - Rust implementation (~550 lines)
 - `Cargo.toml` - Build configuration with size optimizations
-- `package.json` - npm package with `putHandlers: true` capability
+- `package.json` - npm package with `putHandlers` + `httpEndpoints` capabilities
 - `README.md` - Comprehensive documentation
 
-**Binary Size**: ~100-150 KB (optimized)
+**Binary Size**: ~127 KB (optimized)
 
 **Build Command:**
 ```bash
@@ -555,11 +600,11 @@ cargo build --release --target wasm32-wasip1
 |------------|--------|-------------|
 | `putHandlers` | ✅ | Register PUT handlers (AssemblyScript + Rust) |
 
-### Phase 3 (Planned)
+### Phase 3 (In Progress)
 
 | Capability | Status | Description |
 |------------|--------|-------------|
-| REST API | 🔄 | Custom HTTP endpoints |
+| `httpEndpoints` | ✅ | Custom HTTP endpoints (GET/POST/PUT/DELETE) - Tested for AssemblyScript & Rust |
 | Resource providers | 🔄 | Routes, waypoints, etc. |
 | Autopilot providers | 🔄 | Autopilot control |
 | Weather providers | 🔄 | Weather data providers |
@@ -610,7 +655,7 @@ cargo build --release --target wasm32-wasip1
 
 ### Phase 3 Goals (In Progress 🔄)
 
-- [ ] 🔄 Custom REST API endpoints
+- [x] ✅ Custom REST API endpoints (AssemblyScript + Rust)
 - [ ] 🔄 Resource providers
 - [ ] 🔄 Zero Node.js plugin regressions
 - [ ] 🔄 Performance benchmarks
@@ -623,11 +668,10 @@ cargo build --release --target wasm32-wasip1
 
 ### Current Restrictions
 
-1. **No Custom REST Endpoints**: Cannot register custom HTTP routes yet (Phase 3)
-2. **No Serial Ports**: Direct hardware access not available (Phase 4)
-3. **In-Process**: Plugins run in main process, memory shared
-4. **Single HTTP Method**: Only GET via fetchSync(), POST/PUT/DELETE need implementation
-5. **No Streaming**: HTTP responses loaded entirely into memory
+1. **No Serial Ports**: Direct hardware access not available (Phase 4)
+2. **In-Process**: Plugins run in main process, memory shared
+3. **Single HTTP Method**: Only GET via fetchSync(), POST/PUT/DELETE need implementation
+4. **No Streaming**: HTTP responses loaded entirely into memory
 
 ### Technical Debt
 
@@ -701,7 +745,7 @@ Apache License 2.0 (same as Signal K Server)
 
 ---
 
-**Status**: Phase 2A PUT Handlers Complete ✅
-**Version**: 3.0.0-alpha.6
+**Status**: Phase 3 Custom HTTP Endpoints Complete ✅
+**Version**: 3.0.0
 **Date**: December 3, 2025
-**Next**: Phase 3 - Extended Capabilities (REST API, Resource providers)
+**Next**: Phase 3 continued - Resource providers, Weather providers
