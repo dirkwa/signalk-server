@@ -1,0 +1,44 @@
+{
+  "name": "@signalk/charts-provider-go",
+  "version": "0.1.0",
+  "description": "MBTiles Chart Provider - Go WASM plugin for Signal K",
+  "main": "plugin.wasm",
+  "scripts": {
+    "build": "tinygo build -o plugin.wasm -target=wasip1 -gc=leaking -no-debug main.go",
+    "build:debug": "tinygo build -o plugin.wasm -target=wasip1 main.go",
+    "clean": "rm -f plugin.wasm"
+  },
+  "keywords": [
+    "signalk-node-server-plugin",
+    "signalk-wasm-plugin",
+    "signalk-webapp",
+    "signalk-category-charts",
+    "wasm",
+    "go",
+    "tinygo",
+    "mbtiles",
+    "charts"
+  ],
+  "signalk": {
+    "displayName": "Chart Manager"
+  },
+  "author": "Signal K",
+  "license": "Apache-2.0",
+  "signalk-plugin-enabled-by-default": false,
+  "wasmManifest": "plugin.wasm",
+  "wasmCapabilities": {
+    "network": false,
+    "storage": "vfs-only",
+    "dataRead": true,
+    "dataWrite": true,
+    "httpEndpoints": true,
+    "resourceProvider": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SignalK/signalk-server"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

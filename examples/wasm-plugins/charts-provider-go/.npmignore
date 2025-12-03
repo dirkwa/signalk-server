@@ -1,0 +1,14 @@
+# test builds
+*.tgz
+
+# dev files
+.vscode/
+.DS_Store
+*.log
+node_modules/
+dist/
+build/
+coverage/
+*.ps1
+*.go
+*.mod

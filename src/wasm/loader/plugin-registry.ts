@@ -145,6 +145,7 @@ export async function registerWasmPlugin(
         enableDebug: savedConfig.enableDebug || false,
         keywords: packageJson.keywords || [],
         packageLocation: location,
+        configPath,
         metadata: {
           id: pluginId,
           name: pluginName,
@@ -217,6 +218,7 @@ export async function registerWasmPlugin(
       enableDebug: savedConfig.enableDebug || false,
       keywords: packageJson.keywords || [],
       packageLocation: location,
+      configPath,
       metadata: {
         id: pluginId,
         name: pluginName,

@@ -289,6 +289,9 @@ if (response && response.status === 200) {
 - `@assemblyscript/loader` (^0.27.x) - AssemblyScript WASM loader
 - `as-fetch` (^2.1.4) - HTTP client with Asyncify support
 
+**Optional Dependencies:**
+- `better-sqlite3` (^11.0.0) - SQLite support for MBTiles chart serving
+
 **Node.js Requirement**: `>=18` (for native fetch API)
 
 ### 2. Asyncify Support for Network Requests ✅
@@ -621,6 +624,38 @@ if (hasNetworkCapability()) {
 cargo build --release --target wasm32-wasip1
 ```
 
+#### Charts Provider Go (MBTiles Resource Provider) ✅
+
+**Location**: [examples/wasm-plugins/charts-provider-go](../examples/wasm-plugins/charts-provider-go)
+**Version**: 0.1.0
+**Status**: Deployed and tested
+
+**Demonstrates:**
+- ✅ Go/TinyGo WASM plugin development (`wasip1` target)
+- ✅ Resource provider registration (`charts`)
+- ✅ Hybrid architecture (WASM + Node.js for SQLite)
+- ✅ MBTiles file handling and tile serving
+- ✅ HTML webapp for chart upload/management
+- ✅ Delta notifications for chart CRUD operations
+
+**Architecture:**
+- Go WASM: Resource provider registration, metadata, delta emission
+- Node.js: SQLite tile reading via `better-sqlite3`, file upload handling
+
+**Files:**
+- `main.go` - Go/TinyGo implementation
+- `go.mod` - Go module configuration
+- `package.json` - npm package with `resourceProvider` capability
+- `public/` - HTML webapp for chart management
+- `README.md` - Comprehensive documentation
+
+**Binary Size**: ~50 KB (optimized with `-gc=leaking -no-debug`)
+
+**Build Command:**
+```bash
+tinygo build -o plugin.wasm -target=wasip1 -gc=leaking -no-debug main.go
+```
+
 ---
 
 ## Documentation Created
@@ -730,6 +765,12 @@ cargo build --release --target wasm32-wasip1
 | Autopilot providers | 🔄 | Autopilot control |
 | Weather providers | 🔄 | Weather data providers |
 
+### Phase 3A (Complete ✅)
+
+| Capability | Status | Description |
+|------------|--------|-------------|
+| Go/TinyGo | ✅ | Go WASM plugins (charts-provider-go example) |
+
 ### Phase 4 (Future)
 
 | Capability | Status | Description |
@@ -737,7 +778,7 @@ cargo build --release --target wasm32-wasip1
 | `serialPorts` | ⏳ | Serial port access |
 | Multi-threading | ⏳ | Worker thread isolation |
 | Fine-grained caps | ⏳ | Path-level permissions |
-| Multi-language | ⏳ | Python, C++, Go support |
+| Multi-language | ⏳ | Python, C++ support (Go complete) |
 
 ---
 
@@ -866,7 +907,7 @@ Apache License 2.0 (same as Signal K Server)
 
 ---
 
-**Status**: Phase 3 Resource Providers Complete ✅, Runtime Refactored ✅
-**Version**: 3.0.1
-**Date**: December 3, 2025
+**Status**: Phase 3 Resource Providers Complete ✅, Runtime Refactored ✅, Go WASM Plugin Added ✅
+**Version**: 2.18.0+wasm5
+**Date**: December 4, 2025
 **Next**: Phase 4 - Weather Providers (OpenMeteo integration), Serial Port support
