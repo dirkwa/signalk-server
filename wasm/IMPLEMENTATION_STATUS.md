@@ -8,13 +8,60 @@
 **Timeline**: December 2025
 **Status**: AssemblyScript SDK and tooling complete, multiple plugins deployed
 
+## Phase 1B: Rust Support - ✅ COMPLETE
+**Timeline**: December 2025
+**Status**: Rust WASM plugins working with buffer-based FFI, PUT handlers working
+
 ## Phase 2: Network Capabilities - ✅ COMPLETE
 **Timeline**: January 2025
 **Status**: Asyncify integration complete, HTTP requests working in production
 
+## Phase 2A: PUT Handlers - ✅ COMPLETE
+**Timeline**: December 2025
+**Status**: PUT handlers working for both AssemblyScript and Rust plugins
+
 ---
 
 ## Recent Achievements (Latest First)
+
+### 🎉 PUT Handlers Working for WASM Plugins! (December 2025)
+
+**Major Milestone**: WASM plugins can now register PUT handlers for vessel control!
+
+**What Was Fixed:**
+- ✅ **Root Cause Found**: `app.registerPutHandler()` only exists on wrapped `appCopy`, not main `app`
+- ✅ **Solution**: Changed to use `app.registerActionHandler()` which is available on main `app`
+- ✅ **Source Parameter**: Documented that PUT requests require `source` in body when multiple handlers exist
+- ✅ **Meta Emission**: Added `supportsPut` meta for path discoverability
+
+**Rust Plugin Example Created:**
+- `examples/wasm-plugins/anchor-watch-rust/` - Complete working example
+- Buffer-based FFI with `allocate`/`deallocate` exports
+- PUT handlers for `navigation.anchor.position`, `maxRadius`, `state`
+- Delta emission for state updates
+- Comprehensive documentation
+
+**Technical Details:**
+```rust
+// Register PUT handler
+register_put_handler("vessels.self", "navigation.anchor.position");
+
+// Handler export naming convention
+#[no_mangle]
+pub extern "C" fn handle_put_vessels_self_navigation_anchor_position(
+    value_ptr: *const u8, value_len: usize,
+    response_ptr: *mut u8, response_max_len: usize
+) -> i32 { ... }
+```
+
+**Key Finding - Source Parameter:**
+```bash
+# Must include source in body for paths with multiple handlers
+curl -X PUT .../navigation/anchor/position \
+  -d '{"value": {...}, "source": "@signalk/anchor-watch-rust"}'
+```
+
+---
 
 ### 🎉 Asyncify Support - HTTP Requests in WASM Plugins! (January 2025)
 
@@ -376,6 +423,38 @@ if (hasNetworkCapability()) {
 
 **Binary Size**: 13.2 KB
 
+#### Anchor Watch Rust (PUT Handlers Example) ✅
+
+**Location**: [examples/wasm-plugins/anchor-watch-rust](../examples/wasm-plugins/anchor-watch-rust)
+**Version**: 0.1.0
+**Status**: Deployed and tested on Raspberry Pi 5
+
+**Demonstrates:**
+- ✅ Rust WASM plugin development (`wasm32-wasip1` target)
+- ✅ Buffer-based FFI with `allocate`/`deallocate` exports
+- ✅ PUT handler registration and handling
+- ✅ Delta message emission
+- ✅ JSON configuration schema
+- ✅ State management with `thread_local!`
+
+**PUT Handlers:**
+- `navigation.anchor.position` - Set anchor coordinates
+- `navigation.anchor.maxRadius` - Set alarm radius (10-1000m)
+- `navigation.anchor.state` - Query state (informational)
+
+**Files:**
+- `src/lib.rs` - Rust implementation (~400 lines)
+- `Cargo.toml` - Build configuration with size optimizations
+- `package.json` - npm package with `putHandlers: true` capability
+- `README.md` - Comprehensive documentation
+
+**Binary Size**: ~100-150 KB (optimized)
+
+**Build Command:**
+```bash
+cargo build --release --target wasm32-wasip1
+```
+
 ---
 
 ## Documentation Created
@@ -470,11 +549,16 @@ if (hasNetworkCapability()) {
 | Asyncify state management | ✅ | Automatic pause/resume for async ops |
 | Config file resolution | ✅ | Fixed plugin ID mismatch issue |
 
+### Phase 2A (Complete ✅)
+
+| Capability | Status | Description |
+|------------|--------|-------------|
+| `putHandlers` | ✅ | Register PUT handlers (AssemblyScript + Rust) |
+
 ### Phase 3 (Planned)
 
 | Capability | Status | Description |
 |------------|--------|-------------|
-| `putHandlers` | 🔄 | Register PUT handlers |
 | REST API | 🔄 | Custom HTTP endpoints |
 | Resource providers | 🔄 | Routes, waypoints, etc. |
 | Autopilot providers | 🔄 | Autopilot control |
@@ -516,9 +600,16 @@ if (hasNetworkCapability()) {
 - [x] ✅ Comprehensive documentation created
 - [x] ✅ SDK updated to v0.1.2
 
+### Phase 2A Goals (Complete ✅)
+
+- [x] ✅ PUT handlers capability implemented
+- [x] ✅ Rust WASM plugin support added
+- [x] ✅ Buffer-based FFI for Rust plugins
+- [x] ✅ Complete Rust example (anchor-watch-rust)
+- [x] ✅ Documentation updated for Rust development
+
 ### Phase 3 Goals (In Progress 🔄)
 
-- [ ] 🔄 PUT handlers capability
 - [ ] 🔄 Custom REST API endpoints
 - [ ] 🔄 Resource providers
 - [ ] 🔄 Zero Node.js plugin regressions
@@ -610,7 +701,7 @@ Apache License 2.0 (same as Signal K Server)
 
 ---
 
-**Status**: Phase 2 Network Capabilities Complete ✅
-**Version**: 3.0.0-alpha.4
-**Date**: January 2, 2025
-**Next**: Phase 3 - Extended Capabilities (PUT handlers, REST API, Resource providers)
+**Status**: Phase 2A PUT Handlers Complete ✅
+**Version**: 3.0.0-alpha.6
+**Date**: December 3, 2025
+**Next**: Phase 3 - Extended Capabilities (REST API, Resource providers)

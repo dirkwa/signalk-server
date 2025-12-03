@@ -2,6 +2,108 @@
 
 All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
+## [3.0.0] - 2025-12-03
+
+### Fixed - PUT Handler Registration for WASM Plugins
+
+#### Root Cause
+WASM plugins were calling `app.registerPutHandler()` which only exists on the wrapped `appCopy` object for regular Node.js plugins, not on the main `app` object.
+
+#### Solution
+Changed to use `app.registerActionHandler()` which is available on the main `app` object and is the correct API for registering PUT handlers from WASM plugins.
+
+**Files Modified:**
+- `src/wasm/wasm-runtime.ts` (lines 456-551)
+  - Changed `app.registerPutHandler` to `app.registerActionHandler`
+  - Fixed argument order: `(context, path, source, callback)`
+  - Added `supportsPut` meta emission for discoverability
+  - Added diagnostic logging for debugging
+
+**Key Code Changes:**
+```typescript
+// Before (broken)
+app.registerPutHandler(context, path, callback, pluginId)
+
+// After (working)
+app.registerActionHandler(context, path, pluginId, callback)
+```
+
+### Added - Rust WASM Plugin Example with PUT Handlers
+
+Created complete Rust WASM plugin example demonstrating:
+- Buffer-based FFI string passing with `allocate`/`deallocate` exports
+- PUT handler registration and handling
+- Delta message emission
+- Plugin configuration via JSON schema
+
+**Files Created:**
+- `examples/wasm-plugins/anchor-watch-rust/` - Complete working example
+- `examples/wasm-plugins/anchor-watch-rust/src/lib.rs` - Rust implementation
+- `examples/wasm-plugins/anchor-watch-rust/Cargo.toml` - Build configuration
+- `examples/wasm-plugins/anchor-watch-rust/package.json` - npm package
+- `examples/wasm-plugins/anchor-watch-rust/README.md` - Comprehensive documentation
+
+### Documentation Updates
+
+#### WASM_PLUGIN_DEV_GUIDE.md
+- Corrected Rust target from `wasm32-wasi` to `wasm32-wasip1`
+- Added comprehensive Rust plugin development section
+- Added Rust vs AssemblyScript comparison table
+- Added Rust FFI interface reference
+- Updated PUT handler examples with Rust code
+- Added critical source parameter documentation for PUT requests
+- Added debugging section with server log commands
+
+#### Key Finding: PUT Source Parameter
+When multiple plugins provide the same Signal K path, PUT requests **must** include a `source` parameter in the body matching the npm package name:
+
+```bash
+curl -X PUT .../navigation/anchor/position \
+  -d '{"value": {...}, "source": "@signalk/anchor-watch-rust"}'
+```
+
+Without the source parameter, clients receive:
+```json
+{"message": "there are multiple sources for the given path, but no source was specified"}
+```
+
+### Technical Details
+
+#### Rust Plugin FFI Interface
+
+Signal K provides these FFI imports in the `env` module:
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `sk_debug` | `(ptr, len)` | Log debug message |
+| `sk_set_status` | `(ptr, len)` | Set plugin status |
+| `sk_set_error` | `(ptr, len)` | Set error message |
+| `sk_handle_message` | `(ptr, len)` | Emit delta message |
+| `sk_register_put_handler` | `(ctx_ptr, ctx_len, path_ptr, path_len) -> i32` | Register PUT handler |
+
+Rust plugins MUST export:
+
+| Export | Signature | Description |
+|--------|-----------|-------------|
+| `plugin_id` | `(out_ptr, max_len) -> len` | Return plugin ID |
+| `plugin_name` | `(out_ptr, max_len) -> len` | Return plugin name |
+| `plugin_schema` | `(out_ptr, max_len) -> len` | Return JSON schema |
+| `plugin_start` | `(config_ptr, config_len) -> status` | Start plugin |
+| `plugin_stop` | `() -> status` | Stop plugin |
+| `allocate` | `(size) -> ptr` | Allocate memory for host |
+| `deallocate` | `(ptr, size)` | Free allocated memory |
+
+#### PUT Handler Naming Convention
+
+Handler functions follow this pattern:
+```
+handle_put_{context}_{path}
+```
+- Replace all dots (`.`) with underscores (`_`)
+- Example: `handle_put_vessels_self_navigation_anchor_position`
+
+---
+
 ## [3.0.0-alpha.5] - 2025-12-03
 
 ### Investigated - C#/.NET WASM Support

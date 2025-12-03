@@ -99,9 +99,9 @@ export function readPluginConfig(configFile: string): any {
   try {
     if (!fs.existsSync(configFile)) {
       debug(`Config file not found: ${configFile}, returning default config`)
+      // Note: Do NOT include configuration key - UI shows "Configure" button when configuration is null/undefined
       return {
-        enabled: false,
-        configuration: {}
+        enabled: false
       }
     }
 
@@ -110,9 +110,9 @@ export function readPluginConfig(configFile: string): any {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     debug(`Error reading plugin config: ${errorMsg}`)
+    // Note: Do NOT include configuration key - UI shows "Configure" button when configuration is null/undefined
     return {
-      enabled: false,
-      configuration: {}
+      enabled: false
     }
   }
 }

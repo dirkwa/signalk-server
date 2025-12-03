@@ -264,10 +264,22 @@ export class WasmRuntime {
       debug(`Module has ${imports.length} imports, ${moduleExports.length} exports`)
       debug(`Module imports: ${JSON.stringify(imports.map(i => `${i.module}.${i.name}`).slice(0, 20))}`)
 
-      const isAssemblyScriptPlugin = moduleExports.some(e => e.name === 'plugin_id')
-      const isRustPlugin = moduleExports.some(e => e.name === '_start')
+      // Detect plugin type by export signatures:
+      // - Rust library: has plugin_id AND allocate export (buffer-based strings)
+      // - Rust command: has _start export (WASI command)
+      // - AssemblyScript: has plugin_id but NOT allocate (uses AS loader for string handling)
+      const hasPluginId = moduleExports.some(e => e.name === 'plugin_id')
+      const hasAllocate = moduleExports.some(e => e.name === 'allocate')
+      const hasStart = moduleExports.some(e => e.name === '_start')
 
-      debug(`Plugin type detection: AS=${isAssemblyScriptPlugin}, Rust=${isRustPlugin}`)
+      // Rust library plugins export allocate for buffer management
+      const isRustLibraryPlugin = hasPluginId && hasAllocate
+      // Rust command plugins have _start
+      const isRustPlugin = hasStart
+      // AssemblyScript: has plugin_id but NOT allocate (we'll use AS loader for string handling)
+      const isAssemblyScriptPlugin = hasPluginId && !hasAllocate && !hasStart
+
+      debug(`Plugin type detection: AS=${isAssemblyScriptPlugin}, RustLib=${isRustLibraryPlugin}, RustCmd=${isRustPlugin}`)
 
       // Node.js WASI uses getImportObject(), @wasmer/wasi uses getImports()
       const wasiImports = (wasi.getImportObject ? wasi.getImportObject() : wasi.getImports(module)) as any
@@ -434,31 +446,88 @@ export class WasmRuntime {
               return 0 // Failure
             }
 
-            // Register PUT handler with Signal K server
-            if (app && app.registerPutHandler) {
+            // Debug: Log app availability
+            debug(`[${pluginId}] app available: ${!!app}, app.registerActionHandler available: ${!!(app && app.registerActionHandler)}`)
+            if (app) {
+              const appKeys = Object.keys(app).filter(k => k.toLowerCase().includes('register') || k.toLowerCase().includes('handler')).slice(0, 10)
+              debug(`[${pluginId}] app handler-related keys: ${appKeys.join(', ')}`)
+            }
+
+            // Register PUT handler with Signal K server using app.registerActionHandler
+            // (app.registerPutHandler is only available on the wrapped appCopy for regular plugins)
+            if (app && app.registerActionHandler) {
+              // First, send meta message to indicate this path supports PUT
+              if (app.handleMessage) {
+                app.handleMessage(pluginId, {
+                  updates: [
+                    {
+                      meta: [
+                        {
+                          path: path,
+                          value: {
+                            supportsPut: true
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                })
+                debug(`[${pluginId}] Sent supportsPut meta for ${path}`)
+              }
+
               // The callback will be invoked when a PUT request arrives
-              const callback = (context: string, path: string, value: any, cb: (result: any) => void) => {
-                debug(`[${pluginId}] PUT request received: ${context}.${path} = ${JSON.stringify(value)}`)
+              const callback = (cbContext: string, cbPath: string, value: any, cb: (result: any) => void) => {
+                debug(`[${pluginId}] PUT request received: ${cbContext}.${cbPath} = ${JSON.stringify(value)}`)
 
                 // Find the corresponding handler function in WASM exports
                 // Handler function name format: handle_put_<context>_<path> (sanitized)
-                const handlerName = `handle_put_${context.replace(/\./g, '_')}_${path.replace(/\./g, '_')}`
+                const handlerName = `handle_put_${cbContext.replace(/\./g, '_')}_${cbPath.replace(/\./g, '_')}`
 
-                if (asLoaderInstance && asLoaderInstance.exports[handlerName]) {
+                // Check both AssemblyScript loader exports and raw exports (for Rust plugins)
+                const exports = asLoaderInstance?.exports || rawExports
+                const handlerFunc = exports?.[handlerName]
+
+                if (handlerFunc) {
                   debug(`[${pluginId}] Calling WASM handler: ${handlerName}`)
 
-                  // Prepare request JSON
-                  const requestJson = JSON.stringify({
-                    context,
-                    path,
-                    value
-                  })
+                  // Prepare value JSON (just the value, not the full context)
+                  const valueJson = JSON.stringify(value)
 
                   try {
-                    // Call WASM handler and get response JSON
-                    const responseJson = asLoaderInstance.exports[handlerName](requestJson)
-                    const response = JSON.parse(responseJson)
+                    let responseJson: string
 
+                    if (asLoaderInstance) {
+                      // AssemblyScript: pass string directly (loader handles conversion)
+                      responseJson = handlerFunc(valueJson)
+                    } else if (rawExports?.allocate) {
+                      // Rust library plugin: use buffer-based string passing
+                      const valueBytes = Buffer.from(valueJson, 'utf8')
+                      const valuePtr = rawExports.allocate(valueBytes.length)
+                      const responseMaxLen = 8192
+                      const responsePtr = rawExports.allocate(responseMaxLen)
+
+                      // Write value to WASM memory
+                      const memory = rawExports.memory as WebAssembly.Memory
+                      const memView = new Uint8Array(memory.buffer)
+                      memView.set(valueBytes, valuePtr)
+
+                      // Call handler
+                      const writtenLen = handlerFunc(valuePtr, valueBytes.length, responsePtr, responseMaxLen)
+
+                      // Read response from WASM memory
+                      const responseBytes = new Uint8Array(memory.buffer, responsePtr, writtenLen)
+                      responseJson = new TextDecoder('utf-8').decode(responseBytes)
+
+                      // Deallocate
+                      if (rawExports.deallocate) {
+                        rawExports.deallocate(valuePtr, valueBytes.length)
+                        rawExports.deallocate(responsePtr, responseMaxLen)
+                      }
+                    } else {
+                      throw new Error('Unknown plugin type for PUT handler')
+                    }
+
+                    const response = JSON.parse(responseJson)
                     debug(`[${pluginId}] PUT handler response: ${JSON.stringify(response)}`)
                     cb(response)
                   } catch (error) {
@@ -479,11 +548,11 @@ export class WasmRuntime {
                 }
               }
 
-              app.registerPutHandler(context, path, callback, pluginId)
-              debug(`[${pluginId}] PUT handler registered successfully`)
+              app.registerActionHandler(context, path, pluginId, callback)
+              debug(`[${pluginId}] PUT handler registered successfully via registerActionHandler`)
               return 1 // Success
             } else {
-              debug(`[${pluginId}] app.registerPutHandler not available`)
+              debug(`[${pluginId}] app.registerActionHandler not available`)
               return 0
             }
           } catch (error) {
@@ -587,9 +656,17 @@ export class WasmRuntime {
 
       // Initialize based on plugin type
       if (isRustPlugin) {
-        // Rust plugin - start WASI
-        debug(`Initializing Rust plugin: ${pluginId}`)
+        // Rust command plugin - start WASI
+        debug(`Initializing Rust command plugin: ${pluginId}`)
         wasi.start(instance)
+      } else if (isRustLibraryPlugin) {
+        // Rust library plugin - no _start needed, just initialize WASI
+        debug(`Initialized Rust library plugin: ${pluginId}`)
+        // Call _initialize if it exists (WASI reactor pattern)
+        if (rawExports._initialize) {
+          debug(`Calling _initialize for Rust library plugin`)
+          rawExports._initialize()
+        }
       } else if (isAssemblyScriptPlugin) {
         // AssemblyScript plugin - no _start needed
         debug(`Initialized AssemblyScript plugin: ${pluginId}`)
@@ -686,8 +763,95 @@ export class WasmRuntime {
           return result
         }
         stopFunc = () => asLoaderInstance.exports.plugin_stop()
+      } else if (isRustLibraryPlugin) {
+        // Rust library plugins use buffer-based string handling
+        // Functions like plugin_id(out_ptr, out_max_len) -> written_len
+        debug(`Setting up Rust library plugin exports with buffer-based strings`)
+
+        // Helper to call a Rust function that writes to a buffer and returns length
+        const callRustStringFunc = (funcName: string): string => {
+          const func = rawExports[funcName]
+          if (typeof func !== 'function') {
+            debug(`Warning: ${funcName} not found in exports`)
+            return ''
+          }
+
+          // Allocate a buffer in WASM memory for the output
+          const maxLen = 8192  // 8KB should be enough for id/name/schema
+          const allocate = rawExports.allocate
+          if (typeof allocate !== 'function') {
+            throw new Error('Rust plugin missing allocate export')
+          }
+
+          const outPtr = allocate(maxLen)
+          if (!outPtr) {
+            throw new Error(`Failed to allocate ${maxLen} bytes for ${funcName}`)
+          }
+
+          try {
+            // Call the function - it writes to buffer and returns length
+            const writtenLen = func(outPtr, maxLen)
+            if (writtenLen <= 0) {
+              debug(`${funcName} returned ${writtenLen}`)
+              return ''
+            }
+
+            // Read the string from WASM memory
+            const memory = rawExports.memory as WebAssembly.Memory
+            const bytes = new Uint8Array(memory.buffer, outPtr, writtenLen)
+            const decoder = new TextDecoder('utf-8')
+            const result = decoder.decode(bytes)
+            debug(`${funcName} returned: ${result.substring(0, 100)}...`)
+            return result
+          } finally {
+            // Deallocate the buffer
+            const deallocate = rawExports.deallocate
+            if (typeof deallocate === 'function') {
+              deallocate(outPtr, maxLen)
+            }
+          }
+        }
+
+        idFunc = () => callRustStringFunc('plugin_id')
+        nameFunc = () => callRustStringFunc('plugin_name')
+        schemaFunc = () => callRustStringFunc('plugin_schema')
+
+        // plugin_start takes config string as input
+        startFunc = (config: string) => {
+          debug(`Calling Rust plugin_start with config: ${config.substring(0, 100)}...`)
+
+          const encoder = new TextEncoder()
+          const configBytes = encoder.encode(config)
+          const configLen = configBytes.length
+
+          // Allocate memory for config
+          const allocate = rawExports.allocate
+          const configPtr = allocate(configLen)
+
+          // Copy config to WASM memory
+          const memory = rawExports.memory as WebAssembly.Memory
+          const memoryView = new Uint8Array(memory.buffer)
+          memoryView.set(configBytes, configPtr)
+
+          try {
+            const result = rawExports.plugin_start(configPtr, configLen)
+            debug(`plugin_start returned: ${result}`)
+            return result
+          } finally {
+            const deallocate = rawExports.deallocate
+            if (typeof deallocate === 'function') {
+              deallocate(configPtr, configLen)
+            }
+          }
+        }
+
+        stopFunc = () => {
+          const result = rawExports.plugin_stop()
+          debug(`plugin_stop returned: ${result}`)
+          return result
+        }
       } else {
-        // Rust plugins return JavaScript strings directly
+        // Rust command plugins or unknown - try direct exports
         idFunc = rawExports.id
         nameFunc = rawExports.name
         schemaFunc = rawExports.schema
