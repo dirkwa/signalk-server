@@ -4,6 +4,98 @@ All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
 ## [3.0.0] - 2025-12-03
 
+### Added - Custom HTTP Endpoints for WASM Plugins
+
+WASM plugins can now register custom HTTP endpoints to expose REST APIs.
+
+**Features:**
+- Export `http_endpoints()` to define GET/POST/PUT/DELETE routes
+- Routes mounted at `/plugins/{plugin-id}/{path}`
+- Full request context (method, path, query, params, body, headers)
+- JSON response format with status codes and custom headers
+- Support for both AssemblyScript and Rust plugins
+
+**Files Modified:**
+- `src/wasm/loader/plugin-routes.ts`
+  - Added Rust buffer-based handler support for HTTP endpoints
+  - Same pattern as PUT handlers: `(request_ptr, request_len, response_ptr, response_max_len) -> written_len`
+
+### Fixed - Rust Plugin http_endpoints() Support
+
+#### Root Cause
+The `http_endpoints()` call in plugin-routes.ts assumed the function returns a string directly (AssemblyScript style), but Rust plugins use buffer-based FFI with signature `(out_ptr, out_max_len) -> written_len`.
+
+#### Solution
+Added dual-mode detection to handle both AssemblyScript and Rust plugin types:
+1. Check for `http_endpoints` in both AssemblyScript loader and raw WASM exports
+2. For Rust plugins: allocate buffer, call with buffer parameters, read UTF-8 string from WASM memory
+3. Properly deallocate memory after reading
+
+**Files Modified:**
+- `src/wasm/loader/plugin-routes.ts` (lines 148-192)
+  - Fixed detection to check both plugin types
+  - Added Rust buffer-based FFI reading for `http_endpoints()`
+  - Same memory pattern as other Rust FFI: allocate → call → read → deallocate
+
+**Key Code Changes:**
+```typescript
+// Check for http_endpoints in either AssemblyScript loader or raw WASM exports
+const hasAsEndpoints = plugin.instance.asLoader &&
+  typeof plugin.instance.asLoader.exports.http_endpoints === 'function'
+const hasRustEndpoints = plugin.instance.instance &&
+  typeof (plugin.instance.instance.exports as any).http_endpoints === 'function'
+
+// For Rust plugins: use buffer-based FFI
+if (typeof rawExports.allocate === 'function' &&
+    typeof rawExports.http_endpoints === 'function') {
+  const maxLen = 8192
+  const outPtr = rawExports.allocate(maxLen)
+  const writtenLen = rawExports.http_endpoints(outPtr, maxLen)
+
+  // Read UTF-8 string from WASM memory
+  const memory = rawExports.memory as WebAssembly.Memory
+  const bytes = new Uint8Array(memory.buffer, outPtr, writtenLen)
+  endpointsJson = new TextDecoder('utf-8').decode(bytes)
+
+  // Deallocate
+  if (typeof rawExports.deallocate === 'function') {
+    rawExports.deallocate(outPtr, maxLen)
+  }
+}
+```
+
+**Tested:**
+- Rust anchor-watch-rust plugin HTTP endpoints verified working
+- GET /plugins/anchor-watch-rust/api/status returns JSON status
+- GET /plugins/anchor-watch-rust/api/position returns anchor position
+- POST /plugins/anchor-watch-rust/api/drop accepts position updates
+
+**Documentation:**
+- Added "Custom HTTP Endpoints API" section to WASM_PLUGIN_DEV_GUIDE.md
+- Includes AssemblyScript and Rust examples
+- Request/response format documentation
+- URL routing explanation
+
+**Example Usage (Rust):**
+```rust
+#[no_mangle]
+pub extern "C" fn http_endpoints(out_ptr: *mut u8, out_max_len: usize) -> i32 {
+    let endpoints = r#"[{"method": "GET", "path": "/api/data", "handler": "handle_get_data"}]"#;
+    write_string(endpoints, out_ptr, out_max_len)
+}
+
+#[no_mangle]
+pub extern "C" fn handle_get_data(
+    request_ptr: *const u8, request_len: usize,
+    response_ptr: *mut u8, response_max_len: usize
+) -> i32 {
+    let response = r#"{"statusCode": 200, "body": "Hello from WASM!"}"#;
+    write_string(response, response_ptr, response_max_len)
+}
+```
+
+---
+
 ### Fixed - PUT Handler Registration for WASM Plugins
 
 #### Root Cause

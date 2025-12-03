@@ -3,6 +3,7 @@
 //! A Rust implementation demonstrating:
 //! - WASM plugin architecture with raw FFI exports
 //! - PUT handler registration and handling
+//! - Custom HTTP endpoints (REST API)
 //! - Delta message emission
 //! - Plugin configuration via JSON schema
 
@@ -342,6 +343,161 @@ pub extern "C" fn handle_put_vessels_self_navigation_anchor_state(
     // This PUT handler is informational only - actual state change requires plugin restart
     let result = r#"{"state":"COMPLETED","statusCode":200,"message":"Anchor watch state is controlled by enabling/disabling the plugin"}"#;
     write_string(result, response_ptr, response_max_len)
+}
+
+// =============================================================================
+// HTTP Endpoints - Custom REST API
+// =============================================================================
+
+/// Export HTTP endpoint definitions
+/// Returns JSON array of endpoint definitions
+#[no_mangle]
+pub extern "C" fn http_endpoints(out_ptr: *mut u8, out_max_len: usize) -> i32 {
+    let endpoints = r#"[
+        {"method": "GET", "path": "/api/status", "handler": "http_get_status"},
+        {"method": "GET", "path": "/api/position", "handler": "http_get_position"},
+        {"method": "POST", "path": "/api/drop", "handler": "http_post_drop"}
+    ]"#;
+    write_string(endpoints, out_ptr, out_max_len)
+}
+
+/// GET /api/status - Return current anchor watch status
+#[no_mangle]
+pub extern "C" fn http_get_status(
+    _request_ptr: *const u8,
+    _request_len: usize,
+    response_ptr: *mut u8,
+    response_max_len: usize,
+) -> i32 {
+    debug("HTTP GET /api/status");
+
+    let response = STATE.with(|state| {
+        let s = state.borrow();
+        format!(
+            r#"{{"statusCode":200,"headers":{{"Content-Type":"application/json"}},"body":"{{\"running\":{},\"alarmActive\":{},\"position\":{{\"latitude\":{},\"longitude\":{}}},\"maxRadius\":{},\"checkInterval\":{}}}"}}"#,
+            s.is_running,
+            s.alarm_active,
+            s.config.anchor_lat,
+            s.config.anchor_lon,
+            s.config.max_radius,
+            s.config.check_interval
+        )
+    });
+
+    write_string(&response, response_ptr, response_max_len)
+}
+
+/// GET /api/position - Return current anchor position
+#[no_mangle]
+pub extern "C" fn http_get_position(
+    _request_ptr: *const u8,
+    _request_len: usize,
+    response_ptr: *mut u8,
+    response_max_len: usize,
+) -> i32 {
+    debug("HTTP GET /api/position");
+
+    let response = STATE.with(|state| {
+        let s = state.borrow();
+        format!(
+            r#"{{"statusCode":200,"headers":{{"Content-Type":"application/json"}},"body":"{{\"latitude\":{},\"longitude\":{},\"maxRadius\":{}}}"}}"#,
+            s.config.anchor_lat,
+            s.config.anchor_lon,
+            s.config.max_radius
+        )
+    });
+
+    write_string(&response, response_ptr, response_max_len)
+}
+
+/// POST /api/drop - Drop anchor at specified position
+#[no_mangle]
+pub extern "C" fn http_post_drop(
+    request_ptr: *const u8,
+    request_len: usize,
+    response_ptr: *mut u8,
+    response_max_len: usize,
+) -> i32 {
+    debug("HTTP POST /api/drop");
+
+    // Read request context
+    let request_json = unsafe {
+        let slice = std::slice::from_raw_parts(request_ptr, request_len);
+        String::from_utf8_lossy(slice).to_string()
+    };
+
+    debug(&format!("Request: {}", request_json));
+
+    // Parse request to get body
+    #[derive(Deserialize)]
+    struct RequestContext {
+        body: Option<DropRequest>,
+    }
+
+    #[derive(Deserialize)]
+    struct DropRequest {
+        latitude: f64,
+        longitude: f64,
+        #[serde(default = "default_max_radius")]
+        #[serde(rename = "maxRadius")]
+        max_radius: f64,
+    }
+
+    let response = match serde_json::from_str::<RequestContext>(&request_json) {
+        Ok(ctx) => {
+            match ctx.body {
+                Some(drop_req) => {
+                    // Validate coordinates
+                    if drop_req.latitude < -90.0 || drop_req.latitude > 90.0 {
+                        return write_string(
+                            r#"{"statusCode":400,"headers":{"Content-Type":"application/json"},"body":"{\"error\":\"Invalid latitude. Must be between -90 and 90.\"}"}"#,
+                            response_ptr,
+                            response_max_len
+                        );
+                    }
+                    if drop_req.longitude < -180.0 || drop_req.longitude > 180.0 {
+                        return write_string(
+                            r#"{"statusCode":400,"headers":{"Content-Type":"application/json"},"body":"{\"error\":\"Invalid longitude. Must be between -180 and 180.\"}"}"#,
+                            response_ptr,
+                            response_max_len
+                        );
+                    }
+
+                    // Update state
+                    STATE.with(|state| {
+                        let mut s = state.borrow_mut();
+                        s.config.anchor_lat = drop_req.latitude;
+                        s.config.anchor_lon = drop_req.longitude;
+                        s.config.max_radius = drop_req.max_radius;
+                        s.alarm_active = false;
+                    });
+
+                    // Emit delta to Signal K
+                    emit_anchor_state(true, drop_req.latitude, drop_req.longitude, drop_req.max_radius);
+                    set_status(&format!("Anchor dropped at ({:.6}, {:.6})", drop_req.latitude, drop_req.longitude));
+
+                    format!(
+                        r#"{{"statusCode":200,"headers":{{"Content-Type":"application/json"}},"body":"{{\"success\":true,\"message\":\"Anchor dropped\",\"position\":{{\"latitude\":{},\"longitude\":{}}},\"maxRadius\":{}}}"}}"#,
+                        drop_req.latitude,
+                        drop_req.longitude,
+                        drop_req.max_radius
+                    )
+                }
+                None => {
+                    r#"{"statusCode":400,"headers":{"Content-Type":"application/json"},"body":"{\"error\":\"Missing request body. Expected {latitude, longitude, maxRadius?}\"}"}"#.to_string()
+                }
+            }
+        }
+        Err(e) => {
+            debug(&format!("Failed to parse request: {}", e));
+            format!(
+                r#"{{"statusCode":400,"headers":{{"Content-Type":"application/json"}},"body":"{{\"error\":\"Invalid request format: {}\"}}"}}"#,
+                e.to_string().replace('"', "\\\"")
+            )
+        }
+    };
+
+    write_string(&response, response_ptr, response_max_len)
 }
 
 // =============================================================================
