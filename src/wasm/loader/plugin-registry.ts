@@ -115,6 +115,9 @@ export async function registerWasmPlugin(
     if (savedConfig.enabled === false) {
       debug(`Plugin ${packageName} is disabled, schema already extracted from WASM`)
 
+      // Do NOT write config file here - UI shows "Configure" button when no config file exists
+      // Config file will be created when user actually configures the plugin
+
       // Create a minimal plugin object without keeping WASM loaded
       const plugin: WasmPlugin = {
         id: pluginId,
@@ -138,7 +141,7 @@ export async function registerWasmPlugin(
         instance: null as any, // Instance was destroyed
         status: 'stopped',
         schema, // Schema extracted from temp load
-        configuration: savedConfig.configuration || {},
+        configuration: savedConfig.configuration, // Keep undefined/null for UI "Configure" button logic
         crashCount: 0,
         restartBackoff: 1000,
         description: packageJson.description || '',
@@ -210,7 +213,7 @@ export async function registerWasmPlugin(
       instance,
       status: 'stopped',
       schema,
-      configuration: savedConfig.configuration || {},
+      configuration: savedConfig.configuration, // Keep undefined/null for UI "Configure" button logic
       crashCount: 0,
       restartBackoff: 1000, // Start with 1 second
       description: packageJson.description || '',
