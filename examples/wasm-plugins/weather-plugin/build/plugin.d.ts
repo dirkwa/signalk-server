@@ -33,3 +33,15 @@ export declare function plugin_start(configPtr: number, configLen: number): numb
  * @returns `i32`
  */
 export declare function plugin_stop(): number;
+/**
+ * assembly/index/resource_list
+ * @param queryJson `~lib/string/String`
+ * @returns `~lib/string/String`
+ */
+export declare function resource_list(queryJson: string): string;
+/**
+ * assembly/index/resource_get
+ * @param requestJson `~lib/string/String`
+ * @returns `~lib/string/String`
+ */
+export declare function resource_get(requestJson: string): string;

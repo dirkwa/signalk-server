@@ -10,6 +10,7 @@ import { WasmPlugin } from './types'
 import { wasmPlugins, restartTimers, setPluginStatus } from './plugin-registry'
 import { getWasmRuntime } from '../wasm-runtime'
 import { backwardsCompat } from './plugin-routes'
+import { updateResourceProviderInstance } from '../bindings/resource-provider'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -108,6 +109,14 @@ export async function startWasmPlugin(app: any, pluginId: string): Promise<void>
     if (result !== 0) {
       throw new Error(`Plugin start() returned error code: ${result}`)
     }
+
+    // Update resource provider instance references after plugin_start() completes
+    // Resource providers are registered during start(), so we need to update
+    // references using BOTH the packageName (used in env bindings) and real pluginId
+    if (plugin.packageName) {
+      updateResourceProviderInstance(plugin.packageName, plugin.instance)
+    }
+    updateResourceProviderInstance(pluginId, plugin.instance)
 
     setPluginStatus(plugin, 'running')
     plugin.statusMessage = 'Running'

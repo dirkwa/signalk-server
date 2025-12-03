@@ -1,7 +1,7 @@
 {
   "name": "@signalk/weather-plugin-example",
-  "version": "0.1.8",
-  "description": "Example SignalK WASM plugin demonstrating as-fetch network capability",
+  "version": "0.2.0",
+  "description": "Example SignalK WASM plugin demonstrating network capability and resource provider",
   "keywords": [
     "signalk-node-server-plugin",
     "signalk-wasm-plugin",
@@ -9,6 +9,7 @@
     "wasm",
     "plugin",
     "weather",
+    "resource-provider",
     "example"
   ],
   "wasmManifest": "build/plugin.wasm",
@@ -17,7 +18,8 @@
     "storage": "vfs-only",
     "dataRead": true,
     "dataWrite": true,
-    "serialPorts": false
+    "serialPorts": false,
+    "resourceProvider": true
   },
   "author": "Signal K Team",
   "license": "Apache-2.0",
@@ -34,6 +36,6 @@
   },
   "dependencies": {
     "as-fetch": "^2.1.4",
-    "signalk-assemblyscript-plugin-sdk": "^0.1.0"
+    "signalk-assemblyscript-plugin-sdk": "^0.1.3"
   }
 }

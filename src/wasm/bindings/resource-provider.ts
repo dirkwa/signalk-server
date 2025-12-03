@@ -1,0 +1,217 @@
+/**
+ * WASM Resource Provider Support
+ *
+ * Handles resource provider registration and handler invocation for WASM plugins
+ */
+
+import Debug from 'debug'
+import { WasmResourceProvider, WasmPluginInstance } from '../types'
+
+const debug = Debug('signalk:wasm:resource-provider')
+
+/**
+ * Registered resource providers from WASM plugins
+ * Key: pluginId:resourceType
+ */
+export const wasmResourceProviders: Map<string, WasmResourceProvider> = new Map()
+
+/**
+ * Call a WASM resource handler function
+ * Handles both AssemblyScript and Rust plugins
+ */
+export function callWasmResourceHandler(
+  pluginInstance: WasmPluginInstance,
+  handlerName: string,
+  requestJson: string
+): string | null {
+  try {
+    const asLoader = pluginInstance.asLoader
+    const rawExports = pluginInstance.instance?.exports as any
+
+    if (asLoader && typeof asLoader.exports[handlerName] === 'function') {
+      // AssemblyScript: allocate string in WASM memory, pass pointer, get string pointer back
+      const requestPtr = asLoader.exports.__newString(requestJson)
+      const resultPtr = asLoader.exports[handlerName](requestPtr)
+      return asLoader.exports.__getString(resultPtr)
+    } else if (rawExports && typeof rawExports[handlerName] === 'function') {
+      // Rust: buffer-based string passing
+      if (typeof rawExports.allocate !== 'function') {
+        debug(`Plugin ${pluginInstance.pluginId} missing allocate export`)
+        return null
+      }
+
+      const requestBytes = Buffer.from(requestJson, 'utf8')
+      const requestPtr = rawExports.allocate(requestBytes.length)
+      const responseMaxLen = 65536 // 64KB response buffer
+      const responsePtr = rawExports.allocate(responseMaxLen)
+
+      // Write request to WASM memory
+      const memory = rawExports.memory as WebAssembly.Memory
+      const memView = new Uint8Array(memory.buffer)
+      memView.set(requestBytes, requestPtr)
+
+      // Call handler: (request_ptr, request_len, response_ptr, response_max_len) -> written_len
+      const writtenLen = rawExports[handlerName](requestPtr, requestBytes.length, responsePtr, responseMaxLen)
+
+      // Read response from WASM memory
+      const responseBytes = new Uint8Array(memory.buffer, responsePtr, writtenLen)
+      const responseJson = new TextDecoder('utf-8').decode(responseBytes)
+
+      // Deallocate buffers
+      if (typeof rawExports.deallocate === 'function') {
+        rawExports.deallocate(requestPtr, requestBytes.length)
+        rawExports.deallocate(responsePtr, responseMaxLen)
+      }
+
+      return responseJson
+    }
+
+    debug(`Handler ${handlerName} not found in plugin ${pluginInstance.pluginId}`)
+    return null
+  } catch (error) {
+    debug(`Error calling resource handler ${handlerName}: ${error}`)
+    return null
+  }
+}
+
+/**
+ * Update resource provider references with a newly loaded plugin instance
+ */
+export function updateResourceProviderInstance(pluginId: string, pluginInstance: WasmPluginInstance): void {
+  if (wasmResourceProviders && wasmResourceProviders.size > 0) {
+    wasmResourceProviders.forEach((provider, key) => {
+      if (provider.pluginId === pluginId) {
+        provider.pluginInstance = pluginInstance
+        debug(`Updated resource provider ${key} with plugin instance`)
+      }
+    })
+  }
+}
+
+/**
+ * Migrate resource provider registrations from old pluginId to new pluginId
+ * This is needed because during plugin loading, we use packageName as temporary pluginId,
+ * but the real pluginId comes from the WASM module's plugin_id() export.
+ *
+ * NOTE: We only update the pluginId in the provider object, NOT the Map key.
+ * The closures in providerMethods capture the original key, so we must keep it.
+ */
+export function migrateResourceProviderPluginId(oldPluginId: string, newPluginId: string): void {
+  wasmResourceProviders.forEach((provider, key) => {
+    if (provider.pluginId === oldPluginId) {
+      provider.pluginId = newPluginId
+      debug(`Updated resource provider ${key} pluginId from ${oldPluginId} to ${newPluginId}`)
+    }
+  })
+}
+
+/**
+ * Clean up resource provider registrations for a plugin
+ */
+export function cleanupResourceProviders(pluginId: string): void {
+  const keysToDelete: string[] = []
+  wasmResourceProviders.forEach((provider, key) => {
+    if (provider.pluginId === pluginId) {
+      keysToDelete.push(key)
+    }
+  })
+  keysToDelete.forEach(key => {
+    debug(`Removing resource provider registration: ${key}`)
+    wasmResourceProviders.delete(key)
+  })
+}
+
+/**
+ * Create the sk_register_resource_provider host binding
+ */
+export function createResourceProviderBinding(
+  pluginId: string,
+  capabilities: { resourceProvider?: boolean },
+  app: any,
+  readUtf8String: (ptr: number, len: number) => string
+): (typePtr: number, typeLen: number) => number {
+  return (typePtr: number, typeLen: number): number => {
+    try {
+      const resourceType = readUtf8String(typePtr, typeLen)
+      debug(`[${pluginId}] Registering as resource provider for: ${resourceType}`)
+
+      // Check if plugin has resourceProvider capability
+      if (!capabilities.resourceProvider) {
+        debug(`[${pluginId}] resourceProvider capability not granted`)
+        return 0 // Failure
+      }
+
+      // Check if app and resourcesApi are available
+      if (!app || !app.resourcesApi) {
+        debug(`[${pluginId}] app.resourcesApi not available`)
+        return 0
+      }
+
+      // Store the registration (we'll update the pluginInstance reference after instance creation)
+      const key = `${pluginId}:${resourceType}`
+      wasmResourceProviders.set(key, {
+        pluginId,
+        resourceType,
+        pluginInstance: null  // Will be set after full instance creation
+      })
+
+      // Create wrapper methods that call into WASM
+      const providerMethods = {
+        listResources: async (query: { [key: string]: any }): Promise<{ [id: string]: any }> => {
+          const provider = wasmResourceProviders.get(key)
+          if (!provider || !provider.pluginInstance) {
+            debug(`[${pluginId}] Resource provider instance not ready`)
+            return {}
+          }
+
+          const queryJson = JSON.stringify(query)
+          const result = callWasmResourceHandler(provider.pluginInstance, 'resource_list', queryJson)
+          return result ? JSON.parse(result) : {}
+        },
+        getResource: async (id: string, property?: string): Promise<object> => {
+          const provider = wasmResourceProviders.get(key)
+          if (!provider || !provider.pluginInstance) {
+            debug(`[${pluginId}] Resource provider instance not ready`)
+            return {}
+          }
+
+          const requestJson = JSON.stringify({ id, property })
+          const result = callWasmResourceHandler(provider.pluginInstance, 'resource_get', requestJson)
+          return result ? JSON.parse(result) : {}
+        },
+        setResource: async (id: string, value: { [key: string]: any }): Promise<void> => {
+          const provider = wasmResourceProviders.get(key)
+          if (!provider || !provider.pluginInstance) {
+            debug(`[${pluginId}] Resource provider instance not ready`)
+            return
+          }
+
+          const requestJson = JSON.stringify({ id, value })
+          callWasmResourceHandler(provider.pluginInstance, 'resource_set', requestJson)
+        },
+        deleteResource: async (id: string): Promise<void> => {
+          const provider = wasmResourceProviders.get(key)
+          if (!provider || !provider.pluginInstance) {
+            debug(`[${pluginId}] Resource provider instance not ready`)
+            return
+          }
+
+          const requestJson = JSON.stringify({ id })
+          callWasmResourceHandler(provider.pluginInstance, 'resource_delete', requestJson)
+        }
+      }
+
+      // Register with Signal K ResourcesApi
+      app.resourcesApi.register(pluginId, {
+        type: resourceType,
+        methods: providerMethods
+      })
+
+      debug(`[${pluginId}] Successfully registered as ${resourceType} resource provider`)
+      return 1 // Success
+    } catch (error) {
+      debug(`Plugin register resource provider error: ${error}`)
+      return 0
+    }
+  }
+}
