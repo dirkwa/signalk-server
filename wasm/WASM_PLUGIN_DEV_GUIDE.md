@@ -24,7 +24,9 @@ Signal K Server 3.0 supports multiple languages for WASM plugin development:
 ### For Rust Plugins
 
 - Rust toolchain: `rustup`
-- `wasm32-wasi` target: `rustup target add wasm32-wasi`
+- WASI Preview 1 target: `rustup target add wasm32-wasip1`
+
+> **Note**: Signal K uses WASI Preview 1 (`wasm32-wasip1`), not the older `wasm32-wasi` target. The `wasm32-wasip1` target is the modern Rust target name for WASI Preview 1.
 
 ### For C#/.NET Plugins
 
@@ -644,20 +646,31 @@ Pure WASM is faster and simpler for these cases.
 
 ## Creating Rust Plugins
 
+Rust is excellent for WASM plugins due to its zero-cost abstractions, memory safety, and mature WASM tooling. Signal K Rust plugins use **buffer-based FFI** for string passing, which differs from AssemblyScript's automatic string handling.
+
+### Rust vs AssemblyScript: Key Differences
+
+| Aspect | AssemblyScript | Rust |
+|--------|---------------|------|
+| String passing | Automatic via AS loader | Manual buffer-based FFI |
+| Memory management | AS runtime handles | `allocate`/`deallocate` exports |
+| Binary size | 3-10 KB | 50-200 KB |
+| Target | `wasm32` (AS compiler) | `wasm32-wasip1` |
+
 ### Step 1: Project Structure
 
 Create a new Rust library project:
 
 ```bash
-cargo new --lib signalk-example-wasm
-cd signalk-example-wasm
+cargo new --lib anchor-watch-rust
+cd anchor-watch-rust
 ```
 
 ### Step 2: Configure Cargo.toml
 
 ```toml
 [package]
-name = "signalk-example-wasm"
+name = "anchor_watch_rust"
 version = "0.1.0"
 edition = "2021"
 
@@ -677,91 +690,187 @@ strip = true        # Strip symbols
 ### Step 3: Implement Plugin (src/lib.rs)
 
 ```rust
+use std::cell::RefCell;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
-#[derive(Serialize, Deserialize, Default)]
+// =============================================================================
+// FFI Imports - These MUST match what the Signal K runtime provides in "env"
+// =============================================================================
+
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn sk_debug(ptr: *const u8, len: usize);
+    fn sk_set_status(ptr: *const u8, len: usize);
+    fn sk_set_error(ptr: *const u8, len: usize);
+    fn sk_handle_message(ptr: *const u8, len: usize);
+    fn sk_register_put_handler(
+        context_ptr: *const u8, context_len: usize,
+        path_ptr: *const u8, path_len: usize
+    ) -> i32;
+}
+
+// =============================================================================
+// Helper wrappers for FFI functions
+// =============================================================================
+
+fn debug(msg: &str) {
+    unsafe { sk_debug(msg.as_ptr(), msg.len()); }
+}
+
+fn set_status(msg: &str) {
+    unsafe { sk_set_status(msg.as_ptr(), msg.len()); }
+}
+
+fn set_error(msg: &str) {
+    unsafe { sk_set_error(msg.as_ptr(), msg.len()); }
+}
+
+fn handle_message(msg: &str) {
+    unsafe { sk_handle_message(msg.as_ptr(), msg.len()); }
+}
+
+fn register_put_handler(context: &str, path: &str) -> i32 {
+    unsafe {
+        sk_register_put_handler(
+            context.as_ptr(), context.len(),
+            path.as_ptr(), path.len()
+        )
+    }
+}
+
+// =============================================================================
+// Memory Allocation - REQUIRED for buffer-based string passing
+// =============================================================================
+
+/// Allocate memory for string passing from host
+#[no_mangle]
+pub extern "C" fn allocate(size: usize) -> *mut u8 {
+    let mut buf = Vec::with_capacity(size);
+    let ptr = buf.as_mut_ptr();
+    std::mem::forget(buf);
+    ptr
+}
+
+/// Deallocate memory
+#[no_mangle]
+pub extern "C" fn deallocate(ptr: *mut u8, size: usize) {
+    unsafe {
+        let _ = Vec::from_raw_parts(ptr, 0, size);
+    }
+}
+
+// =============================================================================
+// Plugin State
+// =============================================================================
+
+thread_local! {
+    static STATE: RefCell<PluginState> = RefCell::new(PluginState::default());
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 struct PluginConfig {
-    update_rate: u32,
+    #[serde(default)]
+    max_radius: f64,
 }
 
-static mut CONFIG: Option<PluginConfig> = None;
-
-// Plugin exports (called by Signal K server)
-
-#[no_mangle]
-pub extern "C" fn id() -> *const u8 {
-    let id = "example-wasm\0";
-    id.as_ptr()
+#[derive(Debug, Default)]
+struct PluginState {
+    config: PluginConfig,
+    is_running: bool,
 }
 
-#[no_mangle]
-pub extern "C" fn name() -> *const u8 {
-    let name = "Example WASM Plugin\0";
-    name.as_ptr()
-}
+// =============================================================================
+// Plugin Exports - Core plugin interface
+// =============================================================================
 
-#[no_mangle]
-pub extern "C" fn schema() -> *const u8 {
-    let schema = json!({
-        "type": "object",
-        "properties": {
-            "updateRate": {
-                "type": "number",
-                "title": "Update Rate (ms)",
-                "default": 1000
-            }
+static PLUGIN_ID: &str = "my-rust-plugin";
+static PLUGIN_NAME: &str = "My Rust Plugin";
+static PLUGIN_SCHEMA: &str = r#"{
+    "type": "object",
+    "properties": {
+        "maxRadius": {
+            "type": "number",
+            "title": "Max Radius",
+            "default": 50
         }
-    }).to_string() + "\0";
+    }
+}"#;
 
-    Box::into_raw(schema.into_boxed_str()) as *const u8
+/// Return the plugin ID (buffer-based)
+#[no_mangle]
+pub extern "C" fn plugin_id(out_ptr: *mut u8, out_max_len: usize) -> i32 {
+    write_string(PLUGIN_ID, out_ptr, out_max_len)
 }
 
+/// Return the plugin name (buffer-based)
 #[no_mangle]
-pub extern "C" fn start(config_ptr: *const u8, config_len: usize) -> i32 {
+pub extern "C" fn plugin_name(out_ptr: *mut u8, out_max_len: usize) -> i32 {
+    write_string(PLUGIN_NAME, out_ptr, out_max_len)
+}
+
+/// Return the plugin JSON schema (buffer-based)
+#[no_mangle]
+pub extern "C" fn plugin_schema(out_ptr: *mut u8, out_max_len: usize) -> i32 {
+    write_string(PLUGIN_SCHEMA, out_ptr, out_max_len)
+}
+
+/// Start the plugin with configuration
+#[no_mangle]
+pub extern "C" fn plugin_start(config_ptr: *const u8, config_len: usize) -> i32 {
+    // Read config from buffer
     let config_json = unsafe {
-        std::slice::from_raw_parts(config_ptr, config_len)
+        let slice = std::slice::from_raw_parts(config_ptr, config_len);
+        String::from_utf8_lossy(slice).to_string()
     };
 
-    let config_str = std::str::from_utf8(config_json).unwrap();
-    let config: PluginConfig = serde_json::from_str(config_str).unwrap_or_default();
+    // Parse configuration
+    let parsed_config: PluginConfig = match serde_json::from_str(&config_json) {
+        Ok(c) => c,
+        Err(e) => {
+            set_error(&format!("Failed to parse config: {}", e));
+            return 1;
+        }
+    };
 
-    unsafe {
-        CONFIG = Some(config);
-    }
+    // Update state
+    STATE.with(|state| {
+        let mut s = state.borrow_mut();
+        s.config = parsed_config;
+        s.is_running = true;
+    });
 
-    // Plugin initialization logic here
-    sk_set_status("Started successfully");
+    debug("Plugin started successfully");
+    set_status("Running");
 
     0 // Success
 }
 
+/// Stop the plugin
 #[no_mangle]
-pub extern "C" fn stop() -> i32 {
-    // Cleanup logic here
-    sk_set_status("Stopped");
+pub extern "C" fn plugin_stop() -> i32 {
+    STATE.with(|state| {
+        state.borrow_mut().is_running = false;
+    });
+
+    debug("Plugin stopped");
+    set_status("Stopped");
 
     0 // Success
 }
 
-// Helper functions to call Signal K APIs
+// =============================================================================
+// Helper Functions
+// =============================================================================
 
-fn sk_set_status(message: &str) {
+/// Write string to output buffer, return bytes written
+fn write_string(s: &str, ptr: *mut u8, max_len: usize) -> i32 {
+    let bytes = s.as_bytes();
+    let len = bytes.len().min(max_len);
     unsafe {
-        sk_set_status_ffi(message.as_ptr(), message.len());
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, len);
     }
-}
-
-fn sk_emit_delta(delta_json: &str) {
-    unsafe {
-        sk_handle_message(delta_json.as_ptr(), delta_json.len());
-    }
-}
-
-// FFI imports from Signal K server
-extern "C" {
-    fn sk_set_status_ffi(msg_ptr: *const u8, msg_len: usize);
-    fn sk_handle_message(delta_ptr: *const u8, delta_len: usize);
+    len as i32
 }
 ```
 
@@ -769,9 +878,9 @@ extern "C" {
 
 ```json
 {
-  "name": "@signalk/example-wasm",
+  "name": "@signalk/my-rust-plugin",
   "version": "0.1.0",
-  "description": "Example WASM plugin for Signal K",
+  "description": "My Rust WASM plugin for Signal K",
   "keywords": [
     "signalk-node-server-plugin",
     "signalk-wasm-plugin"
@@ -782,7 +891,7 @@ extern "C" {
     "storage": "vfs-only",
     "dataRead": true,
     "dataWrite": true,
-    "serialPorts": false
+    "putHandlers": true
   },
   "author": "Your Name",
   "license": "Apache-2.0"
@@ -792,37 +901,62 @@ extern "C" {
 ### Step 5: Build
 
 ```bash
-cargo build --target wasm32-wasi --release
-cp target/wasm32-wasi/release/signalk_example_wasm.wasm plugin.wasm
+# Build with WASI Preview 1 target (required for Signal K)
+cargo build --release --target wasm32-wasip1
+
+# Copy to plugin.wasm
+cp target/wasm32-wasip1/release/my_rust_plugin.wasm plugin.wasm
 ```
+
+> **Important**: Use `wasm32-wasip1` target, NOT `wasm32-wasi`. Signal K requires WASI Preview 1.
 
 ### Step 6: Install
 
 **Option 1: Direct Copy (Recommended for Development)**
 ```bash
-mkdir -p ~/.signalk/node_modules/@signalk/example-wasm
-cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/example-wasm/
-
-# If your plugin has a public/ folder:
-cp -r public ~/.signalk/node_modules/@signalk/example-wasm/
+mkdir -p ~/.signalk/node_modules/@signalk/my-rust-plugin
+cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/my-rust-plugin/
 ```
 
 **Option 2: NPM Package Install**
 ```bash
-# Package and install
 npm pack
-npm install -g ./signalk-example-wasm-1.0.0.tgz
+npm install -g ./signalk-my-rust-plugin-0.1.0.tgz
 ```
-
-**Note**: Direct copy is faster for development. Use npm install for production deployments.
 
 ### Step 7: Enable in Admin UI
 
 1. Navigate to **Server** → **Plugin Config**
-2. Find "Example WASM Plugin"
+2. Find "My Rust Plugin"
 3. Click **Enable**
 4. Configure settings
 5. Click **Submit**
+
+### Rust FFI Interface Reference
+
+Signal K provides these FFI imports in the `env` module:
+
+| Function | Parameters | Description |
+|----------|------------|-------------|
+| `sk_debug` | `(ptr, len)` | Log debug message |
+| `sk_set_status` | `(ptr, len)` | Set plugin status |
+| `sk_set_error` | `(ptr, len)` | Set error message |
+| `sk_handle_message` | `(ptr, len)` | Emit delta message |
+| `sk_register_put_handler` | `(ctx_ptr, ctx_len, path_ptr, path_len)` | Register PUT handler |
+
+Your plugin MUST export:
+
+| Export | Signature | Description |
+|--------|-----------|-------------|
+| `plugin_id` | `(out_ptr, max_len) -> len` | Return plugin ID |
+| `plugin_name` | `(out_ptr, max_len) -> len` | Return plugin name |
+| `plugin_schema` | `(out_ptr, max_len) -> len` | Return JSON schema |
+| `plugin_start` | `(config_ptr, config_len) -> status` | Start plugin |
+| `plugin_stop` | `() -> status` | Stop plugin |
+| `allocate` | `(size) -> ptr` | Allocate memory |
+| `deallocate` | `(ptr, size)` | Free memory |
+
+📁 **See [anchor-watch-rust example](../examples/wasm-plugins/anchor-watch-rust/) for a complete working plugin with PUT handlers**
 
 ---
 
@@ -1454,60 +1588,95 @@ WASM plugins can register PUT handlers to respond to PUT requests from clients, 
 - Plugin must declare `"putHandlers": true` in manifest
 - Import PUT handler functions from FFI
 - Register handlers during `plugin_start()`
-- Export handler functions
+- Export handler functions with correct naming convention
 
 #### Manifest Configuration
 
 ```json
 {
-  "name": "my-plugin",
+  "name": "@signalk/my-plugin",
   "wasmCapabilities": {
     "putHandlers": true
   }
 }
 ```
 
-#### C# Example - Anchor Watch
+#### Rust Example - Anchor Watch
 
-See [examples/wasm-plugins/anchor-watch-dotnet](examples/wasm-plugins/anchor-watch-dotnet/) for a complete C# implementation.
+See [examples/wasm-plugins/anchor-watch-rust](../examples/wasm-plugins/anchor-watch-rust/) for a complete Rust implementation.
 
 **Register PUT Handler:**
 
-```csharp
-using System.Runtime.InteropServices;
+```rust
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn sk_register_put_handler(
+        context_ptr: *const u8, context_len: usize,
+        path_ptr: *const u8, path_len: usize
+    ) -> i32;
+}
 
-[DllImport("env", EntryPoint = "sk_register_put_handler")]
-public static extern int RegisterPutHandler(IntPtr contextPtr, int contextLen, IntPtr pathPtr, int pathLen);
+fn register_put_handler(context: &str, path: &str) -> i32 {
+    unsafe {
+        sk_register_put_handler(
+            context.as_ptr(), context.len(),
+            path.as_ptr(), path.len()
+        )
+    }
+}
 
 // In plugin_start():
-SignalKApi.RegisterPut("vessels.self", "navigation.anchor.position");
+register_put_handler("vessels.self", "navigation.anchor.position");
+register_put_handler("vessels.self", "navigation.anchor.maxRadius");
 ```
 
 **Implement PUT Handler:**
 
-```csharp
-[UnmanagedCallersOnly(EntryPoint = "handle_put_vessels_self_navigation_anchor_position")]
-public static IntPtr HandleSetAnchorPosition(IntPtr requestPtr, int requestLen)
-{
-    // 1. Parse request
-    var requestJson = ReadString(requestPtr, requestLen);
-    var request = JsonSerializer.Deserialize<PutRequest>(requestJson);
+```rust
+/// Handle PUT request for navigation.anchor.position
+#[no_mangle]
+pub extern "C" fn handle_put_vessels_self_navigation_anchor_position(
+    value_ptr: *const u8,
+    value_len: usize,
+    response_ptr: *mut u8,
+    response_max_len: usize,
+) -> i32 {
+    // 1. Read value from buffer
+    let value_json = unsafe {
+        let slice = std::slice::from_raw_parts(value_ptr, value_len);
+        String::from_utf8_lossy(slice).to_string()
+    };
 
-    // 2. Validate and process
-    var position = JsonSerializer.Deserialize<Position>(request.Value.GetRawText());
+    // 2. Parse and validate
+    #[derive(Deserialize)]
+    struct Position { latitude: f64, longitude: f64 }
 
-    // 3. Update state
-    anchorState.Position = position;
+    let result = match serde_json::from_str::<Position>(&value_json) {
+        Ok(pos) => {
+            // 3. Update state
+            STATE.with(|state| {
+                let mut s = state.borrow_mut();
+                s.config.anchor_lat = pos.latitude;
+                s.config.anchor_lon = pos.longitude;
+            });
 
-    // 4. Emit delta to update data model
-    SignalKApi.EmitDelta(deltaJson);
+            // 4. Emit delta to update data model
+            let delta = format!(
+                r#"{{"context":"vessels.self","updates":[{{"source":{{"label":"my-plugin"}},"values":[{{"path":"navigation.anchor.position","value":{{"latitude":{},"longitude":{}}}}}]}}]}}"#,
+                pos.latitude, pos.longitude
+            );
+            handle_message(&delta);
 
-    // 5. Return response
-    return MarshalJson(new PutResponse {
-        State = "COMPLETED",
-        StatusCode = 200,
-        Message = "Anchor position set successfully"
-    });
+            // 5. Return success response
+            r#"{"state":"COMPLETED","statusCode":200}"#.to_string()
+        }
+        Err(e) => {
+            format!(r#"{{"state":"COMPLETED","statusCode":400,"message":"Invalid position: {}"}}"#, e)
+        }
+    };
+
+    // Write response to buffer
+    write_string(&result, response_ptr, response_max_len)
 }
 ```
 
@@ -1572,23 +1741,41 @@ PUT handlers must return a JSON response:
 
 #### Testing PUT Handlers
 
+**Important: Source Parameter**
+
+When multiple plugins or providers register handlers for the same Signal K path, you **MUST** include a `source` parameter in the PUT request body to identify which handler should process the request.
+
+The `source` value must match the **npm package name** from `package.json`, not the plugin ID.
+
 **Using curl:**
 
 ```bash
-# Set anchor position
+# Set anchor position (with source parameter)
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/position \
   -H "Content-Type: application/json" \
-  -d '{"value": {"latitude": 60.1234, "longitude": 24.5678}}'
+  -d '{"value": {"latitude": 60.1234, "longitude": 24.5678}, "source": "@signalk/anchor-watch-rust"}'
 
 # Set drag alarm radius
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/maxRadius \
   -H "Content-Type: application/json" \
-  -d '{"value": 75}'
+  -d '{"value": 75, "source": "@signalk/anchor-watch-rust"}'
 
-# Enable alarm
-curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/alarmState \
+# Set anchor state
+curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/state \
   -H "Content-Type: application/json" \
-  -d '{"value": true}'
+  -d '{"value": "on", "source": "@signalk/anchor-watch-rust"}'
+```
+
+**Error without source parameter:**
+
+If multiple sources provide the same path and you omit the `source` parameter:
+
+```json
+{
+  "state": "COMPLETED",
+  "statusCode": 400,
+  "message": "there are multiple sources for the given path, but no source was specified in the request"
+}
 ```
 
 **Using WebSocket:**
@@ -1601,7 +1788,8 @@ curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/
     "value": {
       "latitude": 60.1234,
       "longitude": 24.5678
-    }
+    },
+    "source": "@signalk/anchor-watch-rust"
   }
 }
 ```
@@ -1766,8 +1954,8 @@ WASM plugins support hot-reload without server restart:
 
 ### Manual Reload
 
-1. Build new WASM binary: `cargo build --target wasm32-wasi --release`
-2. Copy to plugin directory: `cp target/.../plugin.wasm ~/.signalk/...`
+1. Build new WASM binary: `cargo build --target wasm32-wasip1 --release`
+2. Copy to plugin directory: `cp target/wasm32-wasip1/release/*.wasm ~/.signalk/...`
 3. In Admin UI: **Server** → **Plugin Config** → Click **Reload** button
 
 ### Automatic Reload
@@ -1881,11 +2069,21 @@ fn debug_log(message: &str) {
 
 ### Testing Locally
 
-1. Build with debug symbols: `cargo build --target wasm32-wasi`
+1. Build with debug symbols: `cargo build --target wasm32-wasip1`
 2. Use `wasmtime` for local testing:
 
 ```bash
 wasmtime --dir /tmp::/ plugin.wasm
+```
+
+### Enable Server Debug Logging
+
+```bash
+# Linux/macOS
+DEBUG=signalk:wasm:* signalk-server
+
+# Or with systemd
+journalctl -u signalk -f | grep wasm
 ```
 
 ### Common Issues
