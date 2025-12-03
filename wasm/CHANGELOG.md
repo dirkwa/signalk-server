@@ -2,6 +2,105 @@
 
 All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
+## [3.0.1] - 2025-12-03
+
+### Added - WASM Resource Providers (Phase 3 Complete)
+
+WASM plugins can now register as **resource providers** to serve data via the Signal K REST API.
+
+**Features:**
+- `registerResourceProvider(type)` - Register plugin as provider for a resource type
+- Export `resource_list`, `resource_get`, `resource_set`, `resource_delete` handlers
+- Full ResourcesApi integration - resources accessible at `/signalk/v2/api/resources/{type}`
+- SDK support via `signalk-assemblyscript-plugin-sdk/assembly/resources`
+
+**Example Usage:**
+```typescript
+import { registerResourceProvider, ResourceGetRequest } from 'signalk-assemblyscript-plugin-sdk/assembly/resources'
+
+// In start():
+registerResourceProvider('weather')
+
+// Export handlers:
+export function resource_list(queryJson: string): string {
+  return '{"current":' + cachedData.toJSON() + '}'
+}
+
+export function resource_get(requestJson: string): string {
+  const req = ResourceGetRequest.parse(requestJson)
+  if (req.id === 'current') return data.toJSON()
+  return '{"error":"Not found"}'
+}
+```
+
+**API Access:**
+```bash
+curl http://localhost:3000/signalk/v2/api/resources/weather
+# Returns: {"current":{"temperature":4.24,"humidity":86,...}}
+
+curl http://localhost:3000/signalk/v2/api/resources/weather/current
+# Returns: {"temperature":4.24,"humidity":86,...}
+```
+
+### Fixed - Resource Provider Instance Timing
+
+Fixed "Resource provider instance not ready" error when calling resource handlers.
+
+**Root Cause:** `registerResourceProvider()` is called during `plugin_start()`, which stores `pluginInstance: null`. The instance reference wasn't being updated after `plugin_start()` completes.
+
+**Solution:** Added `updateResourceProviderInstance()` call in `startWasmPlugin()` AFTER `plugin.instance.exports.start()` completes.
+
+**Files Modified:**
+- `src/wasm/loader/plugin-lifecycle.ts` - Added `updateResourceProviderInstance()` after start
+- `src/wasm/loader/plugin-registry.ts` - Added migration and update calls
+
+### Fixed - AssemblyScript String Passing in Resource Handlers
+
+Fixed incorrect string passing when calling AssemblyScript resource handlers.
+
+**Root Cause:** `callWasmResourceHandler()` was passing JavaScript strings directly to AssemblyScript exports, but AssemblyScript expects pointers to strings in WASM memory.
+
+**Solution:** Use `asLoader.exports.__newString(requestJson)` to allocate strings in WASM memory before calling handlers.
+
+**Files Modified:**
+- `src/wasm/bindings/resource-provider.ts` - Fixed string allocation with `__newString()`
+
+### Changed - Runtime Modular Architecture
+
+Split `wasm-runtime.ts` (~1650 lines) into logical modules for better maintainability:
+
+```
+src/wasm/
+├── wasm-runtime.ts        # Main entry (~240 lines)
+├── types.ts               # Shared type definitions
+├── bindings/
+│   ├── env-imports.ts     # Host bindings (sk_debug, sk_emit, etc.)
+│   ├── resource-provider.ts # Resource provider support
+│   └── signalk-api.ts     # Component Model API
+├── loaders/
+│   ├── standard-loader.ts # AssemblyScript/Rust WASI P1 plugins
+│   ├── jco-loader.ts      # Pre-transpiled jco modules
+│   └── component-loader.ts # Component Model transpilation
+└── utils/
+    ├── fetch-wrapper.ts   # Node fetch wrapper for as-fetch
+    └── format-detection.ts # WASM format detection
+```
+
+### Updated - Weather Plugin v0.2.0
+
+Extended weather plugin to demonstrate resource provider capability:
+- Added `resourceProvider: true` capability
+- Registers as `weather` resource provider
+- Exports `resource_list` and `resource_get` handlers
+- Caches weather data for resource queries
+- SDK dependency updated to `^0.1.3`
+
+**Files Modified:**
+- `examples/wasm-plugins/weather-plugin/assembly/index.ts`
+- `examples/wasm-plugins/weather-plugin/package.json` (v0.2.0)
+
+---
+
 ## [3.0.0] - 2025-12-03
 
 ### Added - Custom HTTP Endpoints for WASM Plugins

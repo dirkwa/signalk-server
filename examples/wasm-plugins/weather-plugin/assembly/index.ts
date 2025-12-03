@@ -1,8 +1,10 @@
 /**
  * Weather Plugin Example for Signal K
  *
- * Demonstrates network capability by fetching weather data
- * from OpenWeatherMap API and emitting it as Signal K deltas.
+ * Demonstrates:
+ * - Network capability by fetching weather data from OpenWeatherMap API
+ * - Resource provider capability for serving weather data via REST API
+ * - Delta emission for real-time weather updates
  */
 
 import {
@@ -18,6 +20,11 @@ import {
 import {
   hasNetworkCapability
 } from 'signalk-assemblyscript-plugin-sdk/assembly/network'
+
+import {
+  registerResourceProvider,
+  ResourceGetRequest
+} from 'signalk-assemblyscript-plugin-sdk/assembly/resources'
 
 import { fetchSync } from 'as-fetch/sync'
 import { Response } from 'as-fetch/assembly'
@@ -38,6 +45,20 @@ class WeatherData {
   windSpeed: f64 = 0.0
   windDirection: f64 = 0.0
   description: string = ''
+  timestamp: string = ''
+  latitude: f64 = 0.0
+  longitude: f64 = 0.0
+
+  toJSON(): string {
+    return '{"temperature":' + this.temperature.toString() +
+      ',"humidity":' + this.humidity.toString() +
+      ',"pressure":' + this.pressure.toString() +
+      ',"windSpeed":' + this.windSpeed.toString() +
+      ',"windDirection":' + this.windDirection.toString() +
+      ',"timestamp":"' + this.timestamp + '"' +
+      ',"location":{"latitude":' + this.latitude.toString() +
+      ',"longitude":' + this.longitude.toString() + '}}'
+  }
 
   static parse(json: string): WeatherData | null {
     const data = new WeatherData()
@@ -109,6 +130,10 @@ class WeatherData {
     return data
   }
 }
+
+// Cached weather data for resource provider
+let cachedWeatherData: WeatherData | null = null
+let cachedConfig: WeatherConfig = new WeatherConfig()
 
 // Weather plugin class
 class WeatherPlugin extends Plugin {
@@ -198,6 +223,17 @@ class WeatherPlugin extends Plugin {
     if (this.config.apiKey.length === 0) {
       setError('No API key configured - get one from https://openweathermap.org/api')
       return 1
+    }
+
+    // Store config globally for resource provider handlers
+    cachedConfig = this.config
+
+    // Register as a resource provider for "weather" type
+    debug('Registering as weather resource provider...')
+    if (registerResourceProvider('weather')) {
+      debug('Successfully registered as weather resource provider')
+    } else {
+      debug('Warning: Failed to register as resource provider (capability may not be granted)')
     }
 
     // Fetch and emit real weather data using as-fetch
@@ -318,6 +354,14 @@ class WeatherPlugin extends Plugin {
       return
     }
 
+    // Add timestamp and location for resource provider
+    weatherData.timestamp = getCurrentTimestamp()
+    weatherData.latitude = this.config.latitude
+    weatherData.longitude = this.config.longitude
+
+    // Cache the weather data for resource provider queries
+    cachedWeatherData = weatherData
+
     // Emit temperature
     const tempDelta = createSimpleDelta(
       'weather-example',
@@ -393,4 +437,55 @@ export function plugin_start(configPtr: usize, configLen: usize): i32 {
 
 export function plugin_stop(): i32 {
   return plugin.stop()
+}
+
+// ===== Resource Provider Handlers =====
+// These are called by the Signal K server when requests come in to
+// /signalk/v2/api/resources/weather
+
+/**
+ * List available weather resources
+ * Called for: GET /signalk/v2/api/resources/weather
+ *
+ * @param queryJson - JSON string with query parameters (e.g., filters)
+ * @returns JSON object of resources: { "id": { ...resource... }, ... }
+ */
+export function resource_list(queryJson: string): string {
+  debug('resource_list called with query: ' + queryJson)
+
+  // Return available weather resources
+  // We have one resource: "current" for current weather conditions
+  if (cachedWeatherData !== null) {
+    const data = cachedWeatherData as WeatherData
+    return '{"current":' + data.toJSON() + '}'
+  }
+
+  // No data available yet
+  return '{}'
+}
+
+/**
+ * Get a specific weather resource
+ * Called for: GET /signalk/v2/api/resources/weather/{id}
+ *
+ * @param requestJson - JSON with { "id": "resource-id", "property": optional }
+ * @returns JSON object of the resource
+ */
+export function resource_get(requestJson: string): string {
+  debug('resource_get called with request: ' + requestJson)
+
+  // Parse the request to get the ID
+  const req = ResourceGetRequest.parse(requestJson)
+  debug('Parsed request id: ' + req.id)
+
+  if (req.id === 'current') {
+    if (cachedWeatherData !== null) {
+      const data = cachedWeatherData as WeatherData
+      return data.toJSON()
+    }
+    return '{"error":"No weather data available yet"}'
+  }
+
+  // Unknown resource ID
+  return '{"error":"Resource not found: ' + req.id + '"}'
 }

@@ -20,9 +20,112 @@
 **Timeline**: December 2025
 **Status**: PUT handlers working for both AssemblyScript and Rust plugins
 
+## Phase 3: Resource Providers - ✅ COMPLETE
+**Timeline**: December 2025
+**Status**: Fully working with weather plugin demonstration
+
 ---
 
 ## Recent Achievements (Latest First)
+
+### 🎉 Resource Provider Working End-to-End! (December 3, 2025)
+
+**First WASM Resource Provider in Production!**
+
+The weather plugin now serves weather data via the Signal K REST API:
+
+```bash
+# List weather resources
+curl http://localhost:3000/signalk/v2/api/resources/weather
+# Returns: {"current":{"temperature":4.24,"humidity":86,...}}
+
+# Get specific resource
+curl http://localhost:3000/signalk/v2/api/resources/weather/current
+```
+
+**Key Fixes Applied:**
+- ✅ **AssemblyScript String Passing**: Use `__newString()` to allocate strings in WASM memory
+- ✅ **Plugin Instance Timing**: Update resource provider references AFTER `plugin_start()` completes
+- ✅ **Closure Key Capture**: Keep original Map keys since closures capture them
+
+**Files Modified:**
+- `src/wasm/bindings/resource-provider.ts` - Fixed string passing, simplified migration
+- `src/wasm/loader/plugin-lifecycle.ts` - Added `updateResourceProviderInstance()` after start
+- `src/wasm/loader/plugin-registry.ts` - Added migration and update calls
+- `examples/wasm-plugins/weather-plugin/` - Extended to v0.2.0 with resource provider
+
+---
+
+### 🏗️ Runtime Refactoring - Modular Architecture! (December 2025)
+
+**Major Code Quality Improvement**: `wasm-runtime.ts` split into logical modules for better maintainability.
+
+**Before**: Single 1650-line file handling everything
+**After**: Modular architecture with clear separation of concerns
+
+**New Directory Structure:**
+```
+src/wasm/
+├── wasm-runtime.ts        # Main entry (~240 lines, was ~1650)
+├── types.ts               # Shared type definitions
+├── bindings/
+│   ├── index.ts           # Barrel export
+│   ├── env-imports.ts     # Host bindings (sk_debug, sk_emit, etc.)
+│   ├── resource-provider.ts # Resource provider support
+│   └── signalk-api.ts     # Component Model API
+├── loaders/
+│   ├── index.ts           # Barrel export
+│   ├── standard-loader.ts # AssemblyScript/Rust WASI P1 plugins
+│   ├── jco-loader.ts      # Pre-transpiled jco modules
+│   └── component-loader.ts # Component Model transpilation
+└── utils/
+    ├── index.ts           # Barrel export
+    ├── fetch-wrapper.ts   # Node fetch wrapper for as-fetch
+    └── format-detection.ts # WASM format detection
+```
+
+**Benefits:**
+- ✅ Each loader is independently testable
+- ✅ Host bindings (`env-imports.ts`) clearly documented
+- ✅ Resource provider logic isolated for easier debugging
+- ✅ Format detection and fetch handling in dedicated utilities
+- ✅ Backward compatible - all exports still available from `wasm-runtime.ts`
+- ✅ Easier to add new loaders or bindings
+
+---
+
+### 🔧 Resource Provider Infrastructure Added! (December 2025)
+
+**Infrastructure for WASM Resource Providers:**
+- ✅ **Host Binding**: `sk_register_resource_provider()` added to wasm-runtime.ts
+- ✅ **Capability Flag**: `resourceProvider: true` in wasmCapabilities
+- ✅ **ResourcesApi Integration**: WASM providers register with Signal K ResourcesApi
+- ✅ **SDK Support**: New `resources.ts` module in AssemblyScript SDK
+- ✅ **Handler Pattern**: `resource_list`, `resource_get`, `resource_set`, `resource_delete` exports
+- ✅ **Documentation**: Added Resource Providers section to WASM_PLUGIN_DEV_GUIDE.md
+
+**How It Works:**
+```typescript
+// In package.json:
+"wasmCapabilities": { "resourceProvider": true }
+
+// In plugin start():
+registerResourceProvider("weather-forecasts")
+
+// Export handlers:
+export function resource_list(queryJson: string): string { ... }
+export function resource_get(requestJson: string): string { ... }
+```
+
+**Resources Accessible At:**
+```
+GET  /signalk/v2/api/resources/{type}
+GET  /signalk/v2/api/resources/{type}/{id}
+POST /signalk/v2/api/resources/{type}/{id}
+DELETE /signalk/v2/api/resources/{type}/{id}
+```
+
+---
 
 ### 🎉 Custom HTTP Endpoints Working for Rust WASM Plugins! (December 2025)
 
@@ -140,7 +243,7 @@ if (response && response.status === 200) {
 **Documentation Created:**
 - `wasm/ASYNCIFY_IMPLEMENTATION.md` - Technical deep dive
 - `examples/wasm-plugins/weather-plugin/README.md` - Developer onboarding
-- `src/wasm/CHANGELOG.md` - Complete change history
+- `wasm/IMPLEMENTATION_STATUS.md` - Complete implementation status (this document)
 
 **Dependencies Added:**
 - `as-fetch` (^2.1.4) - HTTP client for AssemblyScript with Asyncify
@@ -269,7 +372,25 @@ Defines type-safe API contract between WASM plugins and Signal K server.
 
 ### 5. WASM Runtime Management ✅
 
-**File**: [src/wasm/wasm-runtime.ts](../src/wasm/wasm-runtime.ts) (~600 lines including Asyncify)
+**Main Entry Point**: [src/wasm/wasm-runtime.ts](../src/wasm/wasm-runtime.ts) (~240 lines)
+
+**Modular Architecture** (refactored December 2025):
+```
+src/wasm/
+├── wasm-runtime.ts        # Main coordinator, singleton pattern
+├── types.ts               # WasmCapabilities, WasmPluginInstance, etc.
+├── bindings/              # Host functions provided to WASM
+│   ├── env-imports.ts     # sk_debug, sk_emit, sk_register_put_handler, etc.
+│   ├── resource-provider.ts # Resource provider registration & handlers
+│   └── signalk-api.ts     # Component Model API callbacks
+├── loaders/               # Plugin format-specific loaders
+│   ├── standard-loader.ts # AssemblyScript + Rust WASI P1 plugins
+│   ├── jco-loader.ts      # Pre-transpiled jco JavaScript modules
+│   └── component-loader.ts # Component Model with jco transpilation
+└── utils/
+    ├── fetch-wrapper.ts   # Node.js fetch wrapper for as-fetch
+    └── format-detection.ts # WASM binary format detection
+```
 
 **Features:**
 - Node.js native WASI support (with @wasmer/wasi fallback)
@@ -523,10 +644,10 @@ cargo build --release --target wasm32-wasip1
    - Best practices
    - Performance and security considerations
 
-3. **WASM Runtime Changelog** - `src/wasm/CHANGELOG.md`
+3. **WASM Implementation Status** - `wasm/IMPLEMENTATION_STATUS.md` (this document)
    - Chronological change history since v2.18.0 fork
-   - File-by-file breakdown of modifications
-   - Migration guide for adding network capability
+   - Phase-by-phase breakdown of features
+   - Architecture diagrams and capability matrix
    - Technical details and references
 
 4. **SDK Release Notes** - `signalk-assemblyscript-plugin-sdk/RELEASE_NOTES_0.1.2.md`
@@ -745,7 +866,7 @@ Apache License 2.0 (same as Signal K Server)
 
 ---
 
-**Status**: Phase 3 Custom HTTP Endpoints Complete ✅
-**Version**: 3.0.0
+**Status**: Phase 3 Resource Providers Complete ✅, Runtime Refactored ✅
+**Version**: 3.0.1
 **Date**: December 3, 2025
-**Next**: Phase 3 continued - Resource providers, Weather providers
+**Next**: Phase 4 - Weather Providers (OpenMeteo integration), Serial Port support

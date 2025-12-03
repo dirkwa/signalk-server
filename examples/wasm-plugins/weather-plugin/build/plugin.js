@@ -21,6 +21,12 @@ async function instantiate(module, imports = {}) {
         msgLen = msgLen >>> 0;
         sk_set_error(msgPtr, msgLen);
       },
+      sk_register_resource_provider(typePtr, typeLen) {
+        // ~lib/signalk-assemblyscript-plugin-sdk/assembly/resources/sk_register_resource_provider_ffi(usize, usize) => i32
+        typePtr = typePtr >>> 0;
+        typeLen = typeLen >>> 0;
+        return sk_register_resource_provider(typePtr, typeLen);
+      },
       sk_handle_message(deltaPtr, deltaLen) {
         // ~lib/signalk-assemblyscript-plugin-sdk/assembly/api/sk_handle_message_ffi(usize, usize) => void
         deltaPtr = deltaPtr >>> 0;
@@ -71,6 +77,16 @@ async function instantiate(module, imports = {}) {
       // assembly/index/plugin_schema() => ~lib/string/String
       return __liftString(exports.plugin_schema() >>> 0);
     },
+    resource_list(queryJson) {
+      // assembly/index/resource_list(~lib/string/String) => ~lib/string/String
+      queryJson = __lowerString(queryJson) || __notnull();
+      return __liftString(exports.resource_list(queryJson) >>> 0);
+    },
+    resource_get(requestJson) {
+      // assembly/index/resource_get(~lib/string/String) => ~lib/string/String
+      requestJson = __lowerString(requestJson) || __notnull();
+      return __liftString(exports.resource_get(requestJson) >>> 0);
+    },
   }, exports);
   function __liftBuffer(pointer) {
     if (!pointer) return null;
@@ -87,6 +103,15 @@ async function instantiate(module, imports = {}) {
     while (end - start > 1024) string += String.fromCharCode(...memoryU16.subarray(start, start += 1024));
     return string + String.fromCharCode(...memoryU16.subarray(start, end));
   }
+  function __lowerString(value) {
+    if (value == null) return 0;
+    const
+      length = value.length,
+      pointer = exports.__new(length << 1, 2) >>> 0,
+      memoryU16 = new Uint16Array(memory.buffer);
+    for (let i = 0; i < length; ++i) memoryU16[(pointer >>> 1) + i] = value.charCodeAt(i);
+    return pointer;
+  }
   function __liftArray(liftElement, align, pointer) {
     if (!pointer) return null;
     const
@@ -95,6 +120,9 @@ async function instantiate(module, imports = {}) {
       values = new Array(length);
     for (let i = 0; i < length; ++i) values[i] = liftElement(dataStart + (i << align >>> 0));
     return values;
+  }
+  function __notnull() {
+    throw TypeError("value must not be null");
   }
   let __dataview = new DataView(memory.buffer);
   function __getU32(pointer) {
@@ -119,6 +147,8 @@ export const {
   plugin_schema,
   plugin_start,
   plugin_stop,
+  resource_list,
+  resource_get,
 } = await (async url => instantiate(
   await (async () => {
     const isNodeOrBun = typeof process != "undefined" && process.versions != null && (process.versions.node != null || process.versions.bun != null);
