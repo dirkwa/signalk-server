@@ -102,8 +102,32 @@ export function createEnvImports(options: EnvImportsOptions): Record<string, any
         if (app && app.handleMessage) {
           try {
             const delta = JSON.parse(deltaJson)
-            app.handleMessage(pluginId, delta)
-            debug(`[${pluginId}] Delta processed by server`)
+
+            // Check if this is a resource delta - if so, use version 2
+            // Resources should not be in the full model cache
+            // See: docs/develop/plugins/resource_provider_plugins.md
+            let isResourceDelta = false
+            if (delta.updates) {
+              for (const update of delta.updates) {
+                if (update.values) {
+                  for (const value of update.values) {
+                    if (value.path && value.path.startsWith('resources.')) {
+                      isResourceDelta = true
+                      break
+                    }
+                  }
+                }
+                if (isResourceDelta) break
+              }
+            }
+
+            if (isResourceDelta) {
+              app.handleMessage(pluginId, delta, 2) // v2 for resources
+              debug(`[${pluginId}] Resource delta processed (v2)`)
+            } else {
+              app.handleMessage(pluginId, delta)
+              debug(`[${pluginId}] Delta processed by server`)
+            }
           } catch (parseError) {
             debug(`[${pluginId}] Failed to parse/process delta: ${parseError}`)
           }

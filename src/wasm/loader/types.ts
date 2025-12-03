@@ -33,6 +33,7 @@ export interface WasmPlugin {
   enableDebug: boolean
   keywords: string[]
   packageLocation: string
+  configPath: string // Signal K config path for VFS/storage
   metadata: WasmPluginMetadata
   instance?: WasmPluginInstance
   router?: Router // Express router for plugin routes
