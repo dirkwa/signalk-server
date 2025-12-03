@@ -1,6 +1,6 @@
 # Weather Plugin Example
 
-This example demonstrates how to create a SignalK WASM plugin with **network capability** using the AssemblyScript SDK and **as-fetch** with **Asyncify** support.
+This example demonstrates how to create a SignalK WASM plugin with **network capability** and **resource provider** support using the AssemblyScript SDK and **as-fetch** with **Asyncify** support.
 
 ## What This Plugin Demonstrates
 
@@ -9,6 +9,7 @@ This is a **production-ready reference implementation** showing:
 - ✅ **Asyncify Integration** - Synchronous-style async HTTP requests in WASM
 - ✅ **as-fetch Library** - HTTP client for AssemblyScript using native fetch
 - ✅ **Network Capability** - Secure network access with permission system
+- ✅ **Resource Provider** - Serve weather data via REST API (`/signalk/v2/api/resources/weather`)
 - ✅ **Real API Integration** - Fetches live weather data from OpenWeatherMap
 - ✅ **Signal K Deltas** - Emits data to standard Signal K paths
 - ✅ **Configuration Schema** - User-friendly configuration with validation
@@ -17,13 +18,47 @@ This is a **production-ready reference implementation** showing:
 
 ## Features
 
+### Signal K Deltas
+
 The plugin fetches real weather data from OpenWeatherMap API and emits Signal K deltas for:
 
-- **environment.outside.temperature** - Temperature in Kelvin
+- **environment.outside.temperature** - Temperature in Celsius
 - **environment.outside.humidity** - Relative humidity (0-1 range)
 - **environment.outside.pressure** - Atmospheric pressure in Pascals
 - **environment.wind.speedTrue** - Wind speed in m/s
 - **environment.wind.directionTrue** - Wind direction in radians
+
+### Resource Provider API
+
+The plugin also registers as a **resource provider** for the `weather` resource type, making weather data available via the Signal K REST API:
+
+```bash
+# List all weather resources
+curl http://localhost:3000/signalk/v2/api/resources/weather
+# Returns: {"current": {...weather data...}}
+
+# Get specific weather resource
+curl http://localhost:3000/signalk/v2/api/resources/weather/current
+# Returns: {...weather data...}
+```
+
+Example response:
+```json
+{
+  "current": {
+    "temperature": 4.24,
+    "humidity": 86,
+    "pressure": 102000,
+    "windSpeed": 10.73,
+    "windDirection": 3.39,
+    "timestamp": "2025-12-03T08:38:03.000Z",
+    "location": {
+      "latitude": 60.1699,
+      "longitude": 24.9384
+    }
+  }
+}
+```
 
 ## Prerequisites
 
@@ -156,26 +191,26 @@ weather-plugin/
 ```json
 {
   "name": "@signalk/weather-plugin-example",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "wasmManifest": "build/plugin.wasm",
   "wasmCapabilities": {
-    "network": true,        // ← REQUIRED for as-fetch
+    "network": true,           // ← REQUIRED for as-fetch
     "storage": "vfs-only",
     "dataRead": true,
     "dataWrite": true,
-    "serialPorts": false
+    "serialPorts": false,
+    "resourceProvider": true   // ← REQUIRED for resource provider
   },
   "dependencies": {
     "as-fetch": "^2.1.4",
-    "signalk-assemblyscript-plugin-sdk": "^0.1.0"
+    "signalk-assemblyscript-plugin-sdk": "^0.1.3"
   }
 }
 ```
 
-**Critical Setting**: `"network": true`
-- Grants permission to make HTTP requests
-- Required for `fetchSync()` to work
-- Server enforces this - plugin cannot access network without it
+**Critical Settings**:
+- `"network": true` - Grants permission to make HTTP requests (required for `fetchSync()`)
+- `"resourceProvider": true` - Grants permission to register as a resource provider
 
 ## Using as-fetch in Your Code
 
@@ -256,6 +291,70 @@ private fetchWeatherData(): void {
 
   emit(delta)
   setStatus('Weather data updated successfully')
+}
+```
+
+## Using Resource Providers
+
+### Registering as a Resource Provider
+
+```typescript
+import {
+  registerResourceProvider,
+  ResourceGetRequest
+} from 'signalk-assemblyscript-plugin-sdk/assembly/resources'
+
+// In your start() function:
+if (registerResourceProvider('weather')) {
+  debug('Successfully registered as weather resource provider')
+} else {
+  debug('Failed to register - capability not granted')
+}
+```
+
+### Implementing Resource Handlers
+
+Export these functions to handle resource requests:
+
+```typescript
+// List all resources - GET /signalk/v2/api/resources/weather
+export function resource_list(queryJson: string): string {
+  // Return JSON object: { "id1": {...}, "id2": {...} }
+  return '{"current":' + cachedData.toJSON() + '}'
+}
+
+// Get specific resource - GET /signalk/v2/api/resources/weather/{id}
+export function resource_get(requestJson: string): string {
+  const req = ResourceGetRequest.parse(requestJson)
+
+  if (req.id === 'current') {
+    return cachedData.toJSON()
+  }
+
+  return '{"error":"Resource not found"}'
+}
+
+// Optional: Set resource - PUT /signalk/v2/api/resources/weather/{id}
+export function resource_set(requestJson: string): string {
+  // Handle resource creation/update
+  return '{"success":true}'
+}
+
+// Optional: Delete resource - DELETE /signalk/v2/api/resources/weather/{id}
+export function resource_delete(requestJson: string): string {
+  // Handle resource deletion
+  return '{"success":true}'
+}
+```
+
+### ResourceGetRequest Structure
+
+```typescript
+class ResourceGetRequest {
+  id: string       // Resource ID from URL path
+  property: string // Optional property filter
+
+  static parse(json: string): ResourceGetRequest
 }
 ```
 
@@ -540,6 +639,7 @@ The plugin **cannot** make HTTP requests unless:
 
 ## Version History
 
+- **v0.2.0** - Added resource provider capability for REST API access to weather data
 - **v0.1.8** - Fixed config file path mismatch and race condition prevention
 - **v0.1.7** - Added race condition fix in Asyncify callback setup
 - **v0.1.6** - Initial Asyncify support implementation

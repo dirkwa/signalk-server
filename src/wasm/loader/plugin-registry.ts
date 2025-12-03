@@ -17,6 +17,10 @@ import {
   writePluginConfig
 } from '../wasm-storage'
 import { setupWasmPluginRoutes } from './plugin-routes'
+import {
+  migrateResourceProviderPluginId,
+  updateResourceProviderInstance
+} from '../bindings/resource-provider'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -82,7 +86,9 @@ export async function registerWasmPlugin(
       dataRead: packageJson.wasmCapabilities?.dataRead !== false, // default true
       dataWrite: packageJson.wasmCapabilities?.dataWrite !== false, // default true
       serialPorts: packageJson.wasmCapabilities?.serialPorts || false,
-      putHandlers: packageJson.wasmCapabilities?.putHandlers || false
+      putHandlers: packageJson.wasmCapabilities?.putHandlers || false,
+      httpEndpoints: packageJson.wasmCapabilities?.httpEndpoints || false,
+      resourceProvider: packageJson.wasmCapabilities?.resourceProvider || false
     }
 
     // Load WASM module temporarily just to get the plugin ID
@@ -106,6 +112,16 @@ export async function registerWasmPlugin(
     const pluginName = tempInstance.exports.name()
     const schemaJson = tempInstance.exports.schema()
     const schema = schemaJson ? JSON.parse(schemaJson) : {}
+
+    // Migrate any resource provider registrations from packageName to real pluginId
+    // This is needed because registerResourceProvider() is called during plugin_start()
+    // before we know the real pluginId
+    if (packageName !== pluginId) {
+      migrateResourceProviderPluginId(packageName, pluginId)
+    }
+
+    // Update the plugin instance reference for resource providers
+    updateResourceProviderInstance(pluginId, tempInstance)
 
     // Now check config using the REAL plugin ID
     const storagePaths = getPluginStoragePaths(configPath, pluginId, packageName)

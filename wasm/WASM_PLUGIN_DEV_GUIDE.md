@@ -2578,6 +2578,162 @@ npm run asbuild
 
 ⚠️ Other commands return empty string for security. If you need additional commands, request them via GitHub issue.
 
+## Resource Providers (Phase 3)
+
+WASM plugins can act as **resource providers** for Signal K resources like weather data, routes, waypoints, or custom resource types.
+
+### Enabling Resource Provider Capability
+
+Add `resourceProvider: true` to your package.json:
+
+```json
+{
+  "wasmCapabilities": {
+    "network": true,
+    "dataRead": true,
+    "dataWrite": true,
+    "resourceProvider": true
+  }
+}
+```
+
+### Registering as a Resource Provider
+
+#### AssemblyScript
+
+```typescript
+import { registerResourceProvider } from 'signalk-assemblyscript-plugin-sdk/assembly/resources'
+
+// In plugin start():
+if (!registerResourceProvider("weather-forecasts")) {
+  setError("Failed to register as resource provider")
+  return 1
+}
+```
+
+#### Rust
+
+```rust
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn sk_register_resource_provider(type_ptr: *const u8, type_len: usize) -> i32;
+}
+
+pub fn register_resource_provider(resource_type: &str) -> bool {
+    let bytes = resource_type.as_bytes();
+    unsafe { sk_register_resource_provider(bytes.as_ptr(), bytes.len()) == 1 }
+}
+
+// In plugin_start():
+if !register_resource_provider("weather-forecasts") {
+    // Registration failed
+    return 1;
+}
+```
+
+### Implementing Resource Handlers
+
+After registering, your plugin must export these handler functions:
+
+#### `resource_list` - List resources matching a query
+
+**AssemblyScript:**
+```typescript
+export function resource_list(queryJson: string): string {
+  // queryJson: {"bbox": [...], "distance": 1000, ...}
+  // Return JSON object: {"resource-id-1": {...}, "resource-id-2": {...}}
+  return '{"forecast-1": {"name": "Current Weather", "type": "weather"}}'
+}
+```
+
+**Rust:**
+```rust
+#[no_mangle]
+pub extern "C" fn resource_list(
+    request_ptr: *const u8, request_len: usize,
+    response_ptr: *mut u8, response_max_len: usize,
+) -> i32 {
+    // Parse query, build response
+    let response = r#"{"forecast-1": {"name": "Current Weather"}}"#;
+    write_string(response, response_ptr, response_max_len)
+}
+```
+
+#### `resource_get` - Get a single resource
+
+**AssemblyScript:**
+```typescript
+export function resource_get(requestJson: string): string {
+  // requestJson: {"id": "forecast-1", "property": null}
+  return '{"name": "Current Weather", "temperature": 20.5, "humidity": 0.65}'
+}
+```
+
+**Rust:**
+```rust
+#[no_mangle]
+pub extern "C" fn resource_get(
+    request_ptr: *const u8, request_len: usize,
+    response_ptr: *mut u8, response_max_len: usize,
+) -> i32 {
+    // Parse request: {"id": "...", "property": "..."}
+    let response = r#"{"name": "Current Weather", "temperature": 20.5}"#;
+    write_string(response, response_ptr, response_max_len)
+}
+```
+
+#### `resource_set` - Create or update a resource
+
+**AssemblyScript:**
+```typescript
+export function resource_set(requestJson: string): string {
+  // requestJson: {"id": "forecast-1", "value": {...}}
+  // Return empty string on success, or error message
+  return ''
+}
+```
+
+#### `resource_delete` - Delete a resource
+
+**AssemblyScript:**
+```typescript
+export function resource_delete(requestJson: string): string {
+  // requestJson: {"id": "forecast-1"}
+  return ''
+}
+```
+
+### Accessing Resources via HTTP
+
+Once registered, resources are available at:
+
+```
+GET  /signalk/v2/api/resources/{type}           # List all
+GET  /signalk/v2/api/resources/{type}/{id}      # Get one
+POST /signalk/v2/api/resources/{type}/{id}      # Create/update
+DELETE /signalk/v2/api/resources/{type}/{id}    # Delete
+```
+
+Example for a weather provider:
+```bash
+# List all weather forecasts
+curl http://localhost:3000/signalk/v2/api/resources/weather-forecasts
+
+# Get a specific forecast
+curl http://localhost:3000/signalk/v2/api/resources/weather-forecasts/forecast-1
+```
+
+### Standard vs Custom Resource Types
+
+Signal K defines standard resource types with validation:
+- `routes` - Navigation routes
+- `waypoints` - Navigation waypoints
+- `notes` - Freeform notes
+- `regions` - Geographic regions
+- `charts` - Chart metadata
+
+Custom types (like `weather-forecasts`) have no schema validation and can contain any JSON structure.
+
 ## Resources
 
 - **WIT Interface**: `packages/server-api/wit/signalk.wit`
