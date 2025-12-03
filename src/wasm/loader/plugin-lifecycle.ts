@@ -11,6 +11,7 @@ import { wasmPlugins, restartTimers, setPluginStatus } from './plugin-registry'
 import { getWasmRuntime } from '../wasm-runtime'
 import { backwardsCompat } from './plugin-routes'
 import { updateResourceProviderInstance } from '../bindings/resource-provider'
+import { initializeChartsFromDisk } from '../bindings/mbtiles-handler'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -117,6 +118,20 @@ export async function startWasmPlugin(app: any, pluginId: string): Promise<void>
       updateResourceProviderInstance(plugin.packageName, plugin.instance)
     }
     updateResourceProviderInstance(pluginId, plugin.instance)
+
+    // For charts-provider plugins, initialize charts from disk into WASM memory
+    // This restores charts that were uploaded in previous sessions
+    if (pluginId.includes('charts-provider') && plugin.configPath) {
+      try {
+        const chartCount = await initializeChartsFromDisk(plugin, plugin.configPath)
+        if (chartCount > 0) {
+          debug(`Initialized ${chartCount} charts from disk for ${pluginId}`)
+        }
+      } catch (initErr) {
+        debug(`Warning: Failed to initialize charts from disk: ${initErr}`)
+        // Don't fail plugin startup if chart init fails
+      }
+    }
 
     setPluginStatus(plugin, 'running')
     plugin.statusMessage = 'Running'

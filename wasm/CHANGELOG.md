@@ -2,7 +2,42 @@
 
 All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
-## [3.0.1] - 2025-12-03
+## [2.18.0+wasm5] - 2025-12-04
+
+### Fixed - Resource Delta Version Parameter
+
+Fixed resource deltas not using version 2, which caused resources to be incorrectly cached in the full Signal K model.
+
+**Root Cause:** The `sk_handle_message` FFI binding was calling `app.handleMessage(pluginId, delta)` without the third parameter (version). Per the resource provider documentation, resource deltas must use version 2 to prevent caching in the full model.
+
+**Solution:** Auto-detect resource deltas (paths starting with `resources.`) and apply version 2 automatically.
+
+**Files Modified:**
+- `src/wasm/bindings/env-imports.ts` - Added resource path detection and v2 parameter
+
+**Key Code Change:**
+```typescript
+// Check if this is a resource delta - if so, use version 2
+if (isResourceDelta) {
+  app.handleMessage(pluginId, delta, 2) // v2 for resources
+} else {
+  app.handleMessage(pluginId, delta)
+}
+```
+
+### Changed - SQLite Dependency
+
+Switched from `sqlite3` to `better-sqlite3` for MBTiles chart serving.
+
+**Reason:** `sqlite3` uses outdated `node-pre-gyp` with deprecated dependencies (rimraf, npmlog, gauge, etc.). `better-sqlite3` has modern dependencies and prebuilts for all major platforms.
+
+**Files Modified:**
+- `package.json` - Changed optionalDependencies from `sqlite3` to `better-sqlite3`
+- `src/wasm/bindings/mbtiles-handler.ts` - Rewrote to use synchronous better-sqlite3 API
+
+---
+
+## [2.18.0+wasm4] - 2025-12-03
 
 ### Added - WASM Resource Providers (Phase 3 Complete)
 
@@ -101,7 +136,7 @@ Extended weather plugin to demonstrate resource provider capability:
 
 ---
 
-## [3.0.0] - 2025-12-03
+## [2.18.0+wasm3] - 2025-12-03
 
 ### Added - Custom HTTP Endpoints for WASM Plugins
 
@@ -295,7 +330,7 @@ handle_put_{context}_{path}
 
 ---
 
-## [3.0.0-alpha.5] - 2025-12-03
+## [2.18.0+wasm2] - 2025-12-03
 
 ### Investigated - C#/.NET WASM Support
 
@@ -345,7 +380,7 @@ https://github.com/bytecodealliance/componentize-dotnet/issues/103
 
 ---
 
-## [3.0.0-alpha.4] - 2025-01-02
+## [2.18.0+wasm1] - 2025-01-02
 
 ### Added - Asyncify Support for Network Requests
 

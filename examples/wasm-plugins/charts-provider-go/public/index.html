@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBTiles Chart Manager - Signal K</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MBTiles Chart Manager</h1>
+            <p class="subtitle">Upload and manage nautical charts for Signal K</p>
+        </header>
+
+        <section id="status-section" class="card">
+            <h2>Status</h2>
+            <div id="status">Loading...</div>
+        </section>
+
+        <section id="upload-section" class="card">
+            <h2>Upload Chart</h2>
+            <form id="upload-form">
+                <div class="form-group">
+                    <label for="chart-file">Select MBTiles File</label>
+                    <input type="file" id="chart-file" name="chart" accept=".mbtiles" required>
+                    <small class="help-text">Chart name and metadata will be extracted from the MBTiles file</small>
+                </div>
+                <button type="submit" class="btn btn-primary">Upload Chart</button>
+            </form>
+            <div id="upload-progress" class="progress-container" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <span id="progress-text">0%</span>
+            </div>
+            <div id="upload-status"></div>
+        </section>
+
+        <section id="charts-section" class="card">
+            <h2>Available Charts</h2>
+            <div id="chart-list">Loading charts...</div>
+        </section>
+
+        <section id="help-section" class="card">
+            <h2>Help</h2>
+            <details>
+                <summary>How to use this plugin</summary>
+                <ol>
+                    <li>Upload an MBTiles file using the form above</li>
+                    <li>The chart will be available via Signal K Resources API</li>
+                    <li>Use Freeboard-SK or other chart clients to view the charts</li>
+                    <li>Charts are served at <code>/plugins/charts-provider-go/tiles/{chartId}/{z}/{x}/{y}</code></li>
+                </ol>
+            </details>
+            <details>
+                <summary>Where to get MBTiles charts</summary>
+                <ul>
+                    <li><a href="https://openseamap.org" target="_blank">OpenSeaMap</a> - Free nautical charts</li>
+                    <li><a href="https://www.chartwork.io" target="_blank">ChartWork</a> - Chart conversion tools</li>
+                    <li><a href="https://gdal.org" target="_blank">GDAL</a> - Convert various formats to MBTiles</li>
+                </ul>
+            </details>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
