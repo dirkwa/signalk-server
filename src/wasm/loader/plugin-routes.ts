@@ -140,7 +140,16 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
     return
   }
 
-  if (!plugin.instance || !plugin.instance.exports.http_endpoints) {
+  if (!plugin.instance) {
+    debug(`No instance for ${plugin.id}`)
+    return
+  }
+
+  // Check for http_endpoints in either AssemblyScript loader or raw WASM exports
+  const hasAsEndpoints = plugin.instance.asLoader && typeof plugin.instance.asLoader.exports.http_endpoints === 'function'
+  const hasRustEndpoints = plugin.instance.instance && typeof (plugin.instance.instance.exports as any).http_endpoints === 'function'
+
+  if (!hasAsEndpoints && !hasRustEndpoints) {
     debug(`No custom HTTP endpoints for ${plugin.id}`)
     return
   }
@@ -149,7 +158,39 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
 
   // Register custom HTTP endpoints
   try {
-    const endpointsJson = plugin.instance.exports.http_endpoints()
+    let endpointsJson: string
+
+    // Check if this is an AssemblyScript or Rust plugin
+    const asLoader = plugin.instance.asLoader
+    if (asLoader && typeof asLoader.exports.http_endpoints === 'function') {
+      // AssemblyScript: http_endpoints() returns a string pointer
+      const ptr = asLoader.exports.http_endpoints()
+      endpointsJson = asLoader.exports.__getString(ptr)
+      debug(`Got http_endpoints from AssemblyScript: ${endpointsJson.substring(0, 200)}`)
+    } else {
+      // Rust: http_endpoints(out_ptr, out_max_len) -> written_len
+      const rawExports = plugin.instance.instance.exports as any
+      if (typeof rawExports.allocate === 'function' && typeof rawExports.http_endpoints === 'function') {
+        const maxLen = 8192 // 8KB should be plenty for endpoint definitions
+        const outPtr = rawExports.allocate(maxLen)
+        const writtenLen = rawExports.http_endpoints(outPtr, maxLen)
+
+        // Read the string from WASM memory
+        const memory = rawExports.memory as WebAssembly.Memory
+        const bytes = new Uint8Array(memory.buffer, outPtr, writtenLen)
+        endpointsJson = new TextDecoder('utf-8').decode(bytes)
+
+        // Deallocate
+        if (typeof rawExports.deallocate === 'function') {
+          rawExports.deallocate(outPtr, maxLen)
+        }
+        debug(`Got http_endpoints from Rust (${writtenLen} bytes): ${endpointsJson.substring(0, 200)}`)
+      } else {
+        debug(`http_endpoints export exists but plugin type unknown for ${plugin.id}`)
+        return
+      }
+    }
+
     const endpoints = JSON.parse(endpointsJson)
     debug(`Registering ${endpoints.length} HTTP endpoints for ${plugin.id}`)
 
@@ -258,8 +299,8 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
               throw new Error(`Failed to decode WASM response: ${decodeErrMsg}`)
             }
           } else {
-            // Fallback for Rust plugins or old manual method
-            debug(`Using raw exports for handler ${handler}`)
+            // Rust plugins use buffer-based string passing
+            debug(`Using raw exports for handler ${handler} (Rust buffer-based)`)
             const rawExports = plugin.instance!.instance.exports as any
             const handlerFunc = rawExports[handler]
 
@@ -269,8 +310,37 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
               return res.status(500).json({ error: `Handler function ${handler} not found` })
             }
 
-            // For Rust plugins, pass string directly
-            responseJson = handlerFunc(requestContext)
+            // Check if this is a Rust plugin with allocate/deallocate
+            if (typeof rawExports.allocate === 'function') {
+              // Rust buffer-based string passing (same pattern as PUT handlers)
+              const requestBytes = Buffer.from(requestContext, 'utf8')
+              const requestPtr = rawExports.allocate(requestBytes.length)
+              const responseMaxLen = 65536 // 64KB response buffer
+              const responsePtr = rawExports.allocate(responseMaxLen)
+
+              // Write request to WASM memory
+              const memory = rawExports.memory as WebAssembly.Memory
+              const memView = new Uint8Array(memory.buffer)
+              memView.set(requestBytes, requestPtr)
+
+              // Call handler: (request_ptr, request_len, response_ptr, response_max_len) -> written_len
+              const writtenLen = handlerFunc(requestPtr, requestBytes.length, responsePtr, responseMaxLen)
+
+              // Read response from WASM memory
+              const responseBytes = new Uint8Array(memory.buffer, responsePtr, writtenLen)
+              responseJson = new TextDecoder('utf-8').decode(responseBytes)
+
+              // Deallocate buffers
+              if (typeof rawExports.deallocate === 'function') {
+                rawExports.deallocate(requestPtr, requestBytes.length)
+                rawExports.deallocate(responsePtr, responseMaxLen)
+              }
+
+              debug(`Rust handler returned ${writtenLen} bytes: ${responseJson.substring(0, 200)}`)
+            } else {
+              // Fallback for unknown plugin types - try direct call
+              responseJson = handlerFunc(requestContext)
+            }
           }
 
           const response = JSON.parse(responseJson)

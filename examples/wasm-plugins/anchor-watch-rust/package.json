@@ -1,6 +1,6 @@
 {
   "name": "@signalk/anchor-watch-rust",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Anchor Watch WASM plugin for Signal K - Rust implementation with PUT handlers",
   "main": "plugin.wasm",
   "scripts": {
@@ -27,7 +27,8 @@
     "storage": "vfs-only",
     "dataRead": true,
     "dataWrite": true,
-    "putHandlers": true
+    "putHandlers": true,
+    "httpEndpoints": true
   },
   "repository": {
     "type": "git",
