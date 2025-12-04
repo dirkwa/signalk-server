@@ -12,8 +12,12 @@ import { getWasmRuntime } from '../wasm-runtime'
 import { backwardsCompat } from './plugin-routes'
 import { updateResourceProviderInstance } from '../bindings/resource-provider'
 import { initializeChartsFromDisk } from '../bindings/mbtiles-handler'
+import { socketManager } from '../bindings/socket-manager'
 
 const debug = Debug('signalk:wasm:loader')
+
+// Track poll timers for plugins that request periodic polling
+const pollTimers: Map<string, NodeJS.Timeout> = new Map()
 
 /**
  * Add WASM plugin webapp to the app.webapps array
@@ -141,6 +145,29 @@ export async function startWasmPlugin(app: any, pluginId: string): Promise<void>
     // Add webapp to app.webapps array if this plugin is a webapp
     addPluginWebapp(app, plugin)
 
+    // Set up periodic polling for plugins that export poll()
+    // This is a generic mechanism for plugins that need to poll hardware,
+    // sockets, or external systems (e.g., radar, NMEA receivers, sensors)
+    if (plugin.instance?.exports?.poll) {
+      const pollInterval = 1000 // Poll every 1 second
+      debug(`Setting up poll timer for ${pluginId} (${pollInterval}ms)`)
+
+      const pollTimer = setInterval(() => {
+        try {
+          if (plugin.status === 'running' && plugin.instance?.exports?.poll) {
+            const result = plugin.instance.exports.poll()
+            if (result !== 0) {
+              debug(`[${pluginId}] poll() returned: ${result}`)
+            }
+          }
+        } catch (pollError) {
+          debug(`[${pluginId}] poll() error: ${pollError}`)
+        }
+      }, pollInterval)
+
+      pollTimers.set(pluginId, pollTimer)
+    }
+
     debug(`Successfully started WASM plugin: ${pluginId}`)
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
@@ -170,6 +197,14 @@ export async function stopWasmPlugin(pluginId: string): Promise<void> {
       restartTimers.delete(pluginId)
     }
 
+    // Cancel any poll timers
+    const pollTimer = pollTimers.get(pluginId)
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimers.delete(pluginId)
+      debug(`Stopped poll timer for ${pluginId}`)
+    }
+
     if (plugin.instance) {
       // Call plugin stop()
       const result = plugin.instance.exports.stop()
@@ -177,6 +212,9 @@ export async function stopWasmPlugin(pluginId: string): Promise<void> {
         debug(`Plugin stop() returned error code: ${result}`)
       }
     }
+
+    // Clean up any sockets opened by this plugin
+    socketManager.closeAllForPlugin(pluginId)
 
     setPluginStatus(plugin, 'stopped')
     plugin.statusMessage = 'Stopped'
