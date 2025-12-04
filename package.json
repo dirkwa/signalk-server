@@ -1,6 +1,6 @@
 {
   "name": "signalk-server",
-  "version": "2.18.0+wasm6",
+  "version": "3.0.0-alpha.1+wasm",
   "description": "An implementation of a [Signal K](http://signalk.org) server for boats.",
   "main": "index.js",
   "scripts": {
