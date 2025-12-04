@@ -88,7 +88,8 @@ export async function registerWasmPlugin(
       serialPorts: packageJson.wasmCapabilities?.serialPorts || false,
       putHandlers: packageJson.wasmCapabilities?.putHandlers || false,
       httpEndpoints: packageJson.wasmCapabilities?.httpEndpoints || false,
-      resourceProvider: packageJson.wasmCapabilities?.resourceProvider || false
+      resourceProvider: packageJson.wasmCapabilities?.resourceProvider || false,
+      rawSockets: packageJson.wasmCapabilities?.rawSockets || false
     }
 
     // Load WASM module temporarily just to get the plugin ID

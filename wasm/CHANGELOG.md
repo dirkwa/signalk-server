@@ -2,6 +2,97 @@
 
 All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
+## [2.18.0+wasm6] - 2025-12-04
+
+### Added - Raw Sockets Capability for UDP Network Access
+
+WASM plugins can now access UDP sockets for communicating with marine hardware like radars, NMEA devices, and AIS receivers.
+
+**Features:**
+- `rawSockets` capability in plugin manifest
+- Full UDP socket API: create, bind, send, receive, multicast
+- Non-blocking receive with automatic buffering (up to 1000 datagrams)
+- Broadcast and multicast support
+- Automatic socket cleanup on plugin stop
+
+**FFI Functions:**
+
+| Function | Description |
+|----------|-------------|
+| `sk_udp_create(type)` | Create UDP socket (0=IPv4, 1=IPv6) |
+| `sk_udp_bind(socket_id, port)` | Bind to port |
+| `sk_udp_send(socket_id, addr, port, data)` | Send datagram |
+| `sk_udp_recv(socket_id, buf, addr_out, port_out)` | Receive (non-blocking) |
+| `sk_udp_set_broadcast(socket_id, enabled)` | Enable broadcast |
+| `sk_udp_join_multicast(socket_id, group, iface)` | Join multicast group |
+| `sk_udp_leave_multicast(socket_id, group, iface)` | Leave multicast group |
+| `sk_udp_pending(socket_id)` | Get buffered datagram count |
+| `sk_udp_close(socket_id)` | Close socket |
+
+**Files Created:**
+- `src/wasm/bindings/socket-manager.ts` - Node.js dgram wrapper with buffering
+
+**Files Modified:**
+- `src/wasm/types.ts` - Added `rawSockets?: boolean` to WasmCapabilities
+- `src/wasm/bindings/env-imports.ts` - Added socket FFI bindings
+- `src/wasm/loaders/standard-loader.ts` - Wired up socket imports
+- `wasm/WASM_PLUGIN_DEV_GUIDE.md` - Documented Raw Sockets API with examples
+
+### Added - Generic Poll Export for Periodic Plugin Execution
+
+WASM plugins can now export a `poll()` function that is called every second while the plugin is running.
+
+**Use Cases:**
+- Polling hardware for new data
+- Checking socket buffers for incoming packets
+- Periodic status updates
+- Timer-based operations
+
+**Files Modified:**
+- `src/wasm/types.ts` - Added `poll?: () => number` to WasmPluginExports
+- `src/wasm/loader/plugin-lifecycle.ts` - Added poll timer management
+- `src/wasm/loaders/standard-loader.ts` - Pass poll through to exports
+
+**Usage:**
+```rust
+#[no_mangle]
+pub extern "C" fn poll() -> i32 {
+    // Called every 1 second
+    // Return 0 for success, non-zero for errors
+    0
+}
+```
+
+### Fixed - Socket Options Deferred Until Bind Completes
+
+Socket options like `setBroadcast`, `setMulticastTTL`, and `setMulticastLoopback` now work correctly when called before the socket is bound.
+
+**Root Cause:** Node.js dgram requires socket to be bound before setting options, but WASM plugins typically set options immediately after socket creation.
+
+**Solution:** Socket manager queues pending options and applies them automatically when bind completes.
+
+**Files Modified:**
+- `src/wasm/bindings/socket-manager.ts`
+  - Added `PendingOption` interface
+  - Added `pendingOptions` array to ManagedSocket
+  - Options queued if socket not bound, applied after bind callback
+
+### Real-World Example: Mayara Radar Plugin
+
+The [Mayara](https://github.com/keesverruijt/mayara) project's fork  [mayara-signalk-wasm](https://github.com/dirkwa/mayara/tree/WASM/mayara-signalk-wasm) crate demonstrates the rawSockets capability with a working Furuno radar detector:
+
+- UDP broadcast beacon to `172.31.255.255:10010`
+- Periodic polling via `poll()` export
+- Radar detection and SignalK delta emission
+- Tested with Furuno DRS4D-NXT hardware
+
+**Protocol Details Verified:**
+- Furuno beacon: 16-byte packet
+- Response header: `01 00 00 01 00 00 00 00 00 01 00` (11 bytes)
+- Identity marker: byte 16 = `0x52` ('R')
+
+---
+
 ## [2.18.0+wasm5] - 2025-12-04
 
 ### Fixed - Resource Delta Version Parameter

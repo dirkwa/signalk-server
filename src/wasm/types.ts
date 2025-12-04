@@ -16,6 +16,7 @@ export interface WasmCapabilities {
   putHandlers: boolean
   httpEndpoints?: boolean
   resourceProvider?: boolean  // Can register as a resource provider
+  rawSockets?: boolean        // Can open UDP/TCP sockets for radar, NMEA, etc.
 }
 
 /**
@@ -54,6 +55,10 @@ export interface WasmPluginExports {
   memory?: WebAssembly.Memory
   // Optional: HTTP endpoint registration
   http_endpoints?: () => string // Returns JSON array of endpoint definitions
+  // Optional: Periodic polling - called every second when plugin is running
+  // Useful for plugins that need to poll hardware, sockets, or external systems
+  // Returns 0 on success, non-zero on error
+  poll?: () => number
 }
 
 /**

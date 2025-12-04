@@ -7,6 +7,7 @@
 import Debug from 'debug'
 import { WasmCapabilities } from '../types'
 import { createResourceProviderBinding } from './resource-provider'
+import { socketManager } from './socket-manager'
 
 const debug = Debug('signalk:wasm:bindings')
 
@@ -192,6 +193,9 @@ export function createEnvImports(options: EnvImportsOptions): Record<string, any
         if (capability === 'network') {
           return capabilities.network ? 1 : 0
         }
+        if (capability === 'rawSockets') {
+          return capabilities.rawSockets ? 1 : 0
+        }
         return 0
       } catch (error) {
         debug(`Plugin capability check error: ${error}`)
@@ -306,7 +310,187 @@ export function createEnvImports(options: EnvImportsOptions): Record<string, any
     },
 
     // Resource Provider Registration
-    sk_register_resource_provider: createResourceProviderBinding(pluginId, capabilities, app, readUtf8String)
+    sk_register_resource_provider: createResourceProviderBinding(pluginId, capabilities, app, readUtf8String),
+
+    // ==========================================================================
+    // Raw Socket API (for radar, NMEA, etc.)
+    // Requires rawSockets capability
+    // ==========================================================================
+
+    /**
+     * Create a UDP socket
+     * @param type - 0 for udp4, 1 for udp6
+     * @returns Socket ID (>0), or -1 on error
+     */
+    sk_udp_create: (type: number): number => {
+      if (!capabilities.rawSockets) {
+        debug(`[${pluginId}] rawSockets capability not granted`)
+        return -1
+      }
+      const socketType = type === 1 ? 'udp6' : 'udp4'
+      return socketManager.createSocket(pluginId, socketType)
+    },
+
+    /**
+     * Bind socket to a port
+     * @param socketId - Socket ID from sk_udp_create
+     * @param port - Port number (0 for any available)
+     * @returns 0 on success, -1 on error
+     */
+    sk_udp_bind: (socketId: number, port: number): number => {
+      if (!capabilities.rawSockets) return -1
+      // Note: bind is async but we return immediately and let it complete
+      // The socket will be ready by the time we try to receive
+      socketManager.bind(socketId, port).catch(err => {
+        debug(`[${pluginId}] Async bind error: ${err}`)
+      })
+      return 0
+    },
+
+    /**
+     * Join a multicast group
+     * @param socketId - Socket ID
+     * @param addrPtr - Pointer to multicast address string
+     * @param addrLen - Length of address string
+     * @param ifacePtr - Pointer to interface address (0 for default)
+     * @param ifaceLen - Length of interface string
+     * @returns 0 on success, -1 on error
+     */
+    sk_udp_join_multicast: (socketId: number, addrPtr: number, addrLen: number, ifacePtr: number, ifaceLen: number): number => {
+      if (!capabilities.rawSockets) return -1
+      try {
+        const multicastAddr = readUtf8String(addrPtr, addrLen)
+        const interfaceAddr = ifaceLen > 0 ? readUtf8String(ifacePtr, ifaceLen) : undefined
+        debug(`[${pluginId}] Joining multicast ${multicastAddr} on interface ${interfaceAddr || 'default'}`)
+        return socketManager.joinMulticast(socketId, multicastAddr, interfaceAddr)
+      } catch (error) {
+        debug(`[${pluginId}] Join multicast error: ${error}`)
+        return -1
+      }
+    },
+
+    /**
+     * Leave a multicast group
+     */
+    sk_udp_leave_multicast: (socketId: number, addrPtr: number, addrLen: number, ifacePtr: number, ifaceLen: number): number => {
+      if (!capabilities.rawSockets) return -1
+      try {
+        const multicastAddr = readUtf8String(addrPtr, addrLen)
+        const interfaceAddr = ifaceLen > 0 ? readUtf8String(ifacePtr, ifaceLen) : undefined
+        return socketManager.leaveMulticast(socketId, multicastAddr, interfaceAddr)
+      } catch (error) {
+        debug(`[${pluginId}] Leave multicast error: ${error}`)
+        return -1
+      }
+    },
+
+    /**
+     * Set multicast TTL
+     */
+    sk_udp_set_multicast_ttl: (socketId: number, ttl: number): number => {
+      if (!capabilities.rawSockets) return -1
+      return socketManager.setMulticastTTL(socketId, ttl)
+    },
+
+    /**
+     * Enable/disable multicast loopback
+     */
+    sk_udp_set_multicast_loopback: (socketId: number, enabled: number): number => {
+      if (!capabilities.rawSockets) return -1
+      return socketManager.setMulticastLoopback(socketId, enabled !== 0)
+    },
+
+    /**
+     * Enable/disable broadcast
+     */
+    sk_udp_set_broadcast: (socketId: number, enabled: number): number => {
+      if (!capabilities.rawSockets) return -1
+      return socketManager.setBroadcast(socketId, enabled !== 0)
+    },
+
+    /**
+     * Send data via UDP
+     * @param socketId - Socket ID
+     * @param addrPtr - Destination address pointer
+     * @param addrLen - Destination address length
+     * @param port - Destination port
+     * @param dataPtr - Data pointer
+     * @param dataLen - Data length
+     * @returns Bytes sent, or -1 on error
+     */
+    sk_udp_send: (socketId: number, addrPtr: number, addrLen: number, port: number, dataPtr: number, dataLen: number): number => {
+      if (!capabilities.rawSockets) return -1
+      try {
+        const address = readUtf8String(addrPtr, addrLen)
+        if (!memoryRef.current) return -1
+        const data = Buffer.from(new Uint8Array(memoryRef.current.buffer, dataPtr, dataLen))
+
+        // Send is async, but we return 0 immediately and let it complete
+        socketManager.send(socketId, data, address, port).catch(err => {
+          debug(`[${pluginId}] Async send error: ${err}`)
+        })
+        return dataLen // Optimistically return bytes "sent"
+      } catch (error) {
+        debug(`[${pluginId}] Send error: ${error}`)
+        return -1
+      }
+    },
+
+    /**
+     * Receive data from UDP socket (non-blocking)
+     * @param socketId - Socket ID
+     * @param bufPtr - Buffer to write data into
+     * @param bufMaxLen - Maximum buffer size
+     * @param addrOutPtr - Buffer to write source address (at least 46 bytes for IPv6)
+     * @param portOutPtr - Pointer to write source port (u16)
+     * @returns Bytes received, 0 if no data, -1 on error
+     */
+    sk_udp_recv: (socketId: number, bufPtr: number, bufMaxLen: number, addrOutPtr: number, portOutPtr: number): number => {
+      if (!capabilities.rawSockets) return -1
+      try {
+        const datagram = socketManager.receive(socketId)
+        if (!datagram) {
+          return 0 // No data available
+        }
+
+        if (!memoryRef.current) return -1
+        const memory = memoryRef.current
+        const memView = new Uint8Array(memory.buffer)
+
+        // Copy data to buffer
+        const bytesToCopy = Math.min(datagram.data.length, bufMaxLen)
+        memView.set(datagram.data.slice(0, bytesToCopy), bufPtr)
+
+        // Write source address (null-terminated string)
+        const addrBytes = Buffer.from(datagram.address + '\0', 'utf8')
+        memView.set(addrBytes, addrOutPtr)
+
+        // Write source port (u16, little-endian)
+        const portView = new DataView(memory.buffer)
+        portView.setUint16(portOutPtr, datagram.port, true)
+
+        return bytesToCopy
+      } catch (error) {
+        debug(`[${pluginId}] Recv error: ${error}`)
+        return -1
+      }
+    },
+
+    /**
+     * Get number of buffered datagrams waiting to be received
+     */
+    sk_udp_pending: (socketId: number): number => {
+      if (!capabilities.rawSockets) return -1
+      return socketManager.getBufferedCount(socketId)
+    },
+
+    /**
+     * Close a socket
+     */
+    sk_udp_close: (socketId: number): void => {
+      if (!capabilities.rawSockets) return
+      socketManager.close(socketId)
+    }
   }
 
   return envImports

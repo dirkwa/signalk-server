@@ -987,6 +987,13 @@ Your plugin MUST export:
 | `allocate` | `(size) -> ptr` | Allocate memory |
 | `deallocate` | `(ptr, size)` | Free memory |
 
+Your plugin MAY export (optional):
+
+| Export | Signature | Description |
+|--------|-----------|-------------|
+| `poll` | `() -> status` | Called every 1 second while plugin is running. Useful for polling hardware, sockets, or external systems. Return 0 for success, non-zero for errors. |
+| `http_endpoints` | `() -> json` | Return JSON array of HTTP endpoint definitions |
+
 📁 **See [anchor-watch-rust example](../examples/wasm-plugins/anchor-watch-rust/) for a complete working plugin with PUT handlers**
 
 ---
@@ -1190,6 +1197,13 @@ Your plugin MUST export:
 | `plugin_stop` | `() -> status` | Stop plugin |
 | `allocate` | `(size) -> ptr` | Allocate memory |
 | `deallocate` | `(ptr, size)` | Free memory |
+
+Your plugin MAY export (optional):
+
+| Export | Signature | Description |
+|--------|-----------|-------------|
+| `poll` | `() -> status` | Called every 1 second while plugin is running. Useful for polling hardware, sockets, or external systems. Return 0 for success, non-zero for errors. |
+| `http_endpoints` | `() -> json` | Return JSON array of HTTP endpoint definitions |
 
 ### TinyGo Limitations
 
@@ -1699,6 +1713,7 @@ Declare required capabilities in `package.json`:
 | `staticFiles` | Serve HTML/CSS/JS from `public/` folder | ✅ Supported |
 | `network` | HTTP requests (via as-fetch) | ✅ Supported (AssemblyScript only) |
 | `putHandlers` | Register PUT handlers for vessel control | ✅ Supported |
+| `rawSockets` | UDP socket access for radar, NMEA, etc. | ✅ Supported |
 | `serialPorts` | Serial port access | ⏳ Planned (Phase 3) |
 
 ### Network API (AssemblyScript)
@@ -1819,6 +1834,162 @@ See [examples/wasm-plugins/weather-plugin](examples/wasm-plugins/weather-plugin/
 - CORS applies for cross-origin requests
 - No rate limiting enforced by server (implement in your plugin)
 - Network capability cannot be bypassed - enforced at runtime
+
+### Raw Sockets API (UDP)
+
+The `rawSockets` capability enables direct UDP socket access for plugins that need to communicate with devices like:
+- Marine radars (Navico, Raymarine, Furuno, Garmin)
+- NMEA 0183 over UDP
+- AIS receivers
+- Other marine electronics using UDP multicast
+
+**Requirements:**
+- Plugin must declare `"rawSockets": true` in manifest
+- Sockets are non-blocking (poll-based receive)
+- Automatic cleanup when plugin stops
+
+**Manifest Configuration:**
+
+```json
+{
+  "name": "@signalk/my-radar-plugin",
+  "wasmCapabilities": {
+    "rawSockets": true,
+    "dataWrite": true
+  }
+}
+```
+
+**FFI Functions Available:**
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `sk_udp_create` | `(type: i32) -> i32` | Create socket (0=udp4, 1=udp6). Returns socket_id or -1 |
+| `sk_udp_bind` | `(socket_id, port) -> i32` | Bind to port (0=any). Returns 0 or -1 |
+| `sk_udp_join_multicast` | `(socket_id, addr_ptr, addr_len, iface_ptr, iface_len) -> i32` | Join multicast group |
+| `sk_udp_leave_multicast` | `(socket_id, addr_ptr, addr_len, iface_ptr, iface_len) -> i32` | Leave multicast group |
+| `sk_udp_set_multicast_ttl` | `(socket_id, ttl) -> i32` | Set multicast TTL |
+| `sk_udp_set_multicast_loopback` | `(socket_id, enabled) -> i32` | Enable/disable loopback |
+| `sk_udp_set_broadcast` | `(socket_id, enabled) -> i32` | Enable/disable broadcast |
+| `sk_udp_send` | `(socket_id, addr_ptr, addr_len, port, data_ptr, data_len) -> i32` | Send datagram |
+| `sk_udp_recv` | `(socket_id, buf_ptr, buf_max_len, addr_out_ptr, port_out_ptr) -> i32` | Receive datagram (non-blocking) |
+| `sk_udp_pending` | `(socket_id) -> i32` | Get number of buffered datagrams |
+| `sk_udp_close` | `(socket_id) -> void` | Close socket |
+
+**Rust Example:**
+
+```rust
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn sk_udp_create(socket_type: i32) -> i32;
+    fn sk_udp_bind(socket_id: i32, port: u16) -> i32;
+    fn sk_udp_join_multicast(
+        socket_id: i32,
+        addr_ptr: *const u8, addr_len: usize,
+        iface_ptr: *const u8, iface_len: usize
+    ) -> i32;
+    fn sk_udp_recv(
+        socket_id: i32,
+        buf_ptr: *mut u8, buf_max_len: usize,
+        addr_out_ptr: *mut u8, port_out_ptr: *mut u16
+    ) -> i32;
+    fn sk_udp_close(socket_id: i32);
+}
+
+// Helper to join multicast group
+fn join_multicast(socket_id: i32, group: &str, interface: Option<&str>) -> i32 {
+    let iface = interface.unwrap_or("");
+    unsafe {
+        sk_udp_join_multicast(
+            socket_id,
+            group.as_ptr(), group.len(),
+            iface.as_ptr(), iface.len()
+        )
+    }
+}
+
+// Example: Radar discovery
+fn start_radar_locator() -> i32 {
+    // Create UDP socket
+    let socket_id = unsafe { sk_udp_create(0) }; // udp4
+    if socket_id < 0 {
+        return -1;
+    }
+
+    // Bind to radar discovery port
+    if unsafe { sk_udp_bind(socket_id, 6878) } < 0 {
+        return -1;
+    }
+
+    // Join radar multicast group
+    if join_multicast(socket_id, "239.254.2.0", None) < 0 {
+        return -1;
+    }
+
+    socket_id
+}
+
+// Poll for incoming data (call this periodically)
+fn poll_radar_data(socket_id: i32) {
+    let mut buf = [0u8; 2048];
+    let mut addr = [0u8; 46]; // Max IPv6 address string
+    let mut port: u16 = 0;
+
+    loop {
+        let bytes = unsafe {
+            sk_udp_recv(
+                socket_id,
+                buf.as_mut_ptr(), buf.len(),
+                addr.as_mut_ptr(), &mut port as *mut u16
+            )
+        };
+
+        if bytes <= 0 {
+            break; // No more data
+        }
+
+        // Process radar data...
+        let data = &buf[..bytes as usize];
+        process_radar_packet(data);
+    }
+}
+```
+
+**Important Notes:**
+- Receive is non-blocking - returns 0 if no data available
+- Incoming datagrams are buffered (max 1000 per socket)
+- Oldest datagrams are dropped if buffer is full
+- All sockets are automatically closed when plugin stops
+- Use `sk_udp_pending()` to check if data is available before calling `sk_udp_recv()`
+- Socket options (broadcast, multicast TTL, loopback) can be set before or after bind - they are automatically deferred until the socket is bound
+
+**Real-World Example: Mayara Radar Plugin**
+
+The [Mayara](https://github.com/keesverruijt/mayara) project provides a complete WASM plugin example using raw sockets for marine radar detection. The `mayara-signalk-wasm` crate demonstrates:
+
+- UDP broadcast for Furuno radar discovery (port 10010)
+- Periodic polling via the `poll()` export
+- Emitting radar status to SignalK data model
+- Socket FFI wrapper pattern for Rust
+
+Key implementation patterns from Mayara:
+
+```rust
+// Create and configure socket for radar beacon
+let socket = UdpSocket::new_v4()?;
+socket.bind(FURUNO_BEACON_PORT)?;  // 10010
+socket.set_broadcast(true)?;
+
+// Send beacon request
+socket.send_to(&BEACON_PACKET, "172.31.255.255", FURUNO_BEACON_PORT)?;
+
+// Poll for responses in poll() export
+while let Some((len, addr, port)) = socket.recv_from(&mut buf, &mut addr_buf)? {
+    if let Some(radar) = process_radar_data(&buf[..len]) {
+        emit_delta(&format_radar_delta(&radar));
+    }
+}
+```
 
 ### Custom HTTP Endpoints API
 
