@@ -399,6 +399,13 @@ function createPluginExports(
         : rawExports.http_endpoints)
     : undefined
 
+  // Wrap poll if it exists (for plugins that need periodic execution)
+  const pollFunc = rawExports.poll
+    ? (isAssemblyScriptPlugin && asLoaderInstance
+        ? () => asLoaderInstance.exports.poll()
+        : rawExports.poll)
+    : undefined
+
   return {
     id: idFunc,
     name: nameFunc,
@@ -406,6 +413,7 @@ function createPluginExports(
     start: startFunc,
     stop: stopFunc,
     memory: rawExports.memory,
-    ...(httpEndpointsFunc && { http_endpoints: httpEndpointsFunc })
+    ...(httpEndpointsFunc && { http_endpoints: httpEndpointsFunc }),
+    ...(pollFunc && { poll: pollFunc })
   }
 }
