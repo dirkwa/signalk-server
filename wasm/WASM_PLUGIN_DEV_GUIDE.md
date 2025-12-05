@@ -4,6 +4,24 @@
 
 This guide covers how to develop WASM/WASIX plugins for Signal K Server 3.0. WASM plugins run in a secure sandbox with isolated storage and capability-based permissions.
 
+## What Makes a WASM Plugin?
+
+A WASM plugin is identified by the **`wasmManifest`** field in `package.json`:
+
+```json
+{
+  "name": "my-plugin-name",
+  "wasmManifest": "plugin.wasm",
+  "wasmCapabilities": { ... }
+}
+```
+
+**Key points:**
+- **`wasmManifest`** (required): Path to the compiled `.wasm` file. This field tells Signal K to load this as a WASM plugin instead of a Node.js plugin.
+- **`wasmCapabilities`** (required): Declares what permissions the plugin needs (network, storage, etc.)
+- **Package name** (flexible): Can be anything - `my-plugin`, `@myorg/my-plugin`, etc. There is **no requirement** to use `@signalk/` scope.
+- **Keywords**: Include both `signalk-node-server-plugin` and `signalk-wasm-plugin` for discovery
+
 ## Language Options
 
 Signal K Server 3.0 supports multiple languages for WASM plugin development:
@@ -74,6 +92,7 @@ tinygo version
 ✅ **Network Access**: HTTP client for external APIs (Phase 3) - DONE
 ✅ **Resource Providers**: Serve SignalK resources (Phase 3) - DONE
 ✅ **Weather Providers**: Integrate with Signal K Weather API (Phase 3) - DONE
+✅ **Radar Providers**: Integrate with Signal K Radar API (Phase 3) - DONE
 
 ## Choose Your Language
 
@@ -292,7 +311,7 @@ npx asc assembly/index.ts --target release
 
 ```json
 {
-  "name": "@signalk/my-plugin",
+  "name": "my-wasm-plugin",
   "version": "0.1.0",
   "keywords": [
     "signalk-node-server-plugin",
@@ -307,24 +326,30 @@ npx asc assembly/index.ts --target release
 }
 ```
 
+> **Important: What makes a WASM plugin?**
+>
+> The **`wasmManifest`** field is the key identifier that tells Signal K this is a WASM plugin (not a Node.js plugin). It must point to your compiled `.wasm` file.
+>
+> The package **name can be anything** - scoped (`@myorg/my-plugin`) or unscoped (`my-wasm-plugin`). There is no requirement to use `@signalk/` scope. Choose a name that makes sense for your plugin and avoids conflicts on npm.
+
 ### Step 6: Install to Signal K
 
 **Option 1: Direct Copy (Recommended for Development)**
 ```bash
-mkdir -p ~/.signalk/node_modules/@signalk/my-plugin
-cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/my-plugin/
+mkdir -p ~/.signalk/node_modules/my-wasm-plugin
+cp plugin.wasm package.json ~/.signalk/node_modules/my-wasm-plugin/
 
 # If your plugin has a public/ folder with web UI:
-cp -r public ~/.signalk/node_modules/@signalk/my-plugin/
+cp -r public ~/.signalk/node_modules/my-wasm-plugin/
 ```
 
 **Option 2: NPM Package Install**
 ```bash
 # If you've packaged with `npm pack`
-npm install -g ./my-plugin-1.0.0.tgz
+npm install -g ./my-wasm-plugin-1.0.0.tgz
 
-# Or install from npm registry
-npm install -g @signalk/my-plugin
+# Or install from npm registry (if published)
+npm install -g my-wasm-plugin
 ```
 
 **Note**: For WASM plugins, both methods work identically. Direct copy is faster for development/testing. Use npm install for production deployments or when distributing plugins.
@@ -1040,7 +1065,7 @@ fn write_string(s: &str, ptr: *mut u8, max_len: usize) -> i32 {
 
 ```json
 {
-  "name": "@signalk/my-rust-plugin",
+  "name": "my-rust-wasm-plugin",
   "version": "0.1.0",
   "description": "My Rust WASM plugin for Signal K",
   "keywords": [
@@ -1060,6 +1085,8 @@ fn write_string(s: &str, ptr: *mut u8, max_len: usize) -> i32 {
 }
 ```
 
+> **Note**: The package name can be anything - there's no requirement for `@signalk/` scope. The `wasmManifest` field is what identifies this as a WASM plugin.
+
 ### Step 5: Build
 
 ```bash
@@ -1076,14 +1103,14 @@ cp target/wasm32-wasip1/release/my_rust_plugin.wasm plugin.wasm
 
 **Option 1: Direct Copy (Recommended for Development)**
 ```bash
-mkdir -p ~/.signalk/node_modules/@signalk/my-rust-plugin
-cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/my-rust-plugin/
+mkdir -p ~/.signalk/node_modules/my-rust-wasm-plugin
+cp plugin.wasm package.json ~/.signalk/node_modules/my-rust-wasm-plugin/
 ```
 
 **Option 2: NPM Package Install**
 ```bash
 npm pack
-npm install -g ./signalk-my-rust-plugin-0.1.0.tgz
+npm install -g ./my-rust-wasm-plugin-0.1.0.tgz
 ```
 
 ### Step 7: Enable in Admin UI
@@ -1105,6 +1132,19 @@ Signal K provides these FFI imports in the `env` module:
 | `sk_set_error` | `(ptr, len)` | Set error message |
 | `sk_handle_message` | `(ptr, len)` | Emit delta message |
 | `sk_register_put_handler` | `(ctx_ptr, ctx_len, path_ptr, path_len)` | Register PUT handler |
+
+> **⚠️ IMPORTANT: Use Exact Function Names**
+>
+> You MUST use the exact function names listed above. Common mistakes:
+> - ❌ `sk_log_debug`, `sk_log_info`, `sk_log_warn` → ✅ Use `sk_debug` for all logging
+> - ❌ `sk_emit_delta` → ✅ Use `sk_handle_message`
+> - ❌ `sk_udp_recv_from` → ✅ Use `sk_udp_recv`
+>
+> There is only one logging function (`sk_debug`). If you need log levels, prefix your message:
+> ```rust
+> debug("[INFO] Starting radar scan");
+> debug("[WARN] Connection timeout");
+> ```
 
 Your plugin MUST export:
 
@@ -1273,7 +1313,7 @@ func main() {}
 
 ```json
 {
-  "name": "@signalk/my-go-plugin",
+  "name": "my-go-wasm-plugin",
   "version": "0.1.0",
   "description": "My Go WASM plugin",
   "keywords": [
@@ -1289,6 +1329,8 @@ func main() {}
 }
 ```
 
+> **Note**: The package name can be anything - there's no requirement for `@signalk/` scope. The `wasmManifest` field is what identifies this as a WASM plugin.
+
 ### Step 6: Build
 
 ```bash
@@ -1302,8 +1344,8 @@ tinygo build -o plugin.wasm -target=wasip1 main.go
 ### Step 7: Install
 
 ```bash
-mkdir -p ~/.signalk/node_modules/@signalk/my-go-plugin
-cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/my-go-plugin/
+mkdir -p ~/.signalk/node_modules/my-go-wasm-plugin
+cp plugin.wasm package.json ~/.signalk/node_modules/my-go-wasm-plugin/
 ```
 
 ### Go FFI Interface Reference
@@ -1985,7 +2027,8 @@ The `rawSockets` capability enables direct UDP socket access for plugins that ne
 
 ```json
 {
-  "name": "@signalk/my-radar-plugin",
+  "name": "my-radar-plugin",
+  "wasmManifest": "plugin.wasm",
   "wasmCapabilities": {
     "rawSockets": true,
     "dataWrite": true
@@ -2008,6 +2051,8 @@ The `rawSockets` capability enables direct UDP socket access for plugins that ne
 | `sk_udp_recv` | `(socket_id, buf_ptr, buf_max_len, addr_out_ptr, port_out_ptr) -> i32` | Receive datagram (non-blocking) |
 | `sk_udp_pending` | `(socket_id) -> i32` | Get number of buffered datagrams |
 | `sk_udp_close` | `(socket_id) -> void` | Close socket |
+
+> **⚠️ Note:** Use exact function names. Do NOT use `sk_udp_recv_from` - the correct name is `sk_udp_recv`.
 
 **Rust Example:**
 
@@ -2143,7 +2188,8 @@ WASM plugins can register custom HTTP endpoints to expose REST APIs. This enable
 
 ```json
 {
-  "name": "@signalk/my-api-plugin",
+  "name": "my-api-plugin",
+  "wasmManifest": "plugin.wasm",
   "wasmCapabilities": {
     "httpEndpoints": true
   }
@@ -2366,7 +2412,8 @@ WASM plugins can register PUT handlers to respond to PUT requests from clients, 
 
 ```json
 {
-  "name": "@signalk/my-plugin",
+  "name": "my-plugin",
+  "wasmManifest": "plugin.wasm",
   "wasmCapabilities": {
     "putHandlers": true
   }
@@ -3485,6 +3532,183 @@ See `examples/wasm-plugins/weather-provider-plugin/` for a complete working exam
 - Implements all three Weather Provider methods
 - Uses Asyncify for async HTTP requests
 - Also emits weather data as Signal K deltas
+
+## Radar Providers (Phase 3)
+
+WASM plugins can act as **radar providers** for Signal K's Radar API at `/signalk/v2/api/vessels/self/radars`. Radar providers manage marine radar hardware and expose radar data through a standardized API.
+
+### Radar API Overview
+
+The Radar API supports:
+- Listing all radars from all providers
+- Getting radar info (status, range, controls, streamUrl)
+- Controlling radar (power, range, gain)
+- Optional WebSocket streaming for radar spoke data
+
+### Enabling Radar Provider Capability
+
+In your `package.json`:
+
+```json
+{
+  "signalk": {
+    "wasmCapabilities": {
+      "radarProvider": true,
+      "network": true
+    }
+  }
+}
+```
+
+### Registering as a Radar Provider
+
+Call `sk_register_radar_provider` in your plugin's `start()` function:
+
+**AssemblyScript:**
+```typescript
+// Declare the host function
+@external("env", "sk_register_radar_provider")
+declare function sk_register_radar_provider(namePtr: usize, nameLen: i32): i32;
+
+export function start(configJson: string): i32 {
+  // Register as radar provider
+  const name = "My Radar Plugin";
+  const nameBytes = String.UTF8.encode(name);
+  const result = sk_register_radar_provider(
+    changetype<usize>(nameBytes),
+    nameBytes.byteLength
+  );
+
+  if (result === 0) {
+    sk_set_plugin_error("Failed to register as radar provider", 38);
+    return 1;
+  }
+
+  return 0;
+}
+```
+
+### Required Handler Exports
+
+Radar providers must export these handler functions:
+
+```typescript
+// Return JSON array of radar IDs this provider manages
+export function radar_get_radars(): string {
+  return JSON.stringify(["radar-0", "radar-1"]);
+}
+
+// Return RadarInfo JSON for a specific radar
+export function radar_get_info(requestJson: string): string {
+  const req = JSON.parse<RadarGetInfoRequest>(requestJson);
+
+  const info: RadarInfo = {
+    id: req.radarId,
+    name: "Furuno DRS4D-NXT",
+    brand: "Furuno",
+    status: "transmit",
+    spokesPerRevolution: 2048,
+    maxSpokeLen: 1024,
+    range: 2000,
+    controls: {
+      gain: { auto: false, value: 50 },
+      sea: { auto: true, value: 30 }
+    },
+    // Optional: external stream URL (if absent, clients use /radars/{id}/stream)
+    streamUrl: "ws://192.168.1.100:3001/v1/api/stream/radar-0"
+  };
+
+  return JSON.stringify(info);
+}
+
+// Optional: Set radar power state
+export function radar_set_power(requestJson: string): string {
+  const req = JSON.parse<RadarSetPowerRequest>(requestJson);
+  // req.radarId, req.state ("off" | "standby" | "transmit" | "warming")
+  // ... send command to hardware ...
+  return "true"; // or "false" on failure
+}
+
+// Optional: Set radar range
+export function radar_set_range(requestJson: string): string {
+  const req = JSON.parse<RadarSetRangeRequest>(requestJson);
+  // req.radarId, req.range (meters)
+  // ... send command to hardware ...
+  return "true";
+}
+
+// Optional: Set radar gain
+export function radar_set_gain(requestJson: string): string {
+  const req = JSON.parse<RadarSetGainRequest>(requestJson);
+  // req.radarId, req.gain { auto: boolean, value?: number }
+  // ... send command to hardware ...
+  return "true";
+}
+
+// Optional: Set multiple controls at once
+export function radar_set_controls(requestJson: string): string {
+  const req = JSON.parse<RadarSetControlsRequest>(requestJson);
+  // req.radarId, req.controls (partial RadarControls)
+  // ... send commands to hardware ...
+  return "true";
+}
+```
+
+### RadarInfo Interface
+
+```typescript
+interface RadarInfo {
+  id: string;                    // Unique radar ID
+  name: string;                  // Display name
+  brand?: string;                // Manufacturer
+  status: "off" | "standby" | "transmit" | "warming";
+  spokesPerRevolution: number;   // Spokes per rotation
+  maxSpokeLen: number;           // Max spoke samples
+  range: number;                 // Current range (meters)
+  controls: RadarControls;       // Current control values
+  legend?: LegendEntry[];        // Color legend for display
+  streamUrl?: string;            // Optional external WebSocket URL
+}
+
+interface RadarControls {
+  gain: { auto: boolean; value: number };
+  sea?: { auto: boolean; value: number };
+  rain?: { value: number };
+  // ... extensible for other controls
+}
+```
+
+### Stream URL Strategy
+
+When `streamUrl` is present in RadarInfo:
+- Client connects directly to external server (e.g., Go radar-server, mayara-server)
+- Signal K handles only metadata and controls
+- Lower latency for high-bandwidth spoke data
+
+When `streamUrl` is absent:
+- Client connects to `/signalk/v2/api/vessels/self/radars/{id}/stream`
+- Signal K proxies or generates the stream
+- Simpler deployment (single server)
+
+### Client Usage
+
+```javascript
+// Get radar info
+const radar = await fetch('/signalk/v2/api/vessels/self/radars/radar-0')
+  .then(r => r.json());
+
+// Connect to stream (auto-detect internal vs external)
+const wsUrl = radar.streamUrl ??
+  `ws://${location.host}/signalk/v2/api/vessels/self/radars/${radar.id}/stream`;
+const socket = new WebSocket(wsUrl);
+
+// Control radar
+await fetch('/signalk/v2/api/vessels/self/radars/radar-0/power', {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ value: 'transmit' })
+});
+```
 
 ## Resources
 

@@ -1,0 +1,384 @@
+/**
+ * WASM Radar Provider Support
+ *
+ * Handles radar provider registration and handler invocation for WASM plugins.
+ * Integrates with Signal K's Radar API at /signalk/v2/api/vessels/self/radars
+ */
+
+import Debug from 'debug'
+import { WasmRadarProvider, WasmPluginInstance } from '../types'
+
+const debug = Debug('signalk:wasm:radar-provider')
+
+/**
+ * Registered radar providers from WASM plugins
+ * Key: pluginId
+ */
+export const wasmRadarProviders: Map<string, WasmRadarProvider> = new Map()
+
+/**
+ * Call a WASM radar handler function
+ * Handles both AssemblyScript and Rust plugins with Asyncify support for async operations
+ */
+export async function callWasmRadarHandler(
+  pluginInstance: WasmPluginInstance,
+  handlerName: string,
+  requestJson: string
+): Promise<string | null> {
+  try {
+    const asLoader = pluginInstance.asLoader
+    const rawExports = pluginInstance.instance?.exports as any
+
+    if (asLoader && typeof asLoader.exports[handlerName] === 'function') {
+      // AssemblyScript: allocate string in WASM memory, pass pointer, get string pointer back
+      // Need to handle Asyncify for handlers that call fetchSync
+      const requestPtr = asLoader.exports.__newString(requestJson)
+
+      // Set up Asyncify resume handling
+      let resumePromiseResolve: ((result: string | null) => void) | null = null
+      const resumePromise = new Promise<string | null>((resolve) => {
+        resumePromiseResolve = resolve
+      })
+
+      // Store the result pointer from the handler call
+      let handlerResultPtr: any = null
+
+      if (pluginInstance.setAsyncifyResume) {
+        pluginInstance.setAsyncifyResume(() => {
+          debug(`Re-calling ${handlerName} to resume from rewind state`)
+          const resumeResultPtr = asLoader.exports[handlerName](requestPtr)
+          const result = asLoader.exports.__getString(resumeResultPtr)
+          if (resumePromiseResolve) {
+            resumePromiseResolve(result)
+          }
+          return resumeResultPtr
+        })
+      }
+
+      // Call the handler
+      handlerResultPtr = asLoader.exports[handlerName](requestPtr)
+
+      // Check if we're in Asyncify unwind state
+      if (typeof asLoader.exports.asyncify_get_state === 'function') {
+        const state = asLoader.exports.asyncify_get_state()
+        debug(`Asyncify state after ${handlerName}: ${state}`)
+
+        if (state === 1) {
+          // State 1 = unwound, waiting for async operation
+          debug(`${handlerName} is in unwound state - waiting for async operation to complete`)
+          const result = await resumePromise
+          debug(`${handlerName} async operation completed`)
+          if (pluginInstance.setAsyncifyResume) {
+            pluginInstance.setAsyncifyResume(null)
+          }
+          return result
+        } else {
+          // Not in async state, clean up
+          if (pluginInstance.setAsyncifyResume) {
+            pluginInstance.setAsyncifyResume(null)
+          }
+        }
+      }
+
+      // Normal synchronous return
+      return asLoader.exports.__getString(handlerResultPtr)
+    } else if (rawExports && typeof rawExports[handlerName] === 'function') {
+      // Rust: buffer-based string passing
+      if (typeof rawExports.allocate !== 'function') {
+        debug(`Plugin ${pluginInstance.pluginId} missing allocate export`)
+        return null
+      }
+
+      const requestBytes = Buffer.from(requestJson, 'utf8')
+      const requestPtr = rawExports.allocate(requestBytes.length)
+      const responseMaxLen = 65536 // 64KB response buffer
+      const responsePtr = rawExports.allocate(responseMaxLen)
+
+      // Write request to WASM memory
+      const memory = rawExports.memory as WebAssembly.Memory
+      const memView = new Uint8Array(memory.buffer)
+      memView.set(requestBytes, requestPtr)
+
+      // Call handler: (request_ptr, request_len, response_ptr, response_max_len) -> written_len
+      const writtenLen = rawExports[handlerName](requestPtr, requestBytes.length, responsePtr, responseMaxLen)
+
+      // Read response from WASM memory
+      const responseBytes = new Uint8Array(memory.buffer, responsePtr, writtenLen)
+      const responseJson = new TextDecoder('utf-8').decode(responseBytes)
+
+      // Deallocate buffers
+      if (typeof rawExports.deallocate === 'function') {
+        rawExports.deallocate(requestPtr, requestBytes.length)
+        rawExports.deallocate(responsePtr, responseMaxLen)
+      }
+
+      return responseJson
+    }
+
+    debug(`Handler ${handlerName} not found in plugin ${pluginInstance.pluginId}`)
+    return null
+  } catch (error) {
+    debug(`Error calling radar handler ${handlerName}: ${error}`)
+    return null
+  }
+}
+
+/**
+ * Update radar provider references with a newly loaded plugin instance
+ */
+export function updateRadarProviderInstance(pluginId: string, pluginInstance: WasmPluginInstance): void {
+  const provider = wasmRadarProviders.get(pluginId)
+  if (provider) {
+    provider.pluginInstance = pluginInstance
+    debug(`Updated radar provider ${pluginId} with plugin instance`)
+  }
+}
+
+/**
+ * Migrate radar provider registrations from old pluginId to new pluginId
+ */
+export function migrateRadarProviderPluginId(oldPluginId: string, newPluginId: string): void {
+  const provider = wasmRadarProviders.get(oldPluginId)
+  if (provider) {
+    provider.pluginId = newPluginId
+    wasmRadarProviders.delete(oldPluginId)
+    wasmRadarProviders.set(newPluginId, provider)
+    debug(`Migrated radar provider from ${oldPluginId} to ${newPluginId}`)
+  }
+}
+
+/**
+ * Clean up radar provider registrations for a plugin
+ * @param pluginId The plugin ID
+ * @param app The Signal K app (optional, if provided will also unregister from RadarApi)
+ */
+export function cleanupRadarProviders(pluginId: string, app?: any): void {
+  if (wasmRadarProviders.has(pluginId)) {
+    debug(`Removing radar provider registration: ${pluginId}`)
+    wasmRadarProviders.delete(pluginId)
+  }
+
+  // Also unregister from Signal K RadarApi
+  if (app && app.radarApi && typeof app.radarApi.unRegister === 'function') {
+    try {
+      app.radarApi.unRegister(pluginId)
+      debug(`Unregistered ${pluginId} from RadarApi`)
+    } catch (error) {
+      debug(`Error unregistering from RadarApi: ${error}`)
+    }
+  }
+}
+
+/**
+ * Create the sk_register_radar_provider host binding
+ *
+ * WASM plugins call this to register as a radar provider.
+ * The plugin must export handler functions:
+ * - radar_get_radars() -> JSON array of radar IDs
+ * - radar_get_info(requestJson) -> RadarInfo JSON
+ * - radar_set_power(requestJson) -> boolean success
+ * - radar_set_range(requestJson) -> boolean success
+ * - radar_set_gain(requestJson) -> boolean success
+ * - radar_set_controls(requestJson) -> boolean success
+ */
+export function createRadarProviderBinding(
+  pluginId: string,
+  capabilities: { radarProvider?: boolean },
+  app: any,
+  readUtf8String: (ptr: number, len: number) => string
+): (namePtr: number, nameLen: number) => number {
+  return (namePtr: number, nameLen: number): number => {
+    try {
+      const providerName = readUtf8String(namePtr, nameLen)
+      debug(`[${pluginId}] Registering as radar provider: ${providerName}`)
+
+      // Check if plugin has radarProvider capability
+      if (!capabilities.radarProvider) {
+        debug(`[${pluginId}] radarProvider capability not granted`)
+        return 0 // Failure
+      }
+
+      // Check if app and radarApi are available
+      if (!app || !app.radarApi) {
+        debug(`[${pluginId}] app.radarApi not available`)
+        return 0
+      }
+
+      // Store the registration (we'll update the pluginInstance reference after instance creation)
+      wasmRadarProviders.set(pluginId, {
+        pluginId,
+        providerName,
+        pluginInstance: null  // Will be set after full instance creation
+      })
+
+      // Create RadarProvider object that calls into WASM handlers
+      const radarProvider = {
+        name: providerName,
+        methods: {
+          pluginId: pluginId,
+
+          /**
+           * Get list of radar IDs this provider manages
+           */
+          getRadars: async (): Promise<string[]> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return []
+            }
+
+            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_get_radars', '{}')
+
+            if (result) {
+              try {
+                return JSON.parse(result)
+              } catch (e) {
+                debug(`[${pluginId}] Failed to parse radar_get_radars response: ${e}`)
+                return []
+              }
+            }
+            return []
+          },
+
+          /**
+           * Get radar info for a specific radar
+           * @param radarId The radar ID
+           */
+          getRadarInfo: async (radarId: string): Promise<any | null> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return null
+            }
+
+            const requestJson = JSON.stringify({ radarId })
+            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_get_info', requestJson)
+
+            if (result) {
+              try {
+                return JSON.parse(result)
+              } catch (e) {
+                debug(`[${pluginId}] Failed to parse radar_get_info response: ${e}`)
+                return null
+              }
+            }
+            return null
+          },
+
+          /**
+           * Set radar power state
+           * @param radarId The radar ID
+           * @param state Power state
+           */
+          setPower: async (radarId: string, state: string): Promise<boolean> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return false
+            }
+
+            const requestJson = JSON.stringify({ radarId, state })
+            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_set_power', requestJson)
+
+            if (result) {
+              try {
+                return JSON.parse(result) === true
+              } catch (e) {
+                debug(`[${pluginId}] Failed to parse radar_set_power response: ${e}`)
+                return false
+              }
+            }
+            return false
+          },
+
+          /**
+           * Set radar range
+           * @param radarId The radar ID
+           * @param range Range in meters
+           */
+          setRange: async (radarId: string, range: number): Promise<boolean> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return false
+            }
+
+            const requestJson = JSON.stringify({ radarId, range })
+            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_set_range', requestJson)
+
+            if (result) {
+              try {
+                return JSON.parse(result) === true
+              } catch (e) {
+                debug(`[${pluginId}] Failed to parse radar_set_range response: ${e}`)
+                return false
+              }
+            }
+            return false
+          },
+
+          /**
+           * Set radar gain
+           * @param radarId The radar ID
+           * @param gain Gain settings
+           */
+          setGain: async (radarId: string, gain: { auto: boolean; value?: number }): Promise<boolean> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return false
+            }
+
+            const requestJson = JSON.stringify({ radarId, gain })
+            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_set_gain', requestJson)
+
+            if (result) {
+              try {
+                return JSON.parse(result) === true
+              } catch (e) {
+                debug(`[${pluginId}] Failed to parse radar_set_gain response: ${e}`)
+                return false
+              }
+            }
+            return false
+          },
+
+          /**
+           * Set multiple radar controls at once
+           * @param radarId The radar ID
+           * @param controls Controls to update
+           */
+          setControls: async (radarId: string, controls: any): Promise<boolean> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return false
+            }
+
+            const requestJson = JSON.stringify({ radarId, controls })
+            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_set_controls', requestJson)
+
+            if (result) {
+              try {
+                return JSON.parse(result) === true
+              } catch (e) {
+                debug(`[${pluginId}] Failed to parse radar_set_controls response: ${e}`)
+                return false
+              }
+            }
+            return false
+          }
+        }
+      }
+
+      // Register with Signal K RadarApi
+      app.radarApi.register(pluginId, radarProvider)
+
+      debug(`[${pluginId}] Successfully registered as radar provider: ${providerName}`)
+      return 1 // Success
+    } catch (error) {
+      debug(`Plugin register radar provider error: ${error}`)
+      return 0
+    }
+  }
+}

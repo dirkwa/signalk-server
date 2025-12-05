@@ -8,6 +8,7 @@ import Debug from 'debug'
 import { WasmCapabilities } from '../types'
 import { createResourceProviderBinding } from './resource-provider'
 import { createWeatherProviderBinding } from './weather-provider'
+import { createRadarProviderBinding } from './radar-provider'
 import { socketManager } from './socket-manager'
 
 const debug = Debug('signalk:wasm:bindings')
@@ -354,6 +355,9 @@ export function createEnvImports(options: EnvImportsOptions): Record<string, any
 
     // Weather Provider Registration
     sk_register_weather_provider: createWeatherProviderBinding(pluginId, capabilities, app, readUtf8String),
+
+    // Radar Provider Registration
+    sk_register_radar_provider: createRadarProviderBinding(pluginId, capabilities, app, readUtf8String),
 
     // ==========================================================================
     // Raw Socket API (for radar, NMEA, etc.)

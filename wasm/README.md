@@ -116,6 +116,8 @@ WASM plugins declare required capabilities in `package.json`:
 
 ```json
 {
+  "name": "my-wasm-plugin",
+  "wasmManifest": "plugin.wasm",
   "wasmCapabilities": {
     "dataRead": true,
     "dataWrite": true,
@@ -125,6 +127,8 @@ WASM plugins declare required capabilities in `package.json`:
   }
 }
 ```
+
+> **Note**: The **`wasmManifest`** field is what identifies a package as a WASM plugin. The package name can be anything - there's no requirement for a specific scope like `@signalk/`.
 
 ## Usage
 
@@ -181,6 +185,7 @@ await runtime.reloadPlugin('my-wasm-plugin')
 **Phase 3 (Provider APIs) - ✅ COMPLETE**
 - ✅ Resource Providers - WASM plugins can serve Signal K resources
 - ✅ Weather Providers - Integration with Weather API
+- ✅ Radar Providers - Integration with Radar API at `/signalk/v2/api/vessels/self/radars`
 - ✅ Delta Subscriptions - WASM plugins receive real-time deltas via `delta_handler`
 - ✅ MBTiles chart serving (better-sqlite3)
 
