@@ -17,6 +17,7 @@ export interface WasmCapabilities {
   httpEndpoints?: boolean
   resourceProvider?: boolean  // Can register as a resource provider
   weatherProvider?: boolean   // Can register as a weather provider
+  radarProvider?: boolean     // Can register as a radar provider
   rawSockets?: boolean        // Can open UDP/TCP sockets for radar, NMEA, etc.
 }
 
@@ -81,6 +82,16 @@ export interface WasmResourceProvider {
  * Weather provider registration from a WASM plugin
  */
 export interface WasmWeatherProvider {
+  pluginId: string
+  providerName: string
+  // Reference to the plugin instance for calling handlers
+  pluginInstance: WasmPluginInstance | null
+}
+
+/**
+ * Radar provider registration from a WASM plugin
+ */
+export interface WasmRadarProvider {
   pluginId: string
   providerName: string
   // Reference to the plugin instance for calling handlers

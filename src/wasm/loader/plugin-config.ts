@@ -40,9 +40,9 @@ export async function updateWasmPluginConfig(
   debug(`updateWasmPluginConfig: Config file path: ${storagePaths.configFile}`)
 
   const config = {
+    configuration: configuration ?? {},  // Ensure configuration is always an object, never undefined
     enabled: plugin.enabled,
-    enableDebug: plugin.enableDebug,
-    configuration
+    enableDebug: plugin.enableDebug
   }
   debug(`updateWasmPluginConfig: Writing config to disk: ${JSON.stringify(config)}`)
   writePluginConfig(storagePaths.configFile, config)
@@ -88,9 +88,9 @@ export async function setWasmPluginEnabled(
   debug(`setWasmPluginEnabled: Config file path: ${storagePaths.configFile}`)
 
   const config = {
+    configuration: plugin.configuration ?? {},  // Ensure configuration is always an object, never undefined
     enabled,
-    enableDebug: plugin.enableDebug,
-    configuration: plugin.configuration
+    enableDebug: plugin.enableDebug
   }
   debug(`setWasmPluginEnabled: Writing config to disk: ${JSON.stringify(config)}`)
   writePluginConfig(storagePaths.configFile, config)

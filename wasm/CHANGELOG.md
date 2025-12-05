@@ -2,6 +2,26 @@
 
 All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
+## [2.19.0+beta1wasm11] - 2025-12-06
+
+### Bug Fixes
+
+- **src/modules.ts**: Fixed module loading error when `.package-lock.json` exists in node_modules. Changed filter from `name !== '.bin'` to `!name.startsWith('.')` to exclude all hidden files/directories.
+
+- **src/modules.ts**: Fixed cryptic "Unexpected token '<'" JSON parse errors when npm registry returns HTML error pages. Added `res.ok` checks before attempting to parse JSON responses in `searchByKeyword()` and `getLatestServerVersion()`.
+
+- **src/wasm/loader/plugin-config.ts**: Fixed WASM plugin config files missing `configuration` key. When configuration was undefined, JSON.stringify omitted it, causing the Plugin Config UI to malfunction. Now uses `configuration ?? {}` to ensure the key is always present. Config file format: `{ "configuration": {}, "enabled": true, "enableDebug": false }`.
+
+### New Features
+
+- **Radar API**: Added new Radar API at `/signalk/v2/api/vessels/self/radars` following the Weather API provider pattern. Supports both Node.js and WASM plugins as radar data providers.
+  - New files: `packages/server-api/src/radarapi.ts`, `src/api/radar/index.ts`, `src/api/radar/openApi.json`, `src/wasm/bindings/radar-provider.ts`
+  - Added `radarProvider` capability to WASM plugins
+
+### Documentation
+
+- **wasm/WASM_PLUGIN_DEV_GUIDE.md**: Added warnings about using exact FFI function names. Clarified that plugins must use `sk_debug` (not `sk_log_debug/info/warn`), `sk_handle_message` (not `sk_emit_delta`), and `sk_udp_recv` (not `sk_udp_recv_from`).
+
 ## [2.19.0+beta1wasm10] - 2025-12-05
 
 ### Added - Delta Subscription for WASM Plugins
