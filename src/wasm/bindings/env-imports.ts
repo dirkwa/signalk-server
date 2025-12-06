@@ -8,7 +8,8 @@ import Debug from 'debug'
 import { WasmCapabilities } from '../types'
 import { createResourceProviderBinding } from './resource-provider'
 import { createWeatherProviderBinding } from './weather-provider'
-import { createRadarProviderBinding } from './radar-provider'
+import { createRadarProviderBinding, createRadarEmitSpokesBinding } from './radar-provider'
+import { createBinaryStreamBinding, createBinaryDataReader } from './binary-stream'
 import { socketManager } from './socket-manager'
 
 const debug = Debug('signalk:wasm:bindings')
@@ -46,6 +47,7 @@ export function createEnvImports(options: EnvImportsOptions): Record<string, any
   const { pluginId, capabilities, app, memoryRef, rawExports, asLoaderInstance } = options
 
   const readUtf8String = createUtf8Reader(memoryRef)
+  const readBinaryData = createBinaryDataReader(memoryRef)
 
   const envImports: Record<string, any> = {
     // AssemblyScript runtime requirements
@@ -358,6 +360,32 @@ export function createEnvImports(options: EnvImportsOptions): Record<string, any
 
     // Radar Provider Registration
     sk_register_radar_provider: createRadarProviderBinding(pluginId, capabilities, app, readUtf8String),
+
+    // ==========================================================================
+    // Binary Stream API (for high-frequency data streaming)
+    // ==========================================================================
+
+    /**
+     * Emit binary data to a stream
+     * General-purpose binary streaming for any plugin
+     * @param streamIdPtr - Pointer to stream ID string
+     * @param streamIdLen - Length of stream ID
+     * @param dataPtr - Pointer to binary data
+     * @param dataLen - Length of binary data
+     * @returns 1 on success, 0 on failure
+     */
+    sk_emit_binary_stream: createBinaryStreamBinding(pluginId, app, readUtf8String, readBinaryData),
+
+    /**
+     * Emit radar spoke data
+     * Convenience wrapper for radar providers
+     * @param radarIdPtr - Pointer to radar ID string
+     * @param radarIdLen - Length of radar ID
+     * @param spokeDataPtr - Pointer to binary spoke data (protobuf)
+     * @param spokeDataLen - Length of spoke data
+     * @returns 1 on success, 0 on failure
+     */
+    sk_radar_emit_spokes: createRadarEmitSpokesBinding(pluginId, capabilities, app, readUtf8String, readBinaryData),
 
     // ==========================================================================
     // Raw Socket API (for radar, NMEA, etc.)

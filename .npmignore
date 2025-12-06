@@ -67,6 +67,7 @@ packages
 
 # Build artifacts from build-docker.yml workflow
 *.tgz
+!packages/server-api/signalk-server-api-2.10.2.tgz
 
 publishing.md
 

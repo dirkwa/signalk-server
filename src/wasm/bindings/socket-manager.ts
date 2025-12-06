@@ -26,8 +26,8 @@ interface BufferedDatagram {
  * Pending socket option to apply after bind
  */
 interface PendingOption {
-  type: 'broadcast' | 'multicastTTL' | 'multicastLoopback'
-  value: boolean | number
+  type: 'broadcast' | 'multicastTTL' | 'multicastLoopback' | 'joinMulticast' | 'leaveMulticast'
+  value: boolean | number | { multicastAddress: string; interfaceAddress?: string }
 }
 
 /**
@@ -142,6 +142,24 @@ class SocketManager {
               } else if (option.type === 'multicastLoopback') {
                 managed.socket.setMulticastLoopback(option.value as boolean)
                 debug(`[${managed.pluginId}] Applied deferred setMulticastLoopback(${option.value})`)
+              } else if (option.type === 'joinMulticast') {
+                const { multicastAddress, interfaceAddress } = option.value as { multicastAddress: string; interfaceAddress?: string }
+                if (interfaceAddress) {
+                  managed.socket.addMembership(multicastAddress, interfaceAddress)
+                } else {
+                  managed.socket.addMembership(multicastAddress)
+                }
+                managed.multicastGroups.add(multicastAddress)
+                debug(`[${managed.pluginId}] Applied deferred joinMulticast(${multicastAddress})`)
+              } else if (option.type === 'leaveMulticast') {
+                const { multicastAddress, interfaceAddress } = option.value as { multicastAddress: string; interfaceAddress?: string }
+                if (interfaceAddress) {
+                  managed.socket.dropMembership(multicastAddress, interfaceAddress)
+                } else {
+                  managed.socket.dropMembership(multicastAddress)
+                }
+                managed.multicastGroups.delete(multicastAddress)
+                debug(`[${managed.pluginId}] Applied deferred leaveMulticast(${multicastAddress})`)
               }
             } catch (optionError) {
               debug(`[${managed.pluginId}] Error applying deferred option ${option.type}: ${optionError}`)
@@ -174,6 +192,16 @@ class SocketManager {
       return -1
     }
 
+    // If socket is not yet bound, defer the multicast join until bind completes
+    if (!managed.bound) {
+      debug(`[${managed.pluginId}] Deferring joinMulticast(${multicastAddress}) until socket is bound`)
+      managed.pendingOptions.push({
+        type: 'joinMulticast',
+        value: { multicastAddress, interfaceAddress }
+      })
+      return 0
+    }
+
     try {
       if (interfaceAddress) {
         managed.socket.addMembership(multicastAddress, interfaceAddress)
@@ -201,6 +229,16 @@ class SocketManager {
     if (!managed) {
       debug(`Socket ${socketId} not found`)
       return -1
+    }
+
+    // If socket is not yet bound, defer the multicast leave until bind completes
+    if (!managed.bound) {
+      debug(`[${managed.pluginId}] Deferring leaveMulticast(${multicastAddress}) until socket is bound`)
+      managed.pendingOptions.push({
+        type: 'leaveMulticast',
+        value: { multicastAddress, interfaceAddress }
+      })
+      return 0
     }
 
     try {
