@@ -89,26 +89,38 @@ export async function callWasmRadarHandler(
         return null
       }
 
-      const requestBytes = Buffer.from(requestJson, 'utf8')
-      const requestPtr = rawExports.allocate(requestBytes.length)
       const responseMaxLen = 65536 // 64KB response buffer
       const responsePtr = rawExports.allocate(responseMaxLen)
-
-      // Write request to WASM memory
       const memory = rawExports.memory as WebAssembly.Memory
-      const memView = new Uint8Array(memory.buffer)
-      memView.set(requestBytes, requestPtr)
 
-      // Call handler: (request_ptr, request_len, response_ptr, response_max_len) -> written_len
-      const writtenLen = rawExports[handlerName](requestPtr, requestBytes.length, responsePtr, responseMaxLen)
+      let writtenLen: number
+
+      // radar_get_radars takes only output buffer params: (output_ptr, output_len) -> written_len
+      if (handlerName === 'radar_get_radars') {
+        writtenLen = rawExports[handlerName](responsePtr, responseMaxLen)
+      } else {
+        // Other handlers take request + output: (request_ptr, request_len, response_ptr, response_max_len) -> written_len
+        const requestBytes = Buffer.from(requestJson, 'utf8')
+        const requestPtr = rawExports.allocate(requestBytes.length)
+
+        // Write request to WASM memory
+        const memView = new Uint8Array(memory.buffer)
+        memView.set(requestBytes, requestPtr)
+
+        writtenLen = rawExports[handlerName](requestPtr, requestBytes.length, responsePtr, responseMaxLen)
+
+        // Deallocate request buffer
+        if (typeof rawExports.deallocate === 'function') {
+          rawExports.deallocate(requestPtr, requestBytes.length)
+        }
+      }
 
       // Read response from WASM memory
       const responseBytes = new Uint8Array(memory.buffer, responsePtr, writtenLen)
       const responseJson = new TextDecoder('utf-8').decode(responseBytes)
 
-      // Deallocate buffers
+      // Deallocate response buffer
       if (typeof rawExports.deallocate === 'function') {
-        rawExports.deallocate(requestPtr, requestBytes.length)
         rawExports.deallocate(responsePtr, responseMaxLen)
       }
 
@@ -379,6 +391,69 @@ export function createRadarProviderBinding(
     } catch (error) {
       debug(`Plugin register radar provider error: ${error}`)
       return 0
+    }
+  }
+}
+
+/**
+ * Create the sk_radar_emit_spokes host binding
+ *
+ * Convenience wrapper for radar plugins to emit binary spoke data.
+ * Maps to sk_emit_binary_stream with "radars/{radarId}" stream ID format.
+ *
+ * @param pluginId - Plugin identifier
+ * @param capabilities - Plugin capabilities
+ * @param app - SignalK application instance
+ * @param readUtf8String - Function to read UTF-8 strings from WASM memory
+ * @param readBinaryData - Function to read binary data from WASM memory
+ * @returns FFI binding function
+ */
+export function createRadarEmitSpokesBinding(
+  pluginId: string,
+  capabilities: { radarProvider?: boolean },
+  app: any,
+  readUtf8String: (ptr: number, len: number) => string,
+  readBinaryData: (ptr: number, len: number) => Buffer
+): (radarIdPtr: number, radarIdLen: number, spokeDataPtr: number, spokeDataLen: number) => number {
+  return (radarIdPtr: number, radarIdLen: number, spokeDataPtr: number, spokeDataLen: number): number => {
+    try {
+      // Check radar provider capability
+      if (!capabilities.radarProvider) {
+        debug(`[${pluginId}] radarProvider capability not granted`)
+        return 0
+      }
+
+      // Extract radar ID and spoke data from WASM memory
+      const radarId = readUtf8String(radarIdPtr, radarIdLen)
+      const spokeData = readBinaryData(spokeDataPtr, spokeDataLen)
+
+      // Only log periodically to avoid flooding logs (every ~1000 calls)
+      if (Math.random() < 0.001) {
+        debug(
+          `[${pluginId}] sk_radar_emit_spokes: radarId="${radarId}", ` +
+          `dataLen=${spokeDataLen} bytes`
+        )
+      }
+
+      // Validate radar belongs to this plugin
+      const provider = wasmRadarProviders.get(pluginId)
+      if (!provider || !provider.pluginInstance) {
+        debug(`[${pluginId}] Radar provider instance not ready`)
+        return 0
+      }
+
+      // Use general binary stream with radar stream ID format
+      const streamId = `radars/${radarId}`
+      if (app && app.binaryStreamManager) {
+        app.binaryStreamManager.emitData(streamId, spokeData)
+        return 1 // Success
+      } else {
+        debug(`[${pluginId}] Binary stream manager not available`)
+        return 0 // Failure
+      }
+    } catch (error) {
+      debug(`[${pluginId}] sk_radar_emit_spokes error: ${error}`)
+      return 0 // Failure
     }
   }
 }

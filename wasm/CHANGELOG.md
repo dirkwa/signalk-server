@@ -2,6 +2,109 @@
 
 All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
+## [Unreleased]
+
+## [2.19.0+beta1wasm14] - 2025-12-06
+
+### Bug Fixes
+
+- **src/api/streams/binary-stream-manager.ts**: Fixed WebSocket Error 1008 (backpressure overflow) on radar stream connections. The server was sending up to 100 buffered frames (up to 1MB of data) to new clients immediately upon connection, overwhelming the client's WebSocket buffer and triggering automatic disconnection. Removed the buffered frame sending code ([binary-stream-manager.ts:115-118](../src/api/streams/binary-stream-manager.ts#L115-L118)). Fresh radar data arrives at 60Hz, so new clients receive current data within 16ms anyway without needing historical frames.
+
+### Installation Requirements
+
+- **@signalk/server-api@2.10.2 bundled**: This build bundles `@signalk/server-api@2.10.2` which includes Radar API support. The server-api package is included as a bundled dependency, so you only need to install one tarball:
+
+  ```bash
+  # Install signalk-server (includes bundled server-api 2.10.2)
+  sudo npm install -g signalk-server-2.19.0+beta1wasm14.tgz
+  ```
+
+  **Server-api 2.10.2 includes**:
+  1. Complete Radar API (radarapi.ts with isRadarProvider function)
+  2. Moved `@js-temporal/polyfill` from devDependencies to dependencies (matching npm 2.10.1)
+
+  The server package uses `bundledDependencies` to include server-api 2.10.2 directly in the tarball.
+
+## [2.19.0+beta1wasm13] - 2025-12-06
+
+### Added
+
+- **Binary Stream Support**: New WebSocket streaming infrastructure for high-frequency binary data from WASM plugins
+  - **FFI Bindings**:
+    - `sk_emit_binary_stream(streamId, data, length)` - General-purpose binary streaming for any plugin
+    - `sk_radar_emit_spokes(radarId, data, length)` - Radar-specific convenience wrapper for spoke streaming
+  - **WebSocket Endpoints**:
+    - `GET /signalk/v2/api/streams/:streamId` - General binary stream endpoint
+    - `GET /signalk/v2/api/vessels/self/radars/:id/stream` - Radar spoke stream alias
+  - **Features**:
+    - Ring buffer (100 frames per stream) for late-joining clients
+    - Automatic backpressure handling disconnects slow clients after 30 consecutive drops
+    - Supports both authenticated and unauthenticated connections (respects SignalK security settings)
+    - Binary WebSocket frames (opcode 0x02) for efficient protobuf transmission
+  - **Use Cases**:
+    - Radar spoke streaming at 60Hz (protobuf RadarMessage)
+    - Future: AIS target streaming, sonar data, video frames, sensor arrays
+  - **Documentation**: Updated WASM Plugin Development Guide with streaming examples for AssemblyScript and Rust
+  - **New Files**:
+    - `src/api/streams/index.ts` - WebSocket upgrade handler for binary streams
+    - `src/api/streams/binary-stream-manager.ts` - Stream manager with ring buffer and backpressure
+    - `src/wasm/bindings/binary-stream.ts` - General FFI binding for binary streaming
+  - **Modified Files**:
+    - `src/api/index.ts` - Initialize binary stream manager
+    - `src/wasm/bindings/env-imports.ts` - Register FFI bindings
+    - `src/wasm/bindings/radar-provider.ts` - Add `sk_radar_emit_spokes` wrapper
+    - `packages/server-api/src/radarapi.ts` - Update `streamUrl` documentation
+
+### Bug Fixes
+
+- **src/api/streams/index.ts**: Fixed `TypeError: ws_1.WebSocketServer is not a constructor` error on WebSocket stream endpoints. The code was using `WebSocketServer` from `ws@8.x` syntax, but SignalK uses `ws@7.5.10` which requires `WebSocket.Server()` instead. Changed import from `import { WebSocketServer } from 'ws'` to `import WebSocket from 'ws'` and updated to use `new WebSocket.Server()`.
+
+- **src/api/streams/index.ts**: Fixed 500 error on WebSocket stream endpoints when SignalK security is disabled. The authentication code was assuming security methods always exist, causing exceptions when security is disabled. Now the endpoint properly supports both security-enabled (authenticated connections) and security-disabled (unauthenticated connections) configurations.
+
+- **src/api/streams/index.ts**: Added comprehensive error logging to WebSocket upgrade handler catch block. Previously, errors were only logged via `debug()` which doesn't show full stack traces, making diagnosis impossible. Now errors are logged to console with full details.
+
+### Installation Requirements
+
+- **@signalk/server-api@2.10.2 bundled**: This build bundles `@signalk/server-api@2.10.2` which includes Radar API support. The server-api package is included as a bundled dependency, so you only need to install one tarball:
+
+  ```bash
+  # Install signalk-server (includes bundled server-api 2.10.2)
+  sudo npm install -g signalk-server-2.19.0+beta1wasm13.tgz
+  ```
+
+  **Server-api 2.10.2 includes**:
+  1. Complete Radar API (radarapi.ts with isRadarProvider function)
+  2. Moved `@js-temporal/polyfill` from devDependencies to dependencies (matching npm 2.10.1)
+
+  The server package uses `bundledDependencies` to include server-api 2.10.2 directly in the tarball.
+
+## [2.19.0+beta1wasm12] - 2025-12-06
+
+### Bug Fixes
+
+- **src/wasm/bindings/radar-provider.ts**: Fixed critical `radar_get_radars` buffer allocation bug. The server was incorrectly passing 4 parameters to `radar_get_radars()`, but the Rust function signature only takes 2 (output buffer pointer and length). This caused the function to receive a 2-byte buffer (the size of the empty `"{}"` request string) instead of the proper 64KB output buffer, resulting in truncated radar lists. Now `radar_get_radars` correctly receives only the output buffer parameters.
+
+- **src/wasm/loader/***: Fixed "Radar provider instance not ready" errors. Added missing `updateRadarProviderInstance()` calls to all 5 plugin loaders (plugin-lifecycle.ts, plugin-registry.ts, standard-loader.ts, jco-loader.ts, component-loader.ts). The update function existed but was never called, leaving the instance reference as `null` from initial registration.
+
+- **src/wasm/bindings/socket-manager.ts**: Fixed UDP socket multicast race condition. When plugins called `sk_udp_bind()` followed immediately by `sk_udp_join_multicast()`, the multicast join would fail with `EINVAL` because Node.js requires sockets to be bound before joining multicast groups. Now multicast join/leave operations are deferred until bind completes, using the same pattern as socket options like `setBroadcast()`.
+
+- **src/wasm/loader/plugin-registry.ts**: Fixed `radarProvider` capability not being parsed from package.json. The capability was defined in the `WasmCapabilities` interface but missing from the capabilities parsing code, meaning radar plugins couldn't actually register as providers even if they declared the capability.
+
+### Installation Requirements
+
+- **@signalk/server-api@2.10.2 bundled**: This build bundles `@signalk/server-api@2.10.2` which includes Radar API support. The server-api package is included as a bundled dependency, so you only need to install one tarball:
+
+  ```bash
+  # Install signalk-server (includes bundled server-api 2.10.2)
+  sudo npm install -g signalk-server-2.19.0+beta1wasm12.tgz
+  ```
+
+  **Server-api 2.10.2 includes**:
+  1. Complete Radar API (radarapi.ts with isRadarProvider function)
+  2. Moved `@js-temporal/polyfill` from devDependencies to dependencies (matching npm 2.10.1)
+
+  The server package uses `bundledDependencies` to include server-api 2.10.2 directly in the tarball.
+
 ## [2.19.0+beta1wasm11] - 2025-12-06
 
 ### Bug Fixes

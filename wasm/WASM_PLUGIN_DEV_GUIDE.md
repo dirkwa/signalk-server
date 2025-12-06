@@ -3678,6 +3678,155 @@ interface RadarControls {
 }
 ```
 
+### Streaming Radar Spokes
+
+WASM radar plugins can stream high-frequency binary spoke data to web clients via WebSocket.
+
+#### Why Streaming?
+
+Radar spoke data arrives at ~60Hz (2048 spokes/rotation × 30-60 RPM). Emitting each spoke as a Signal K delta would be inefficient. Instead, plugins stream binary protobuf data directly to clients.
+
+#### AssemblyScript Example
+
+```typescript
+import { sk_radar_emit_spokes } from './signalk-api';
+
+// Called when spoke data received via UDP multicast
+function processSpokeData(radarId: string, spokeProtobuf: Uint8Array): void {
+  // Stream spoke to connected WebSocket clients
+  const result = sk_radar_emit_spokes(
+    radarId,
+    spokeProtobuf.buffer,
+    spokeProtobuf.byteLength
+  );
+
+  if (result === 0) {
+    sk_debug('Failed to emit spoke - no clients connected or error');
+  }
+}
+
+// Example: Process UDP packet and emit spoke
+export function poll(): i32 {
+  const socketId = getRadarSocketId();
+  const datagram = sk_udp_recv(socketId);
+
+  if (datagram) {
+    // Decode spoke from UDP packet (Halo/DRS protocol)
+    const spoke = decodeRadarSpoke(datagram.data);
+
+    // Encode as protobuf RadarMessage
+    const protobuf = encodeRadarMessage(spoke);
+
+    // Stream to clients
+    sk_radar_emit_spokes("radar-0", protobuf.buffer, protobuf.byteLength);
+  }
+
+  return 0;
+}
+```
+
+#### Rust Example
+
+```rust
+// In your FFI declarations
+extern "C" {
+    fn sk_radar_emit_spokes(
+        radar_id_ptr: *const u8,
+        radar_id_len: usize,
+        spoke_data_ptr: *const u8,
+        spoke_data_len: usize
+    ) -> i32;
+}
+
+// Helper function
+pub fn emit_spoke(radar_id: &str, spoke_data: &[u8]) -> bool {
+    unsafe {
+        let result = sk_radar_emit_spokes(
+            radar_id.as_ptr(),
+            radar_id.len(),
+            spoke_data.as_ptr(),
+            spoke_data.len()
+        );
+        result == 1
+    }
+}
+
+// Usage in poll() or callback
+#[no_mangle]
+pub extern "C" fn poll() -> i32 {
+    // Receive spoke data from UDP
+    if let Some(spoke_data) = receive_radar_spoke() {
+        // Encode as protobuf RadarMessage
+        let protobuf = encode_radar_message(&spoke_data);
+
+        // Stream to clients
+        emit_spoke("radar-0", &protobuf);
+    }
+    0
+}
+```
+
+#### Client Connection
+
+Web clients connect to the built-in stream endpoint:
+
+```javascript
+// Get radar info
+const response = await fetch('/signalk/v2/api/vessels/self/radars/radar-0');
+const radar = await response.json();
+
+// Connect to WebSocket stream
+// Use streamUrl if present (external server), otherwise built-in endpoint
+const wsUrl = radar.streamUrl ??
+  `ws://${location.host}/signalk/v2/api/vessels/self/radars/radar-0/stream`;
+
+const ws = new WebSocket(wsUrl);
+ws.binaryType = 'arraybuffer';
+
+ws.onmessage = (event) => {
+  // Decode binary protobuf RadarMessage
+  const spokeData = new Uint8Array(event.data);
+  const radarMessage = RadarMessage.decode(spokeData); // protobuf.js
+
+  // Render spoke on canvas/WebGL
+  renderSpoke(radarMessage);
+};
+```
+
+#### Protobuf Format
+
+The spoke data should be encoded as protobuf `RadarMessage` (or your custom format):
+
+```protobuf
+message RadarMessage {
+  string radar_id = 1;
+  float angle = 2;           // Spoke angle (0-360 degrees)
+  int32 range = 3;           // Range in meters
+  bytes samples = 4;         // Radar return samples (0-255 intensity)
+  int64 timestamp_ms = 5;    // Timestamp in milliseconds
+}
+```
+
+#### Stream Behavior
+
+- **Buffering**: Server buffers last 100 spokes per radar for late-joining clients
+- **Backpressure**: Slow clients are auto-disconnected after 30 consecutive dropped frames
+- **Authentication**: Streams use SignalK's existing security (cookies/tokens)
+- **Binary WebSocket**: Frames are sent as binary (opcode 0x02), not JSON
+
+#### Advanced: General Binary Streaming
+
+For custom binary streams beyond radar (e.g., AIS targets, sonar, video):
+
+```typescript
+// General-purpose streaming
+const streamId = `plugins/${myPluginId}/custom-data`;
+sk_emit_binary_stream(streamId, binaryData.buffer, binaryData.byteLength);
+
+// Clients connect to:
+// ws://server/signalk/v2/api/streams/plugins/{pluginId}/custom-data
+```
+
 ### Stream URL Strategy
 
 When `streamUrl` is present in RadarInfo:

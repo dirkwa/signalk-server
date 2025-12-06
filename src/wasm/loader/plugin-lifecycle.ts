@@ -12,6 +12,7 @@ import { getWasmRuntime } from '../wasm-runtime'
 import { backwardsCompat } from './plugin-routes'
 import { updateResourceProviderInstance } from '../bindings/resource-provider'
 import { updateWeatherProviderInstance } from '../bindings/weather-provider'
+import { updateRadarProviderInstance } from '../bindings/radar-provider'
 import { initializeChartsFromDisk } from '../bindings/mbtiles-handler'
 import { socketManager } from '../bindings/socket-manager'
 
@@ -125,9 +126,11 @@ export async function startWasmPlugin(app: any, pluginId: string): Promise<void>
     if (plugin.packageName) {
       updateResourceProviderInstance(plugin.packageName, plugin.instance)
       updateWeatherProviderInstance(plugin.packageName, plugin.instance)
+      updateRadarProviderInstance(plugin.packageName, plugin.instance)
     }
     updateResourceProviderInstance(pluginId, plugin.instance)
     updateWeatherProviderInstance(pluginId, plugin.instance)
+    updateRadarProviderInstance(pluginId, plugin.instance)
 
     // For charts-provider plugins, initialize charts from disk into WASM memory
     // This restores charts that were uploaded in previous sessions

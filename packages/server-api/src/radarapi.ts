@@ -89,9 +89,15 @@ export interface RadarInfo {
   /** Color legend for radar display */
   legend?: LegendEntry[]
   /**
-   * WebSocket URL for radar spoke stream.
-   * If absent, clients should connect to /radars/{id}/stream on this server.
-   * If present, clients connect directly to the external URL.
+   * WebSocket URL for radar spoke streaming.
+   *
+   * - If **absent**: Clients use the built-in stream endpoint:
+   *   `ws://server/signalk/v2/api/vessels/self/radars/{id}/stream`
+   *   or `ws://server/signalk/v2/api/streams/radars/{id}`
+   *   (WASM plugins emit spokes via `sk_radar_emit_spokes()` FFI binding)
+   *
+   * - If **present**: Clients connect directly to external URL (backward compat)
+   *   @example "ws://192.168.1.100:3001/stream" (external mayara-server)
    */
   streamUrl?: string
 }

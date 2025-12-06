@@ -9,6 +9,7 @@ import { AutopilotApi } from './autopilot'
 import { RadarApi } from './radar'
 import { HistoryApiHttpRegistry } from './history'
 import { SignalKApiId, WithFeatures } from '@signalk/server-api'
+import { binaryStreamManager, initializeBinaryStreams } from './streams'
 
 export interface ApiResponse {
   state: 'FAILED' | 'COMPLETED' | 'PENDING'
@@ -55,6 +56,12 @@ export const startApis = (
     WithFeatures
 ) => {
   const apiList: Array<SignalKApiId> = []
+
+  // Initialize binary stream manager for WASM plugin streaming
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(app as any).binaryStreamManager = binaryStreamManager
+  initializeBinaryStreams(app as any)
+
   const resourcesApi = new ResourcesApi(app)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(app as any).resourcesApi = resourcesApi
