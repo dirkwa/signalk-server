@@ -83,19 +83,20 @@ curl "http://localhost:3000/signalk/v2/api/weather/warnings?lat=60.17&lon=24.94"
 
 ## Weather Provider vs Resource Provider
 
-| Feature | Weather Provider | Resource Provider |
-|---------|-----------------|-------------------|
-| API Path | `/signalk/v2/api/weather/*` | `/signalk/v2/api/resources/{type}` |
-| Methods | getObservations, getForecasts, getWarnings | list, get, set, delete |
-| Use Case | Standardized weather data | Generic data storage |
-| Capability | `weatherProvider: true` | `resourceProvider: true` |
-| FFI | `sk_register_weather_provider` | `sk_register_resource_provider` |
+| Feature    | Weather Provider                           | Resource Provider                  |
+| ---------- | ------------------------------------------ | ---------------------------------- |
+| API Path   | `/signalk/v2/api/weather/*`                | `/signalk/v2/api/resources/{type}` |
+| Methods    | getObservations, getForecasts, getWarnings | list, get, set, delete             |
+| Use Case   | Standardized weather data                  | Generic data storage               |
+| Capability | `weatherProvider: true`                    | `resourceProvider: true`           |
+| FFI        | `sk_register_weather_provider`             | `sk_register_resource_provider`    |
 
 ## Implementation Details
 
 ### Capability Declaration
 
 In `package.json`:
+
 ```json
 {
   "wasmCapabilities": {
@@ -108,6 +109,7 @@ In `package.json`:
 ### Registration
 
 In plugin `start()`:
+
 ```typescript
 @external("env", "sk_register_weather_provider")
 declare function sk_register_weather_provider(namePtr: usize, nameLen: usize): i32

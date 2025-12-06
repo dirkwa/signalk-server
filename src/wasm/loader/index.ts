@@ -16,14 +16,16 @@ import {
   filterDisabledWasmWebapps
 } from './plugin-lifecycle'
 
-import {
-  updateWasmPluginConfig,
-  setWasmPluginEnabled
-} from './plugin-config'
+import { updateWasmPluginConfig, setWasmPluginEnabled } from './plugin-config'
 
 // Initialize circular dependency resolution
 import { initializeLifecycleFunctions } from './plugin-registry'
-initializeLifecycleFunctions(startWasmPlugin, updateWasmPluginConfig, unloadWasmPlugin, stopWasmPlugin)
+initializeLifecycleFunctions(
+  startWasmPlugin,
+  updateWasmPluginConfig,
+  unloadWasmPlugin,
+  stopWasmPlugin
+)
 
 // Export types
 export * from './types'
@@ -50,10 +52,7 @@ export {
 }
 
 // Export configuration functions
-export {
-  updateWasmPluginConfig,
-  setWasmPluginEnabled
-}
+export { updateWasmPluginConfig, setWasmPluginEnabled }
 
 // Export route setup functions
 export {

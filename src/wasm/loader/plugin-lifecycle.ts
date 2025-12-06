@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * WASM Plugin Lifecycle Operations
  *
@@ -32,11 +35,15 @@ function addPluginWebapp(app: any, plugin: WasmPlugin): void {
     return
   }
 
-  const packageJson = require(`${plugin.packageLocation}/${plugin.packageName}/package.json`)
+  const packageJson = require(
+    `${plugin.packageLocation}/${plugin.packageName}/package.json`
+  )
 
   // Check if this plugin has webapp keywords
   const isWebapp = packageJson.keywords?.includes('signalk-webapp')
-  const isEmbeddableWebapp = packageJson.keywords?.includes('signalk-embeddable-webapp')
+  const isEmbeddableWebapp = packageJson.keywords?.includes(
+    'signalk-embeddable-webapp'
+  )
 
   if (!isWebapp && !isEmbeddableWebapp) {
     return
@@ -53,7 +60,9 @@ function addPluginWebapp(app: any, plugin: WasmPlugin): void {
   }
 
   if (isEmbeddableWebapp) {
-    const existing = app.embeddablewebapps?.find((w: any) => w.name === packageJson.name)
+    const existing = app.embeddablewebapps?.find(
+      (w: any) => w.name === packageJson.name
+    )
     if (!existing) {
       debug(`Adding ${plugin.id} to app.embeddablewebapps`)
       app.embeddablewebapps = app.embeddablewebapps || []
@@ -79,14 +88,19 @@ function removePluginWebapp(app: any, plugin: WasmPlugin): void {
 
   // Remove from embeddablewebapps
   if (app.embeddablewebapps) {
-    app.embeddablewebapps = app.embeddablewebapps.filter((w: any) => w.name !== plugin.packageName)
+    app.embeddablewebapps = app.embeddablewebapps.filter(
+      (w: any) => w.name !== plugin.packageName
+    )
   }
 }
 
 /**
  * Start a WASM plugin
  */
-export async function startWasmPlugin(app: any, pluginId: string): Promise<void> {
+export async function startWasmPlugin(
+  app: any,
+  pluginId: string
+): Promise<void> {
   const plugin = wasmPlugins.get(pluginId)
   if (!plugin) {
     throw new Error(`WASM plugin ${pluginId} not found`)
@@ -136,7 +150,10 @@ export async function startWasmPlugin(app: any, pluginId: string): Promise<void>
     // This restores charts that were uploaded in previous sessions
     if (pluginId.includes('charts-provider') && plugin.configPath) {
       try {
-        const chartCount = await initializeChartsFromDisk(plugin, plugin.configPath)
+        const chartCount = await initializeChartsFromDisk(
+          plugin,
+          plugin.configPath
+        )
         if (chartCount > 0) {
           debug(`Initialized ${chartCount} charts from disk for ${pluginId}`)
         }
@@ -185,7 +202,10 @@ export async function startWasmPlugin(app: any, pluginId: string): Promise<void>
       if (app.signalk && typeof app.signalk.on === 'function') {
         const deltaHandler = (delta: any) => {
           try {
-            if (plugin.status === 'running' && plugin.instance?.exports?.delta_handler) {
+            if (
+              plugin.status === 'running' &&
+              plugin.instance?.exports?.delta_handler
+            ) {
               const deltaJson = JSON.stringify(delta)
               plugin.instance.exports.delta_handler(deltaJson)
             }
@@ -281,7 +301,10 @@ export async function stopWasmPlugin(pluginId: string): Promise<void> {
 /**
  * Unload a WASM plugin completely (remove from memory and unregister routes)
  */
-export async function unloadWasmPlugin(app: any, pluginId: string): Promise<void> {
+export async function unloadWasmPlugin(
+  app: any,
+  pluginId: string
+): Promise<void> {
   const plugin = wasmPlugins.get(pluginId)
   if (!plugin) {
     throw new Error(`WASM plugin ${pluginId} not found`)
@@ -303,7 +326,7 @@ export async function unloadWasmPlugin(app: any, pluginId: string): Promise<void
       const paths = backwardsCompat(`/plugins/${pluginId}`)
 
       // Remove all route handlers for this plugin
-      paths.forEach(path => {
+      paths.forEach((path) => {
         if (app._router && app._router.stack) {
           app._router.stack = app._router.stack.filter((layer: any) => {
             // Remove layers that match this plugin's path
@@ -313,7 +336,7 @@ export async function unloadWasmPlugin(app: any, pluginId: string): Promise<void
               if (typeof routePath === 'string') {
                 return !routePath.startsWith(path)
               } else if (Array.isArray(routePath)) {
-                return !routePath.some(p => p.startsWith(path))
+                return !routePath.some((p) => p.startsWith(path))
               }
               return true
             }
@@ -429,12 +452,15 @@ export async function handleWasmPluginCrash(
   setPluginStatus(plugin, 'crashed')
   plugin.errorMessage = `Crashed: ${error.message}`
 
-  debug(`WASM plugin ${pluginId} crashed (count: ${plugin.crashCount}): ${error.message}`)
+  debug(
+    `WASM plugin ${pluginId} crashed (count: ${plugin.crashCount}): ${error.message}`
+  )
 
   // Give up after 3 crashes in quick succession
   if (plugin.crashCount >= 3) {
     setPluginStatus(plugin, 'error')
-    plugin.errorMessage = 'Plugin repeatedly crashing, automatic restart disabled'
+    plugin.errorMessage =
+      'Plugin repeatedly crashing, automatic restart disabled'
     debug(`Plugin ${pluginId} disabled after 3 crashes`)
     return
   }
@@ -492,7 +518,9 @@ export async function shutdownAllWasmPlugins(): Promise<void> {
 
   // Stop all plugins
   const plugins = Array.from(wasmPlugins.values())
-  debug(`Plugins to shutdown: ${plugins.map(p => `${p.id}(${p.status})`).join(', ')}`)
+  debug(
+    `Plugins to shutdown: ${plugins.map((p) => `${p.id}(${p.status})`).join(', ')}`
+  )
   for (const plugin of plugins) {
     try {
       if (plugin.status === 'running') {
@@ -500,7 +528,9 @@ export async function shutdownAllWasmPlugins(): Promise<void> {
         await stopWasmPlugin(plugin.id)
         debug(`Plugin ${plugin.id} stopped, status now: ${plugin.status}`)
       } else {
-        debug(`Plugin ${plugin.id} not running (status=${plugin.status}), skipping stop`)
+        debug(
+          `Plugin ${plugin.id} not running (status=${plugin.status}), skipping stop`
+        )
       }
     } catch (error) {
       debug(`Error stopping plugin ${plugin.id}:`, error)

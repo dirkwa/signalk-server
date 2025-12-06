@@ -7,6 +7,7 @@ This directory contains the infrastructure for running WebAssembly (WASM/WASIX) 
 ## Architecture
 
 The WASM plugin system runs alongside the existing Node.js plugin system in a hybrid mode:
+
 - **Node.js plugins**: Continue running with full access (unsandboxed)
 - **WASM plugins**: Run in Wasmer sandbox with VFS isolation and capability restrictions
 
@@ -88,12 +89,14 @@ The WASM plugin API is defined in WebAssembly Interface Types (WIT) at:
 `packages/server-api/wit/signalk.wit`
 
 This provides a type-safe, language-agnostic API definition that generates:
+
 - Rust bindings via `wit-bindgen`
 - JavaScript host bindings via `@bytecodealliance/jco`
 
 ## Dependencies
 
 Added to `package.json`:
+
 - `@wasmer/wasi` - WASM runtime with WASI support
 - `@bytecodealliance/jco` - WIT bindings generator
 
@@ -160,6 +163,7 @@ await runtime.reloadPlugin('my-wasm-plugin')
 ## Status
 
 **Phase 1 (Core Infrastructure) - ✅ COMPLETE**
+
 - ✅ Dependencies added (@wasmer/wasi, @assemblyscript/loader, as-fetch)
 - ✅ Runtime initialization implemented (wasm-runtime.ts)
 - ✅ VFS storage layer implemented (wasm-storage.ts)
@@ -173,6 +177,7 @@ await runtime.reloadPlugin('my-wasm-plugin')
 - ✅ Example plugins (hello-assemblyscript, weather-plugin, signalk-logviewer)
 
 **Phase 2 (Extended Features) - ✅ COMPLETE**
+
 - ✅ Refactored loader into modular architecture (6 focused modules)
 - ✅ Fixed Plugin Config UI for disabled plugins
 - ✅ Implemented full runtime enable/disable with unload/reload
@@ -183,6 +188,7 @@ await runtime.reloadPlugin('my-wasm-plugin')
 - ✅ Poll export for periodic plugin execution
 
 **Phase 3 (Provider APIs) - ✅ COMPLETE**
+
 - ✅ Resource Providers - WASM plugins can serve Signal K resources
 - ✅ Weather Providers - Integration with Weather API
 - ✅ Radar Providers - Integration with Radar API at `/signalk/v2/api/vessels/self/radars`
@@ -190,12 +196,14 @@ await runtime.reloadPlugin('my-wasm-plugin')
 - ✅ MBTiles chart serving (better-sqlite3)
 
 **Phase 4 (Language Support) - ✅ PARTIAL**
+
 - ✅ AssemblyScript - Full support with SDK
 - ✅ Rust - Library plugins working (anchor-watch-rust example)
 - ⏳ Go/TinyGo - Documented, not extensively tested
 - ❌ C#/.NET - Not compatible (componentize-dotnet requires Wasmtime, not V8)
 
 **Phase 5 (Testing & Documentation) - ✅ COMPLETE**
+
 - ✅ Regression test suite (test/wasm-plugin-regression.ts)
 - ✅ Comprehensive developer guide (wasm/WASM_PLUGIN_DEV_GUIDE.md)
 - ✅ Changelog with all changes since fork (wasm/CHANGELOG.md)
@@ -240,6 +248,7 @@ This pattern allows `plugin-registry` to call lifecycle functions without direct
 ## Future Enhancements
 
 **Post-Merge Improvements:**
+
 - Plugin dependency resolution
 - Plugin versioning and compatibility checks
 - Performance profiling and optimization
@@ -249,6 +258,7 @@ This pattern allows `plugin-registry` to call lifecycle functions without direct
 - Autopilot API integration
 
 **Known Limitations:**
+
 - C#/.NET not supported (V8/jco incompatibility with componentize-dotnet)
 - Serial ports not yet implemented
 - Autopilot API not yet integrated

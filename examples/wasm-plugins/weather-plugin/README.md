@@ -43,6 +43,7 @@ curl http://localhost:3000/signalk/v2/api/resources/weather/current
 ```
 
 Example response:
+
 ```json
 {
   "current": {
@@ -90,12 +91,12 @@ The easiest way is through the Plugin Config UI:
 
 ### 3. Configure the Plugin
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `apiKey` | string | *(required)* | Your OpenWeatherMap API key |
-| `latitude` | number | 60.1699 | Latitude for weather location |
-| `longitude` | number | 24.9384 | Longitude for weather location |
-| `updateInterval` | number | 600000 | Update interval in ms (10 minutes) |
+| Field            | Type   | Default      | Description                        |
+| ---------------- | ------ | ------------ | ---------------------------------- |
+| `apiKey`         | string | _(required)_ | Your OpenWeatherMap API key        |
+| `latitude`       | number | 60.1699      | Latitude for weather location      |
+| `longitude`      | number | 24.9384      | Longitude for weather location     |
+| `updateInterval` | number | 600000       | Update interval in ms (10 minutes) |
 
 **Important**: You MUST provide a valid OpenWeatherMap API key for the plugin to work.
 
@@ -106,6 +107,7 @@ The easiest way is through the Plugin Config UI:
 3. Check logs: `journalctl -u signalk -f | grep weather`
 
 Expected log output:
+
 ```
 signalk:wasm:runtime Asyncify state after plugin_start: 1
 signalk:wasm:runtime Plugin is in unwound state - waiting for async operation to complete
@@ -175,12 +177,13 @@ weather-plugin/
   "options": {
     "bindings": "esm",
     "exportRuntime": true,
-    "transform": ["as-fetch/transform"]  // ← ENABLES ASYNCIFY!
+    "transform": ["as-fetch/transform"] // ← ENABLES ASYNCIFY!
   }
 }
 ```
 
 **Critical Setting**: `"transform": ["as-fetch/transform"]`
+
 - This enables the Asyncify transform during compilation
 - **Without this, fetchSync() will not work!**
 - Must also have `"bindings": "esm"` for FetchHandler
@@ -194,12 +197,12 @@ weather-plugin/
   "version": "0.2.0",
   "wasmManifest": "build/plugin.wasm",
   "wasmCapabilities": {
-    "network": true,           // ← REQUIRED for as-fetch
+    "network": true, // ← REQUIRED for as-fetch
     "storage": "vfs-only",
     "dataRead": true,
     "dataWrite": true,
     "serialPorts": false,
-    "resourceProvider": true   // ← REQUIRED for resource provider
+    "resourceProvider": true // ← REQUIRED for resource provider
   },
   "dependencies": {
     "as-fetch": "^2.1.4",
@@ -209,6 +212,7 @@ weather-plugin/
 ```
 
 **Critical Settings**:
+
 - `"network": true` - Grants permission to make HTTP requests (required for `fetchSync()`)
 - `"resourceProvider": true` - Grants permission to register as a resource provider
 
@@ -351,7 +355,7 @@ export function resource_delete(requestJson: string): string {
 
 ```typescript
 class ResourceGetRequest {
-  id: string       // Resource ID from URL path
+  id: string // Resource ID from URL path
   property: string // Optional property filter
 
   static parse(json: string): ResourceGetRequest
@@ -408,6 +412,7 @@ npm start
 ### Key Log Messages to Look For
 
 **Successful Asyncify flow:**
+
 ```
 signalk:wasm:runtime Initializing as-fetch handler with exports
 signalk:wasm:runtime Calling plugin_start with config: {...
@@ -419,6 +424,7 @@ signalk:wasm:runtime Async operation completed, plugin execution resumed
 ```
 
 **Config file loading:**
+
 ```
 signalk:wasm:loader Plugin @signalk/weather-plugin-example is enabled, initializing VFS and preparing for startup
 ```
@@ -432,6 +438,7 @@ signalk:wasm:loader Plugin @signalk/weather-plugin-example is enabled, initializ
 **Cause**: Config file path mismatch (fixed in v0.1.8)
 
 **Solution**: Update to latest version. The runtime now:
+
 1. Loads WASM first to get real plugin ID
 2. Uses real ID to find config file
 3. Reuses loaded instance for enabled plugins
@@ -441,6 +448,7 @@ signalk:wasm:loader Plugin @signalk/weather-plugin-example is enabled, initializ
 **Cause**: Missing or incorrect network capability declaration
 
 **Solution**: Ensure `package.json` has:
+
 ```json
 "wasmCapabilities": {
   "network": true
@@ -450,36 +458,41 @@ signalk:wasm:loader Plugin @signalk/weather-plugin-example is enabled, initializ
 ### Asyncify Not Working / fetchSync Hangs
 
 **Causes**:
+
 1. Missing Asyncify transform in `asconfig.json`
 2. Wrong as-fetch import path
 3. Missing `"bindings": "esm"` configuration
 
 **Solution**: Check `asconfig.json`:
+
 ```json
 {
   "options": {
-    "bindings": "esm",           // ← Required
-    "exportRuntime": true,       // ← Required
-    "transform": ["as-fetch/transform"]  // ← Required
+    "bindings": "esm", // ← Required
+    "exportRuntime": true, // ← Required
+    "transform": ["as-fetch/transform"] // ← Required
   }
 }
 ```
 
 And use correct import:
+
 ```typescript
-import { fetchSync } from 'as-fetch/sync'  // ← Correct
+import { fetchSync } from 'as-fetch/sync' // ← Correct
 // NOT: import { fetchSync } from 'as-fetch'
 ```
 
 ### "Failed to fetch weather data"
 
 **Possible Causes**:
+
 1. Invalid API key
 2. No internet connection
 3. OpenWeatherMap API rate limit exceeded
 4. Node.js version < 18 (native fetch not available)
 
 **Solution**:
+
 1. Verify API key at https://openweathermap.org/api
 2. Test URL in browser or curl
 3. Check rate limits (free tier: 60 calls/minute)
@@ -488,6 +501,7 @@ import { fetchSync } from 'as-fetch/sync'  // ← Correct
 ### No Data in Signal K Paths
 
 **Check**:
+
 1. Plugin status in **Server Dashboard**
 2. Debug logs: `journalctl -u signalk -f | grep weather`
 3. Data Browser for `environment.outside.*` paths
@@ -503,8 +517,8 @@ function fetchSync(url: string): Response | null
 
 // Response object
 class Response {
-  status: i32        // HTTP status code
-  text(): string     // Get response body as text
+  status: i32 // HTTP status code
+  text(): string // Get response body as text
 }
 ```
 
@@ -606,6 +620,7 @@ Ideas for your own plugins:
 ### API Rate Limits
 
 OpenWeatherMap free tier:
+
 - 60 calls/minute
 - 1,000,000 calls/month
 
@@ -622,6 +637,7 @@ Default update interval (10 minutes) = ~4,320 calls/month ✅
 ### Network Capability System
 
 The plugin **cannot** make HTTP requests unless:
+
 1. `package.json` declares `"network": true`
 2. User approves the capability (implicit via install)
 3. Runtime grants the capability at load time

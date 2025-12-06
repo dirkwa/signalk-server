@@ -48,13 +48,13 @@ npx @bytecodealliance/jco transpile MyPlugin.wasm -o jco-output --name mymodule 
 ### 4. Try to use in Node.js
 
 ```javascript
-import * as module from './jco-output/mymodule.js';
+import * as module from './jco-output/mymodule.js'
 
-await module.$init;
-console.log('Init complete');
+await module.$init
+console.log('Init complete')
 
 // This crashes:
-const id = module.plugin.pluginId();
+const id = module.plugin.pluginId()
 ```
 
 ## Expected Behavior
@@ -85,6 +85,7 @@ Using `jco print` on the compiled component, we can see:
 ```
 
 The component:
+
 - Exports `_initialize` (WASI reactor initialization)
 - Exports `InitializeModules` (.NET runtime initialization)
 - Has a function table with 3983 entries
@@ -93,6 +94,7 @@ The component:
 ### What jco generates
 
 The generated JavaScript correctly:
+
 1. Instantiates the WASM module
 2. Sets `_initialized = true` after instantiation
 3. Assigns function references: `plugin100PluginId = exports1['signalk:plugin/plugin@1.0.0#plugin-id']`
@@ -104,6 +106,7 @@ When `pluginId()` is called, it invokes the WASM function which internally uses 
 ### Why it works in Wasmtime
 
 In Wasmtime, the `_initialize` function properly populates the indirect call table. In V8 (via jco transpilation), this initialization either:
+
 1. Doesn't happen correctly
 2. Happens but the table isn't shared properly between the shim and core modules
 
@@ -147,4 +150,5 @@ https://github.com/dirkwa/signalk-server/tree/WASM_WASIX/examples/wasm-plugins/a
 **Labels suggestion**: `enhancement`, `runtime-support`, `jco`
 
 # Issue Filed
+
 https://github.com/bytecodealliance/componentize-dotnet/issues/103

@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * WASM Plugin HTTP Route Handlers
  *
@@ -7,7 +10,7 @@
 
 import * as path from 'path'
 import * as express from 'express'
-import { Request, Response, Router } from 'express'
+import { Request, Response } from 'express'
 import { spawn } from 'child_process'
 import * as readline from 'readline'
 import Debug from 'debug'
@@ -40,7 +43,10 @@ export function backwardsCompat(url: string) {
  * Handle /api/logs request directly in Node.js (for signalk-logviewer plugin)
  * This avoids WASM memory buffer limitations (~64KB) when streaming large logs
  */
-export async function handleLogViewerRequest(req: Request, res: Response): Promise<void> {
+export async function handleLogViewerRequest(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const lines = parseInt(req.query.lines as string) || 2000
     const maxLines = Math.min(lines, 50000) // Cap at 50000 lines
@@ -48,7 +54,14 @@ export async function handleLogViewerRequest(req: Request, res: Response): Promi
     debug(`[logviewer] Fetching ${maxLines} log lines via Node.js streaming`)
 
     // Try journalctl first
-    const p = spawn('journalctl', ['-u', 'signalk', '-n', maxLines.toString(), '--output=short-iso', '--no-pager'])
+    const p = spawn('journalctl', [
+      '-u',
+      'signalk',
+      '-n',
+      maxLines.toString(),
+      '--output=short-iso',
+      '--no-pager'
+    ])
 
     const logLines: string[] = []
     let hasError = false
@@ -91,7 +104,11 @@ export async function handleLogViewerRequest(req: Request, res: Response): Promi
 
       // Fallback to reading from file
       try {
-        const tailP = spawn('tail', ['-n', maxLines.toString(), '/var/log/syslog'])
+        const tailP = spawn('tail', [
+          '-n',
+          maxLines.toString(),
+          '/var/log/syslog'
+        ])
         logLines.length = 0 // Clear array
 
         const tailRl = readline.createInterface({
@@ -121,7 +138,9 @@ export async function handleLogViewerRequest(req: Request, res: Response): Promi
       return
     }
 
-    debug(`[logviewer] Retrieved ${logLines.length} log lines, sending response`)
+    debug(
+      `[logviewer] Retrieved ${logLines.length} log lines, sending response`
+    )
 
     // Send response
     res.json({
@@ -143,7 +162,9 @@ export async function handleLogViewerRequest(req: Request, res: Response): Promi
  */
 export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
   if (!plugin.router) {
-    debug(`Warning: Cannot setup plugin-specific routes - no router found for ${plugin.id}`)
+    debug(
+      `Warning: Cannot setup plugin-specific routes - no router found for ${plugin.id}`
+    )
     return
   }
 
@@ -153,8 +174,13 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
   }
 
   // Check for http_endpoints in either AssemblyScript loader or raw WASM exports
-  const hasAsEndpoints = plugin.instance.asLoader && typeof plugin.instance.asLoader.exports.http_endpoints === 'function'
-  const hasRustEndpoints = plugin.instance.instance && typeof (plugin.instance.instance.exports as any).http_endpoints === 'function'
+  const hasAsEndpoints =
+    plugin.instance.asLoader &&
+    typeof plugin.instance.asLoader.exports.http_endpoints === 'function'
+  const hasRustEndpoints =
+    plugin.instance.instance &&
+    typeof (plugin.instance.instance.exports as any).http_endpoints ===
+      'function'
 
   if (!hasAsEndpoints && !hasRustEndpoints) {
     debug(`No custom HTTP endpoints for ${plugin.id}`)
@@ -173,11 +199,16 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
       // AssemblyScript: http_endpoints() returns a string pointer
       const ptr = asLoader.exports.http_endpoints()
       endpointsJson = asLoader.exports.__getString(ptr)
-      debug(`Got http_endpoints from AssemblyScript: ${endpointsJson.substring(0, 200)}`)
+      debug(
+        `Got http_endpoints from AssemblyScript: ${endpointsJson.substring(0, 200)}`
+      )
     } else {
       // Rust: http_endpoints(out_ptr, out_max_len) -> written_len
       const rawExports = plugin.instance.instance.exports as any
-      if (typeof rawExports.allocate === 'function' && typeof rawExports.http_endpoints === 'function') {
+      if (
+        typeof rawExports.allocate === 'function' &&
+        typeof rawExports.http_endpoints === 'function'
+      ) {
         const maxLen = 8192 // 8KB should be plenty for endpoint definitions
         const outPtr = rawExports.allocate(maxLen)
         const writtenLen = rawExports.http_endpoints(outPtr, maxLen)
@@ -191,9 +222,13 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
         if (typeof rawExports.deallocate === 'function') {
           rawExports.deallocate(outPtr, maxLen)
         }
-        debug(`Got http_endpoints from Rust (${writtenLen} bytes): ${endpointsJson.substring(0, 200)}`)
+        debug(
+          `Got http_endpoints from Rust (${writtenLen} bytes): ${endpointsJson.substring(0, 200)}`
+        )
       } else {
-        debug(`http_endpoints export exists but plugin type unknown for ${plugin.id}`)
+        debug(
+          `http_endpoints export exists but plugin type unknown for ${plugin.id}`
+        )
         return
       }
     }
@@ -203,7 +238,11 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
 
     for (const endpoint of endpoints) {
       const { method, path: endpointPath, handler } = endpoint
-      const routeMethod = method.toLowerCase() as 'get' | 'post' | 'put' | 'delete'
+      const routeMethod = method.toLowerCase() as
+        | 'get'
+        | 'post'
+        | 'put'
+        | 'delete'
 
       if (!['get', 'post', 'put', 'delete'].includes(routeMethod)) {
         debug(`Skipping unsupported method: ${method}`)
@@ -217,11 +256,17 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
         let timeout: NodeJS.Timeout | null = null
 
         try {
-          debug(`HTTP ${method} ${endpointPath} called - req.path: ${req.path}, req.url: ${req.url}`)
+          debug(
+            `HTTP ${method} ${endpointPath} called - req.path: ${req.path}, req.url: ${req.url}`
+          )
 
           // SPECIAL CASE: Handle /api/logs directly in Node.js for signalk-logviewer
           // WASM cannot handle large data streams due to memory buffer limitations (~64KB)
-          if (plugin.id === 'signalk-logviewer' && endpointPath === '/api/logs' && method === 'GET') {
+          if (
+            plugin.id === 'signalk-logviewer' &&
+            endpointPath === '/api/logs' &&
+            method === 'GET'
+          ) {
             debug(`Intercepting /api/logs for logviewer - handling in Node.js`)
             return handleLogViewerRequest(req, res)
           }
@@ -236,7 +281,9 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
             headers: req.headers
           })
 
-          debug(`Calling WASM handler ${handler} with context: ${requestContext.substring(0, 200)}`)
+          debug(
+            `Calling WASM handler ${handler} with context: ${requestContext.substring(0, 200)}`
+          )
 
           // Use AssemblyScript loader if available (handles strings automatically)
           const asLoader = plugin.instance!.asLoader
@@ -247,13 +294,18 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
           let handlerTimedOut = false
           timeout = setTimeout(() => {
             handlerTimedOut = true
-            debug(`ERROR: Handler ${handler} exceeded 10 second timeout - responding with error`)
-            debug(`WARNING: WASM execution cannot be interrupted, server may remain partially blocked`)
+            debug(
+              `ERROR: Handler ${handler} exceeded 10 second timeout - responding with error`
+            )
+            debug(
+              `WARNING: WASM execution cannot be interrupted, server may remain partially blocked`
+            )
             // Send error response even though handler is still running
             if (!res.headersSent) {
               res.status(504).json({
                 error: 'Plugin handler timeout',
-                message: 'The WASM plugin took too long to respond. This indicates a performance issue in the plugin code.'
+                message:
+                  'The WASM plugin took too long to respond. This indicates a performance issue in the plugin code.'
               })
             }
           }, 10000) // 10 second hard timeout
@@ -266,25 +318,36 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
             if (typeof handlerFunc !== 'function') {
               debug(`Handler function ${handler} not found in WASM exports`)
               if (timeout) clearTimeout(timeout)
-              return res.status(500).json({ error: `Handler function ${handler} not found` })
+              return res
+                .status(500)
+                .json({ error: `Handler function ${handler} not found` })
             }
 
             // Create an AssemblyScript string in WASM memory using __newString
             const requestPtr = asLoader.exports.__newString(requestContext)
             const requestLen = requestContext.length
 
-            debug(`Calling handler with string ptr=${requestPtr}, len=${requestLen}`)
+            debug(
+              `Calling handler with string ptr=${requestPtr}, len=${requestLen}`
+            )
 
             // Call handler - it returns an AssemblyScript string pointer
             let asStringPtr: number
             try {
               debug(`About to call handler function...`)
               asStringPtr = handlerFunc(requestPtr, requestLen)
-              debug(`Handler function call completed, returned pointer: ${asStringPtr}`)
+              debug(
+                `Handler function call completed, returned pointer: ${asStringPtr}`
+              )
             } catch (handlerError) {
-              const handlerErrMsg = handlerError instanceof Error ? handlerError.message : String(handlerError)
+              const handlerErrMsg =
+                handlerError instanceof Error
+                  ? handlerError.message
+                  : String(handlerError)
               debug(`ERROR: Handler function threw exception: ${handlerErrMsg}`)
-              debug(`Stack: ${handlerError instanceof Error ? handlerError.stack : 'N/A'}`)
+              debug(
+                `Stack: ${handlerError instanceof Error ? handlerError.stack : 'N/A'}`
+              )
               throw new Error(`WASM handler crashed: ${handlerErrMsg}`)
             }
 
@@ -298,23 +361,34 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
             try {
               debug(`About to decode string from pointer ${asStringPtr}...`)
               responseJson = asLoader.exports.__getString(asStringPtr)
-              debug(`String decoded successfully, length: ${responseJson.length}`)
-              debug(`WASM handler returned (via loader): ${responseJson.substring(0, 500)}`)
+              debug(
+                `String decoded successfully, length: ${responseJson.length}`
+              )
+              debug(
+                `WASM handler returned (via loader): ${responseJson.substring(0, 500)}`
+              )
             } catch (decodeError) {
-              const decodeErrMsg = decodeError instanceof Error ? decodeError.message : String(decodeError)
+              const decodeErrMsg =
+                decodeError instanceof Error
+                  ? decodeError.message
+                  : String(decodeError)
               debug(`ERROR: Failed to decode response string: ${decodeErrMsg}`)
               throw new Error(`Failed to decode WASM response: ${decodeErrMsg}`)
             }
           } else {
             // Rust plugins use buffer-based string passing
-            debug(`Using raw exports for handler ${handler} (Rust buffer-based)`)
+            debug(
+              `Using raw exports for handler ${handler} (Rust buffer-based)`
+            )
             const rawExports = plugin.instance!.instance.exports as any
             const handlerFunc = rawExports[handler]
 
             if (typeof handlerFunc !== 'function') {
               debug(`Handler function ${handler} not found in WASM exports`)
               if (timeout) clearTimeout(timeout)
-              return res.status(500).json({ error: `Handler function ${handler} not found` })
+              return res
+                .status(500)
+                .json({ error: `Handler function ${handler} not found` })
             }
 
             // Check if this is a Rust plugin with allocate/deallocate
@@ -331,10 +405,19 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
               memView.set(requestBytes, requestPtr)
 
               // Call handler: (request_ptr, request_len, response_ptr, response_max_len) -> written_len
-              const writtenLen = handlerFunc(requestPtr, requestBytes.length, responsePtr, responseMaxLen)
+              const writtenLen = handlerFunc(
+                requestPtr,
+                requestBytes.length,
+                responsePtr,
+                responseMaxLen
+              )
 
               // Read response from WASM memory
-              const responseBytes = new Uint8Array(memory.buffer, responsePtr, writtenLen)
+              const responseBytes = new Uint8Array(
+                memory.buffer,
+                responsePtr,
+                writtenLen
+              )
               responseJson = new TextDecoder('utf-8').decode(responseBytes)
 
               // Deallocate buffers
@@ -343,7 +426,9 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
                 rawExports.deallocate(responsePtr, responseMaxLen)
               }
 
-              debug(`Rust handler returned ${writtenLen} bytes: ${responseJson.substring(0, 200)}`)
+              debug(
+                `Rust handler returned ${writtenLen} bytes: ${responseJson.substring(0, 200)}`
+              )
             } else {
               // Fallback for unknown plugin types - try direct call
               responseJson = handlerFunc(requestContext)
@@ -371,7 +456,9 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
                 body = JSON.parse(body)
               } catch (e) {
                 // If parsing fails, send the string as-is (might be plain text)
-                debug(`Warning: Could not parse body as JSON, sending as string: ${e}`)
+                debug(
+                  `Warning: Could not parse body as JSON, sending as string: ${e}`
+                )
               }
             }
           }
@@ -381,7 +468,8 @@ export function setupPluginSpecificRoutes(plugin: WasmPlugin): void {
           res.send(body)
         } catch (error) {
           if (timeout) clearTimeout(timeout)
-          const errorMsg = error instanceof Error ? error.message : String(error)
+          const errorMsg =
+            error instanceof Error ? error.message : String(error)
           const stack = error instanceof Error ? error.stack : 'N/A'
           debug(`Error in HTTP endpoint ${method} ${endpointPath}: ${errorMsg}`)
           debug(`Stack trace: ${stack}`)
@@ -404,7 +492,12 @@ export function setupWasmPluginRoutes(
   app: any,
   plugin: WasmPlugin,
   configPath: string,
-  updateWasmPluginConfig: (app: any, pluginId: string, configuration: any, configPath: string) => Promise<void>,
+  updateWasmPluginConfig: (
+    app: any,
+    pluginId: string,
+    configuration: any,
+    configPath: string
+  ) => Promise<void>,
   startWasmPlugin: (app: any, pluginId: string) => Promise<void>,
   unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>,
   stopWasmPlugin: (pluginId: string) => Promise<void>
@@ -430,24 +523,37 @@ export function setupWasmPluginRoutes(
 
       const newConfig = req.body
 
-      debug(`Current plugin state - enabled: ${plugin.enabled}, enableDebug: ${plugin.enableDebug}, configuration: ${JSON.stringify(plugin.configuration)}`)
+      debug(
+        `Current plugin state - enabled: ${plugin.enabled}, enableDebug: ${plugin.enableDebug}, configuration: ${JSON.stringify(plugin.configuration)}`
+      )
 
       // Update enableDebug FIRST (before saving config)
       if (typeof newConfig.enableDebug === 'boolean') {
-        debug(`Updating enableDebug from ${plugin.enableDebug} to ${newConfig.enableDebug}`)
+        debug(
+          `Updating enableDebug from ${plugin.enableDebug} to ${newConfig.enableDebug}`
+        )
         plugin.enableDebug = newConfig.enableDebug
       }
 
       // Update enabled state SECOND (before saving config)
-      const enabledChanged = typeof newConfig.enabled === 'boolean' && newConfig.enabled !== plugin.enabled
+      const enabledChanged =
+        typeof newConfig.enabled === 'boolean' &&
+        newConfig.enabled !== plugin.enabled
       if (enabledChanged) {
         debug(`Updating enabled from ${plugin.enabled} to ${newConfig.enabled}`)
         plugin.enabled = newConfig.enabled
       }
 
       // Update plugin configuration and save everything to disk
-      debug(`Calling updateWasmPluginConfig with: ${JSON.stringify(newConfig.configuration)}`)
-      await updateWasmPluginConfig(app, plugin.id, newConfig.configuration, configPath)
+      debug(
+        `Calling updateWasmPluginConfig with: ${JSON.stringify(newConfig.configuration)}`
+      )
+      await updateWasmPluginConfig(
+        app,
+        plugin.id,
+        newConfig.configuration,
+        configPath
+      )
       debug(`updateWasmPluginConfig completed`)
 
       // Start or stop plugin if enabled state changed
@@ -458,12 +564,26 @@ export function setupWasmPluginRoutes(
             debug(`Plugin was disabled at startup, loading WASM binary now...`)
 
             // Read package.json to get WASM path
-            const packageJson = require(path.join(plugin.packageLocation, plugin.packageName, 'package.json'))
-            const wasmPath = path.join(plugin.packageLocation, plugin.packageName, packageJson.wasmManifest)
+            const packageJson = require(
+              path.join(
+                plugin.packageLocation,
+                plugin.packageName,
+                'package.json'
+              )
+            )
+            const wasmPath = path.join(
+              plugin.packageLocation,
+              plugin.packageName,
+              packageJson.wasmManifest
+            )
             const capabilities = plugin.metadata.capabilities
 
             // Create VFS root
-            const storagePaths = getPluginStoragePaths(configPath, plugin.id, plugin.packageName)
+            const storagePaths = getPluginStoragePaths(
+              configPath,
+              plugin.id,
+              plugin.packageName
+            )
 
             // Load WASM module
             const runtime = getWasmRuntime()
@@ -501,7 +621,9 @@ export function setupWasmPluginRoutes(
         }
       }
 
-      debug(`Final plugin state - enabled: ${plugin.enabled}, status: ${plugin.status}`)
+      debug(
+        `Final plugin state - enabled: ${plugin.enabled}, status: ${plugin.status}`
+      )
 
       const response = `Saved configuration for plugin ${plugin.id}`
       debug(`Sending response: ${response}`)
@@ -518,7 +640,11 @@ export function setupWasmPluginRoutes(
 
   // GET /plugins/:id/config - Get plugin configuration
   router.get('/config', (req: Request, res: Response) => {
-    const storagePaths = getPluginStoragePaths(configPath, plugin.id, plugin.packageName)
+    const storagePaths = getPluginStoragePaths(
+      configPath,
+      plugin.id,
+      plugin.packageName
+    )
     const config = readPluginConfig(storagePaths.configFile)
 
     res.json({
@@ -535,9 +661,12 @@ export function setupWasmPluginRoutes(
     debug(`Setting up MBTiles hybrid routes for ${plugin.id}`)
 
     // Tile serving: GET /tiles/{chartId}/{z}/{x}/{y}
-    router.get('/tiles/:chartId/:z/:x/:y', async (req: Request, res: Response) => {
-      await handleMBTileRequest(req, res, plugin, configPath)
-    })
+    router.get(
+      '/tiles/:chartId/:z/:x/:y',
+      async (req: Request, res: Response) => {
+        await handleMBTileRequest(req, res, plugin, configPath)
+      }
+    )
 
     // File upload: POST /api/charts/upload
     router.post('/api/charts/upload', async (req: Request, res: Response) => {
@@ -550,10 +679,13 @@ export function setupWasmPluginRoutes(
     })
 
     // File deletion (removes the .mbtiles file): DELETE /api/charts/file/:id
-    router.delete('/api/charts/file/:id', async (req: Request, res: Response) => {
-      const chartId = req.params.id
-      await handleChartDelete(req, res, plugin, configPath, chartId)
-    })
+    router.delete(
+      '/api/charts/file/:id',
+      async (req: Request, res: Response) => {
+        const chartId = req.params.id
+        await handleChartDelete(req, res, plugin, configPath, chartId)
+      }
+    )
 
     debug(`MBTiles hybrid routes registered for ${plugin.id}`)
   }

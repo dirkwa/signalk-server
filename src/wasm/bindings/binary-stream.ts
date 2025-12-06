@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Binary Stream FFI Bindings
  *
@@ -12,7 +13,9 @@ const debug = Debug('signalk:wasm:binary-stream')
 /**
  * Helper to read binary data from WASM memory
  */
-export function createBinaryDataReader(memoryRef: { current: WebAssembly.Memory | null }) {
+export function createBinaryDataReader(memoryRef: {
+  current: WebAssembly.Memory | null
+}) {
   return (ptr: number, len: number): Buffer => {
     if (!memoryRef.current) {
       throw new Error('WASM memory not initialized')
@@ -39,8 +42,18 @@ export function createBinaryStreamBinding(
   app: any,
   readUtf8String: (ptr: number, len: number) => string,
   readBinaryData: (ptr: number, len: number) => Buffer
-): (streamIdPtr: number, streamIdLen: number, dataPtr: number, dataLen: number) => number {
-  return (streamIdPtr: number, streamIdLen: number, dataPtr: number, dataLen: number): number => {
+): (
+  streamIdPtr: number,
+  streamIdLen: number,
+  dataPtr: number,
+  dataLen: number
+) => number {
+  return (
+    streamIdPtr: number,
+    streamIdLen: number,
+    dataPtr: number,
+    dataLen: number
+  ): number => {
     try {
       // Extract stream ID and data from WASM memory
       const streamId = readUtf8String(streamIdPtr, streamIdLen)
@@ -48,7 +61,7 @@ export function createBinaryStreamBinding(
 
       debug(
         `[${pluginId}] sk_emit_binary_stream: streamId="${streamId}", ` +
-        `dataLen=${dataLen} bytes`
+          `dataLen=${dataLen} bytes`
       )
 
       // Validate stream ID format
@@ -61,7 +74,7 @@ export function createBinaryStreamBinding(
       if (!validRadarStream && !validPluginStream) {
         debug(
           `[${pluginId}] Invalid stream ID: "${streamId}". ` +
-          `Expected "radars/{radarId}" or "plugins/${pluginId}/{streamName}"`
+            `Expected "radars/{radarId}" or "plugins/${pluginId}/{streamName}"`
         )
         return 0 // Failure
       }

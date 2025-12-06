@@ -282,7 +282,15 @@
             "description": "WebSocket URL for spoke stream. If absent, use /radars/{id}/stream"
           }
         },
-        "required": ["id", "name", "status", "spokesPerRevolution", "maxSpokeLen", "range", "controls"]
+        "required": [
+          "id",
+          "name",
+          "status",
+          "spokesPerRevolution",
+          "maxSpokeLen",
+          "range",
+          "controls"
+        ]
       },
       "RadarControls": {
         "type": "object",

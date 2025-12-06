@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Binary Stream Manager
  *
@@ -57,7 +58,9 @@ export class BinaryStreamManager {
     // Log periodically
     if (this.emitCount % 500 === 0) {
       const clients = this.clients.get(streamId)
-      console.log(`[binaryStreamManager] emitData #${this.emitCount}: streamId="${streamId}", dataLen=${data.length}, clients=${clients?.size || 0}`)
+      console.log(
+        `[binaryStreamManager] emitData #${this.emitCount}: streamId="${streamId}", dataLen=${data.length}, clients=${clients?.size || 0}`
+      )
     }
 
     // Add to ring buffer
@@ -137,7 +140,9 @@ export class BinaryStreamManager {
       if (client.ws === ws) {
         clients.delete(client)
         debug(`Removed client from stream: ${streamId}`)
-        console.log(`[binaryStreamManager] removeClient: streamId="${streamId}", remaining=${clients.size}`)
+        console.log(
+          `[binaryStreamManager] removeClient: streamId="${streamId}", remaining=${clients.size}`
+        )
         break
       }
     }
@@ -186,7 +191,7 @@ export class BinaryStreamManager {
       if (client.backpressureDropCount > MAX_CONSECUTIVE_DROPS) {
         debug(
           `Disconnecting slow client on stream ${client.streamId} ` +
-          `(dropped ${client.backpressureDropCount} frames)`
+            `(dropped ${client.backpressureDropCount} frames)`
         )
         try {
           client.ws.close(1008, 'Client cannot keep up with data rate')

@@ -59,6 +59,7 @@ if (fetchHandler && capabilities.network) {
 ```
 
 **Key Points:**
+
 - FetchHandler needs a "main function" callback to resume WASM execution
 - This callback is set up BEFORE calling plugin_start to avoid race conditions
 - The callback re-calls the WASM function to continue from the rewind state
@@ -87,7 +88,10 @@ startFunc = async (config: string) => {
 
   asyncifyResumeFunction = () => {
     debug(`Re-calling plugin_start to resume from rewind state`)
-    const resumeResult = asLoaderInstance.exports.plugin_start(configPtr, configLen)
+    const resumeResult = asLoaderInstance.exports.plugin_start(
+      configPtr,
+      configLen
+    )
     if (resumePromiseResolve) {
       resumePromiseResolve()
     }
@@ -103,7 +107,9 @@ startFunc = async (config: string) => {
     debug(`Asyncify state after plugin_start: ${state}`)
 
     if (state === 1) {
-      debug(`Plugin is in unwound state - waiting for async operation to complete`)
+      debug(
+        `Plugin is in unwound state - waiting for async operation to complete`
+      )
       await resumePromise
       debug(`Async operation completed, plugin execution resumed`)
     } else {
@@ -120,6 +126,7 @@ startFunc = async (config: string) => {
 ```
 
 **Key Points:**
+
 - **Race Condition Prevention**: Promise and callback are set up BEFORE calling plugin_start
 - If set up AFTER, fast HTTP responses could complete before callback is registered
 - Checks Asyncify state after initial call to detect if async operation started
@@ -155,7 +162,11 @@ In `src/wasm/loader/plugin-registry.ts` (lines 85-110):
 ```typescript
 // Load WASM module temporarily just to get the plugin ID
 // We need the real plugin ID to find the correct config file
-const tempVfsRoot = path.join(configPath, 'plugin-config-data', '.temp-' + packageName.replace(/\//g, '-'))
+const tempVfsRoot = path.join(
+  configPath,
+  'plugin-config-data',
+  '.temp-' + packageName.replace(/\//g, '-')
+)
 if (!fs.existsSync(tempVfsRoot)) {
   fs.mkdirSync(tempVfsRoot, { recursive: true })
 }
@@ -181,6 +192,7 @@ const savedConfig = readPluginConfig(storagePaths.configFile)
 ```
 
 **Key Points:**
+
 - Always load WASM first to get real plugin ID
 - Use real plugin ID to locate config file
 - Reuse loaded instance for enabled plugins (no double-loading)
@@ -206,12 +218,13 @@ const savedConfig = readPluginConfig(storagePaths.configFile)
   "options": {
     "bindings": "esm",
     "exportRuntime": true,
-    "transform": ["as-fetch/transform"]  // ← CRITICAL: Enables Asyncify
+    "transform": ["as-fetch/transform"] // ← CRITICAL: Enables Asyncify
   }
 }
 ```
 
 **Critical Settings:**
+
 - `"transform": ["as-fetch/transform"]` - Enables Asyncify transform
 - `"bindings": "esm"` - Generates ESM bindings for FetchHandler
 - `"exportRuntime": true` - Exports Asyncify state functions
@@ -224,7 +237,7 @@ const savedConfig = readPluginConfig(storagePaths.configFile)
   "version": "0.1.8",
   "wasmManifest": "build/plugin.wasm",
   "wasmCapabilities": {
-    "network": true,        // ← Required for as-fetch
+    "network": true, // ← Required for as-fetch
     "storage": "vfs-only",
     "dataRead": true,
     "dataWrite": true,
@@ -238,6 +251,7 @@ const savedConfig = readPluginConfig(storagePaths.configFile)
 ```
 
 **Critical Settings:**
+
 - `"network": true` - Grants network capability
 - `"as-fetch": "^2.1.4"` - HTTP client library dependency
 
@@ -263,6 +277,7 @@ export function plugin_start(config: Config): i32 {
 ```
 
 **Key Points:**
+
 - Import from `'as-fetch/sync'` for synchronous-style API
 - `fetchSync()` internally uses Asyncify to pause/resume execution
 - Runtime handles all state transitions automatically
@@ -330,14 +345,17 @@ signalk:wasm:runtime Async operation completed, plugin execution resumed
 ### Common Issues
 
 **Issue**: Plugin doesn't fetch data on server restart
+
 - **Cause**: Config file not found due to plugin ID mismatch
 - **Solution**: Fixed in plugin-registry.ts - loads WASM first to get real ID
 
 **Issue**: FetchHandler callback undefined
+
 - **Cause**: Race condition - callback set after async operation completes
 - **Solution**: Set up Promise and callback BEFORE calling plugin_start
 
 **Issue**: Asyncify transform not working
+
 - **Cause**: Missing `"transform": ["as-fetch/transform"]` in asconfig.json
 - **Solution**: Add transform to options in asconfig.json
 

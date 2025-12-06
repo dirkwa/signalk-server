@@ -14,36 +14,36 @@
  * reactor-style WASI components.
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('fs')
+const path = require('path')
 
-const jcoOutputPath = path.join(__dirname, '..', 'jco-output', 'dotnet.js');
+const jcoOutputPath = path.join(__dirname, '..', 'jco-output', 'dotnet.js')
 
-console.log('Patching jco output to add .NET initialization calls...');
+console.log('Patching jco output to add .NET initialization calls...')
 
-let content = fs.readFileSync(jcoOutputPath, 'utf8');
+let content = fs.readFileSync(jcoOutputPath, 'utf8')
 
 // Check if already patched
 if (content.includes('// Initialize .NET runtime')) {
-  console.log('Already patched, skipping.');
-  process.exit(0);
+  console.log('Already patched, skipping.')
+  process.exit(0)
 }
 
 // Find the line "realloc1 = exports1.cabi_realloc;" and add initialization calls after it
-const searchPattern = 'realloc1 = exports1.cabi_realloc;';
+const searchPattern = 'realloc1 = exports1.cabi_realloc;'
 const initializeCall = `realloc1 = exports1.cabi_realloc;
     // Initialize .NET runtime - required before calling any exports
     // Note: _initialize internally calls InitializeModules, so we only call _initialize
     if (typeof exports1._initialize === 'function') {
       exports1._initialize();
-    }`;
+    }`
 
 if (!content.includes(searchPattern)) {
-  console.error('Could not find insertion point for initialization calls');
-  process.exit(1);
+  console.error('Could not find insertion point for initialization calls')
+  process.exit(1)
 }
 
-content = content.replace(searchPattern, initializeCall);
+content = content.replace(searchPattern, initializeCall)
 
-fs.writeFileSync(jcoOutputPath, content);
-console.log('Successfully patched jco output with .NET initialization calls');
+fs.writeFileSync(jcoOutputPath, content)
+console.log('Successfully patched jco output with .NET initialization calls')

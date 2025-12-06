@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * WASM Plugin Types
  *
@@ -15,10 +16,10 @@ export interface WasmCapabilities {
   serialPorts: boolean
   putHandlers: boolean
   httpEndpoints?: boolean
-  resourceProvider?: boolean  // Can register as a resource provider
-  weatherProvider?: boolean   // Can register as a weather provider
-  radarProvider?: boolean     // Can register as a radar provider
-  rawSockets?: boolean        // Can open UDP/TCP sockets for radar, NMEA, etc.
+  resourceProvider?: boolean // Can register as a resource provider
+  weatherProvider?: boolean // Can register as a weather provider
+  radarProvider?: boolean // Can register as a radar provider
+  rawSockets?: boolean // Can open UDP/TCP sockets for radar, NMEA, etc.
 }
 
 /**
@@ -34,8 +35,8 @@ export interface WasmPluginInstance {
   wasmPath: string
   vfsRoot: string
   capabilities: WasmCapabilities
-  format: WasmFormat  // Binary format: wasi-p1 or component-model
-  wasi: any  // WASI type varies between Node.js and @wasmer/wasi
+  format: WasmFormat // Binary format: wasi-p1 or component-model
+  wasi: any // WASI type varies between Node.js and @wasmer/wasi
   module: WebAssembly.Module
   instance: WebAssembly.Instance
   exports: WasmPluginExports

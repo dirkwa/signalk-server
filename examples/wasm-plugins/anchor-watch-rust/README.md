@@ -1,6 +1,7 @@
 # Anchor Watch - Rust WASM Plugin
 
 A Signal K WASM plugin written in Rust demonstrating:
+
 - Rust WASM compilation for Signal K (wasm32-wasip1 target)
 - PUT handler registration and handling
 - **Custom HTTP endpoints** (REST API)
@@ -74,6 +75,7 @@ npm install -g ./signalk-anchor-watch-rust-0.1.0.tgz
 ## Configuration
 
 Enable and configure the plugin via the Signal K Admin UI:
+
 1. Navigate to **Server** → **Plugin Config**
 2. Find "Anchor Watch (Rust)"
 3. Click **Enable**
@@ -91,12 +93,12 @@ Enable and configure the plugin via the Signal K Admin UI:
 }
 ```
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `anchorLat` | number | 0 | Anchor latitude (degrees) |
-| `anchorLon` | number | 0 | Anchor longitude (degrees) |
-| `maxRadius` | number | 50 | Max swing radius in meters (10-1000) |
-| `checkInterval` | integer | 10 | Check interval in seconds |
+| Property        | Type    | Default | Description                          |
+| --------------- | ------- | ------- | ------------------------------------ |
+| `anchorLat`     | number  | 0       | Anchor latitude (degrees)            |
+| `anchorLon`     | number  | 0       | Anchor longitude (degrees)           |
+| `maxRadius`     | number  | 50      | Max swing radius in meters (10-1000) |
+| `checkInterval` | integer | 10      | Check interval in seconds            |
 
 ## PUT Handlers
 
@@ -150,11 +152,12 @@ curl http://localhost:3000/plugins/anchor-watch-rust/api/status
 ```
 
 **Response:**
+
 ```json
 {
   "running": true,
   "alarmActive": false,
-  "position": {"latitude": 52.1234, "longitude": 4.5678},
+  "position": { "latitude": 52.1234, "longitude": 4.5678 },
   "maxRadius": 50,
   "checkInterval": 10
 }
@@ -169,6 +172,7 @@ curl http://localhost:3000/plugins/anchor-watch-rust/api/position
 ```
 
 **Response:**
+
 ```json
 {
   "latitude": 52.1234,
@@ -195,11 +199,12 @@ curl -X POST http://localhost:3000/plugins/anchor-watch-rust/api/drop \
 | `maxRadius` | number | No | Max swing radius in meters (default: 50) |
 
 **Response:**
+
 ```json
 {
   "success": true,
   "message": "Anchor dropped",
-  "position": {"latitude": 52.1234, "longitude": 4.5678},
+  "position": { "latitude": 52.1234, "longitude": 4.5678 },
   "maxRadius": 75
 }
 ```
@@ -231,11 +236,11 @@ The source name matches the npm package name declared in `package.json`.
 
 The plugin emits delta updates to these paths:
 
-| Path | Type | Description |
-|------|------|-------------|
-| `navigation.anchor.position` | `{ latitude, longitude }` | Anchor position in degrees |
-| `navigation.anchor.maxRadius` | number | Maximum swing radius in meters |
-| `navigation.anchor.state` | string | "on" when plugin enabled, "off" when disabled |
+| Path                          | Type                      | Description                                   |
+| ----------------------------- | ------------------------- | --------------------------------------------- |
+| `navigation.anchor.position`  | `{ latitude, longitude }` | Anchor position in degrees                    |
+| `navigation.anchor.maxRadius` | number                    | Maximum swing radius in meters                |
+| `navigation.anchor.state`     | string                    | "on" when plugin enabled, "off" when disabled |
 
 ## Project Structure
 
@@ -256,6 +261,7 @@ anchor-watch-rust/
 The plugin uses raw FFI to communicate with the Signal K server:
 
 **Imports from host (env module):**
+
 - `sk_debug(ptr, len)` - Log debug message
 - `sk_set_status(ptr, len)` - Set plugin status
 - `sk_set_error(ptr, len)` - Set error message
@@ -263,6 +269,7 @@ The plugin uses raw FFI to communicate with the Signal K server:
 - `sk_register_put_handler(ctx_ptr, ctx_len, path_ptr, path_len)` - Register PUT handler
 
 **Exports to host:**
+
 - `plugin_id(out_ptr, max_len) -> len` - Return plugin ID
 - `plugin_name(out_ptr, max_len) -> len` - Return plugin name
 - `plugin_schema(out_ptr, max_len) -> len` - Return JSON schema
@@ -272,11 +279,13 @@ The plugin uses raw FFI to communicate with the Signal K server:
 - `deallocate(ptr, size)` - Free allocated memory
 
 **PUT Handlers:**
+
 - `handle_put_vessels_self_navigation_anchor_position(value_ptr, value_len, response_ptr, response_max_len) -> len`
 - `handle_put_vessels_self_navigation_anchor_maxRadius(value_ptr, value_len, response_ptr, response_max_len) -> len`
 - `handle_put_vessels_self_navigation_anchor_state(value_ptr, value_len, response_ptr, response_max_len) -> len`
 
 **HTTP Endpoints:**
+
 - `http_endpoints(out_ptr, max_len) -> len` - Return JSON array of endpoint definitions
 - `http_get_status(request_ptr, request_len, response_ptr, response_max_len) -> len` - GET /api/status
 - `http_get_position(request_ptr, request_len, response_ptr, response_max_len) -> len` - GET /api/position
@@ -285,9 +294,11 @@ The plugin uses raw FFI to communicate with the Signal K server:
 ### PUT Handler Naming Convention
 
 Handler function names follow this pattern:
+
 ```
 handle_put_{context}_{path}
 ```
+
 - Replace all dots (`.`) with underscores (`_`)
 - Context: `vessels.self` → `vessels_self`
 - Path: `navigation.anchor.position` → `navigation_anchor_position`
@@ -295,6 +306,7 @@ handle_put_{context}_{path}
 ### Memory Management
 
 Rust plugins use buffer-based string passing:
+
 1. Host calls `allocate(size)` to get memory for input
 2. Host writes UTF-8 bytes to allocated memory
 3. Plugin reads input and writes output to provided buffer
@@ -321,11 +333,13 @@ cp target/wasm32-wasip1/release/anchor_watch_rust.wasm plugin.wasm
 ### Debugging
 
 Enable debug logging on the Signal K server:
+
 ```bash
 DEBUG=signalk:wasm:* signalk-server
 ```
 
 Or use journalctl on systemd systems:
+
 ```bash
 journalctl -u signalk -f | grep wasm
 ```
@@ -343,6 +357,7 @@ ls -lh target/wasm32-wasip1/release/anchor_watch_rust.wasm
 ### Size Optimization
 
 The `Cargo.toml` includes optimizations:
+
 ```toml
 [profile.release]
 opt-level = "z"     # Optimize for size
@@ -351,6 +366,7 @@ strip = true        # Strip debug symbols
 ```
 
 Further optimization with `wasm-opt` (optional):
+
 ```bash
 wasm-opt -Oz plugin.wasm -o plugin.optimized.wasm
 ```
@@ -358,26 +374,31 @@ wasm-opt -Oz plugin.wasm -o plugin.optimized.wasm
 ## Troubleshooting
 
 ### Plugin not loading
+
 - Verify `wasmManifest` in `package.json` points to correct file
 - Check that `plugin.wasm` exists and is readable
 - Enable debug logging: `DEBUG=signalk:wasm:*`
 
 ### PUT handlers not registering
+
 - Check `"putHandlers": true` in `wasmCapabilities`
 - Verify handler function names match the pattern exactly
 - Check server logs for registration messages
 
 ### HTTP endpoints returning 404
+
 - Check `"httpEndpoints": true` in `wasmCapabilities`
 - Verify `http_endpoints()` export returns valid JSON array
 - Check that handler function names match exactly
 - Enable debug logging: `DEBUG=signalk:wasm:*`
 
 ### PUT requests return "multiple sources" error
+
 - Add `"source": "@signalk/anchor-watch-rust"` to the request body
 - The source must match the package name in `package.json`
 
 ### Memory errors
+
 - Ensure `allocate` and `deallocate` are exported
 - Check buffer sizes in handler functions
 - Verify UTF-8 encoding of all strings
@@ -385,10 +406,12 @@ wasm-opt -Oz plugin.wasm -o plugin.optimized.wasm
 ## Dependencies
 
 ### Rust Crates (Cargo.toml)
+
 - `serde` (1.0) - JSON serialization with derive macros
 - `serde_json` (1.0) - JSON parsing
 
 ### No external WASM libraries needed
+
 The plugin uses only Rust standard library and serde for JSON. No wasm-bindgen or other WASM-specific crates required.
 
 ## License

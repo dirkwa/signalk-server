@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * WASM Plugin Configuration Management
  *
@@ -8,10 +9,7 @@
 import Debug from 'debug'
 import { wasmPlugins } from './plugin-registry'
 import { startWasmPlugin, stopWasmPlugin } from './plugin-lifecycle'
-import {
-  getPluginStoragePaths,
-  writePluginConfig
-} from '../wasm-storage'
+import { getPluginStoragePaths, writePluginConfig } from '../wasm-storage'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -30,21 +28,29 @@ export async function updateWasmPluginConfig(
   }
 
   debug(`updateWasmPluginConfig: Starting for ${pluginId}`)
-  debug(`updateWasmPluginConfig: New configuration: ${JSON.stringify(configuration)}`)
+  debug(
+    `updateWasmPluginConfig: New configuration: ${JSON.stringify(configuration)}`
+  )
 
   plugin.configuration = configuration
   debug(`updateWasmPluginConfig: Updated in-memory configuration`)
 
   // Save to disk
-  const storagePaths = getPluginStoragePaths(configPath, plugin.id, plugin.packageName)
+  const storagePaths = getPluginStoragePaths(
+    configPath,
+    plugin.id,
+    plugin.packageName
+  )
   debug(`updateWasmPluginConfig: Config file path: ${storagePaths.configFile}`)
 
   const config = {
-    configuration: configuration ?? {},  // Ensure configuration is always an object, never undefined
+    configuration: configuration ?? {}, // Ensure configuration is always an object, never undefined
     enabled: plugin.enabled,
     enableDebug: plugin.enableDebug
   }
-  debug(`updateWasmPluginConfig: Writing config to disk: ${JSON.stringify(config)}`)
+  debug(
+    `updateWasmPluginConfig: Writing config to disk: ${JSON.stringify(config)}`
+  )
   writePluginConfig(storagePaths.configFile, config)
   debug(`updateWasmPluginConfig: Config written to disk`)
 
@@ -57,7 +63,9 @@ export async function updateWasmPluginConfig(
     debug(`updateWasmPluginConfig: Plugin started`)
     plugin.statusMessage = 'Configuration updated'
   } else {
-    debug(`updateWasmPluginConfig: Plugin not running (status: ${plugin.status}), skipping restart`)
+    debug(
+      `updateWasmPluginConfig: Plugin not running (status: ${plugin.status}), skipping restart`
+    )
   }
 
   debug(`updateWasmPluginConfig: Configuration updated for ${pluginId}`)
@@ -78,36 +86,52 @@ export async function setWasmPluginEnabled(
   }
 
   debug(`setWasmPluginEnabled: Starting for ${pluginId}, enabled=${enabled}`)
-  debug(`setWasmPluginEnabled: Current state - enabled: ${plugin.enabled}, status: ${plugin.status}`)
+  debug(
+    `setWasmPluginEnabled: Current state - enabled: ${plugin.enabled}, status: ${plugin.status}`
+  )
 
   plugin.enabled = enabled
   debug(`setWasmPluginEnabled: Updated in-memory enabled flag to ${enabled}`)
 
   // Save to disk
-  const storagePaths = getPluginStoragePaths(configPath, plugin.id, plugin.packageName)
+  const storagePaths = getPluginStoragePaths(
+    configPath,
+    plugin.id,
+    plugin.packageName
+  )
   debug(`setWasmPluginEnabled: Config file path: ${storagePaths.configFile}`)
 
   const config = {
-    configuration: plugin.configuration ?? {},  // Ensure configuration is always an object, never undefined
+    configuration: plugin.configuration ?? {}, // Ensure configuration is always an object, never undefined
     enabled,
     enableDebug: plugin.enableDebug
   }
-  debug(`setWasmPluginEnabled: Writing config to disk: ${JSON.stringify(config)}`)
+  debug(
+    `setWasmPluginEnabled: Writing config to disk: ${JSON.stringify(config)}`
+  )
   writePluginConfig(storagePaths.configFile, config)
   debug(`setWasmPluginEnabled: Config written to disk`)
 
   // Start or stop accordingly
   if (enabled && plugin.status !== 'running') {
-    debug(`setWasmPluginEnabled: Plugin should be enabled and is not running, starting...`)
+    debug(
+      `setWasmPluginEnabled: Plugin should be enabled and is not running, starting...`
+    )
     await startWasmPlugin(app, pluginId)
     debug(`setWasmPluginEnabled: Plugin started, new status: ${plugin.status}`)
   } else if (!enabled && plugin.status === 'running') {
-    debug(`setWasmPluginEnabled: Plugin should be disabled and is running, stopping...`)
+    debug(
+      `setWasmPluginEnabled: Plugin should be disabled and is running, stopping...`
+    )
     await stopWasmPlugin(pluginId)
     debug(`setWasmPluginEnabled: Plugin stopped, new status: ${plugin.status}`)
   } else {
-    debug(`setWasmPluginEnabled: No action needed - enabled=${enabled}, status=${plugin.status}`)
+    debug(
+      `setWasmPluginEnabled: No action needed - enabled=${enabled}, status=${plugin.status}`
+    )
   }
 
-  debug(`setWasmPluginEnabled: Completed - Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`)
+  debug(
+    `setWasmPluginEnabled: Completed - Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`
+  )
 }

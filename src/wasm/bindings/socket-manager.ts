@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * WASM Socket Manager
  *
@@ -26,8 +27,16 @@ interface BufferedDatagram {
  * Pending socket option to apply after bind
  */
 interface PendingOption {
-  type: 'broadcast' | 'multicastTTL' | 'multicastLoopback' | 'joinMulticast' | 'leaveMulticast'
-  value: boolean | number | { multicastAddress: string; interfaceAddress?: string }
+  type:
+    | 'broadcast'
+    | 'multicastTTL'
+    | 'multicastLoopback'
+    | 'joinMulticast'
+    | 'leaveMulticast'
+  value:
+    | boolean
+    | number
+    | { multicastAddress: string; interfaceAddress?: string }
 }
 
 /**
@@ -62,7 +71,7 @@ class SocketManager {
       const socketId = this.nextSocketId++
       const socket = dgram.createSocket({
         type,
-        reuseAddr: true  // Allow multiple plugins to bind to same port
+        reuseAddr: true // Allow multiple plugins to bind to same port
       })
 
       const managed: ManagedSocket = {
@@ -128,41 +137,67 @@ class SocketManager {
         managed.socket.bind(port, address, () => {
           managed.bound = true
           const addr = managed.socket.address()
-          debug(`[${managed.pluginId}] Socket ${socketId} bound to ${addr.address}:${addr.port}`)
+          debug(
+            `[${managed.pluginId}] Socket ${socketId} bound to ${addr.address}:${addr.port}`
+          )
 
           // Apply any pending socket options now that we're bound
           for (const option of managed.pendingOptions) {
             try {
               if (option.type === 'broadcast') {
                 managed.socket.setBroadcast(option.value as boolean)
-                debug(`[${managed.pluginId}] Applied deferred setBroadcast(${option.value})`)
+                debug(
+                  `[${managed.pluginId}] Applied deferred setBroadcast(${option.value})`
+                )
               } else if (option.type === 'multicastTTL') {
                 managed.socket.setMulticastTTL(option.value as number)
-                debug(`[${managed.pluginId}] Applied deferred setMulticastTTL(${option.value})`)
+                debug(
+                  `[${managed.pluginId}] Applied deferred setMulticastTTL(${option.value})`
+                )
               } else if (option.type === 'multicastLoopback') {
                 managed.socket.setMulticastLoopback(option.value as boolean)
-                debug(`[${managed.pluginId}] Applied deferred setMulticastLoopback(${option.value})`)
+                debug(
+                  `[${managed.pluginId}] Applied deferred setMulticastLoopback(${option.value})`
+                )
               } else if (option.type === 'joinMulticast') {
-                const { multicastAddress, interfaceAddress } = option.value as { multicastAddress: string; interfaceAddress?: string }
+                const { multicastAddress, interfaceAddress } = option.value as {
+                  multicastAddress: string
+                  interfaceAddress?: string
+                }
                 if (interfaceAddress) {
-                  managed.socket.addMembership(multicastAddress, interfaceAddress)
+                  managed.socket.addMembership(
+                    multicastAddress,
+                    interfaceAddress
+                  )
                 } else {
                   managed.socket.addMembership(multicastAddress)
                 }
                 managed.multicastGroups.add(multicastAddress)
-                debug(`[${managed.pluginId}] Applied deferred joinMulticast(${multicastAddress})`)
+                debug(
+                  `[${managed.pluginId}] Applied deferred joinMulticast(${multicastAddress})`
+                )
               } else if (option.type === 'leaveMulticast') {
-                const { multicastAddress, interfaceAddress } = option.value as { multicastAddress: string; interfaceAddress?: string }
+                const { multicastAddress, interfaceAddress } = option.value as {
+                  multicastAddress: string
+                  interfaceAddress?: string
+                }
                 if (interfaceAddress) {
-                  managed.socket.dropMembership(multicastAddress, interfaceAddress)
+                  managed.socket.dropMembership(
+                    multicastAddress,
+                    interfaceAddress
+                  )
                 } else {
                   managed.socket.dropMembership(multicastAddress)
                 }
                 managed.multicastGroups.delete(multicastAddress)
-                debug(`[${managed.pluginId}] Applied deferred leaveMulticast(${multicastAddress})`)
+                debug(
+                  `[${managed.pluginId}] Applied deferred leaveMulticast(${multicastAddress})`
+                )
               }
             } catch (optionError) {
-              debug(`[${managed.pluginId}] Error applying deferred option ${option.type}: ${optionError}`)
+              debug(
+                `[${managed.pluginId}] Error applying deferred option ${option.type}: ${optionError}`
+              )
             }
           }
           managed.pendingOptions = []
@@ -185,7 +220,11 @@ class SocketManager {
    * @param interfaceAddress - Interface address to use (optional)
    * @returns 0 on success, -1 on error
    */
-  joinMulticast(socketId: number, multicastAddress: string, interfaceAddress?: string): number {
+  joinMulticast(
+    socketId: number,
+    multicastAddress: string,
+    interfaceAddress?: string
+  ): number {
     const managed = this.sockets.get(socketId)
     if (!managed) {
       debug(`Socket ${socketId} not found`)
@@ -194,7 +233,9 @@ class SocketManager {
 
     // If socket is not yet bound, defer the multicast join until bind completes
     if (!managed.bound) {
-      debug(`[${managed.pluginId}] Deferring joinMulticast(${multicastAddress}) until socket is bound`)
+      debug(
+        `[${managed.pluginId}] Deferring joinMulticast(${multicastAddress}) until socket is bound`
+      )
       managed.pendingOptions.push({
         type: 'joinMulticast',
         value: { multicastAddress, interfaceAddress }
@@ -209,7 +250,9 @@ class SocketManager {
         managed.socket.addMembership(multicastAddress)
       }
       managed.multicastGroups.add(multicastAddress)
-      debug(`[${managed.pluginId}] Socket ${socketId} joined multicast ${multicastAddress}`)
+      debug(
+        `[${managed.pluginId}] Socket ${socketId} joined multicast ${multicastAddress}`
+      )
       return 0
     } catch (error) {
       debug(`[${managed.pluginId}] Join multicast error: ${error}`)
@@ -224,7 +267,11 @@ class SocketManager {
    * @param interfaceAddress - Interface address (optional)
    * @returns 0 on success, -1 on error
    */
-  leaveMulticast(socketId: number, multicastAddress: string, interfaceAddress?: string): number {
+  leaveMulticast(
+    socketId: number,
+    multicastAddress: string,
+    interfaceAddress?: string
+  ): number {
     const managed = this.sockets.get(socketId)
     if (!managed) {
       debug(`Socket ${socketId} not found`)
@@ -233,7 +280,9 @@ class SocketManager {
 
     // If socket is not yet bound, defer the multicast leave until bind completes
     if (!managed.bound) {
-      debug(`[${managed.pluginId}] Deferring leaveMulticast(${multicastAddress}) until socket is bound`)
+      debug(
+        `[${managed.pluginId}] Deferring leaveMulticast(${multicastAddress}) until socket is bound`
+      )
       managed.pendingOptions.push({
         type: 'leaveMulticast',
         value: { multicastAddress, interfaceAddress }
@@ -248,7 +297,9 @@ class SocketManager {
         managed.socket.dropMembership(multicastAddress)
       }
       managed.multicastGroups.delete(multicastAddress)
-      debug(`[${managed.pluginId}] Socket ${socketId} left multicast ${multicastAddress}`)
+      debug(
+        `[${managed.pluginId}] Socket ${socketId} left multicast ${multicastAddress}`
+      )
       return 0
     } catch (error) {
       debug(`[${managed.pluginId}] Leave multicast error: ${error}`)
@@ -265,7 +316,9 @@ class SocketManager {
 
     // If socket is not yet bound, defer the option
     if (!managed.bound) {
-      debug(`[${managed.pluginId}] Deferring setMulticastTTL(${ttl}) until socket is bound`)
+      debug(
+        `[${managed.pluginId}] Deferring setMulticastTTL(${ttl}) until socket is bound`
+      )
       managed.pendingOptions.push({ type: 'multicastTTL', value: ttl })
       return 0
     }
@@ -285,7 +338,9 @@ class SocketManager {
 
     // If socket is not yet bound, defer the option
     if (!managed.bound) {
-      debug(`[${managed.pluginId}] Deferring setMulticastLoopback(${enabled}) until socket is bound`)
+      debug(
+        `[${managed.pluginId}] Deferring setMulticastLoopback(${enabled}) until socket is bound`
+      )
       managed.pendingOptions.push({ type: 'multicastLoopback', value: enabled })
       return 0
     }
@@ -305,7 +360,9 @@ class SocketManager {
 
     // If socket is not yet bound, defer the option
     if (!managed.bound) {
-      debug(`[${managed.pluginId}] Deferring setBroadcast(${enabled}) until socket is bound`)
+      debug(
+        `[${managed.pluginId}] Deferring setBroadcast(${enabled}) until socket is bound`
+      )
       managed.pendingOptions.push({ type: 'broadcast', value: enabled })
       return 0
     }
@@ -327,7 +384,12 @@ class SocketManager {
    * @param port - Destination port
    * @returns Bytes sent, or -1 on error
    */
-  send(socketId: number, data: Buffer, address: string, port: number): Promise<number> {
+  send(
+    socketId: number,
+    data: Buffer,
+    address: string,
+    port: number
+  ): Promise<number> {
     return new Promise((resolve) => {
       const managed = this.sockets.get(socketId)
       if (!managed) {
@@ -418,10 +480,14 @@ class SocketManager {
   /**
    * Get socket statistics
    */
-  getStats(): { totalSockets: number; socketsPerPlugin: Record<string, number> } {
+  getStats(): {
+    totalSockets: number
+    socketsPerPlugin: Record<string, number>
+  } {
     const socketsPerPlugin: Record<string, number> = {}
     for (const managed of this.sockets.values()) {
-      socketsPerPlugin[managed.pluginId] = (socketsPerPlugin[managed.pluginId] || 0) + 1
+      socketsPerPlugin[managed.pluginId] =
+        (socketsPerPlugin[managed.pluginId] || 0) + 1
     }
     return {
       totalSockets: this.sockets.size,

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * WASM Radar Provider Support
  *
@@ -65,7 +66,9 @@ export async function callWasmRadarHandler(
 
         if (state === 1) {
           // State 1 = unwound, waiting for async operation
-          debug(`${handlerName} is in unwound state - waiting for async operation to complete`)
+          debug(
+            `${handlerName} is in unwound state - waiting for async operation to complete`
+          )
           const result = await resumePromise
           debug(`${handlerName} async operation completed`)
           if (pluginInstance.setAsyncifyResume) {
@@ -107,7 +110,12 @@ export async function callWasmRadarHandler(
         const memView = new Uint8Array(memory.buffer)
         memView.set(requestBytes, requestPtr)
 
-        writtenLen = rawExports[handlerName](requestPtr, requestBytes.length, responsePtr, responseMaxLen)
+        writtenLen = rawExports[handlerName](
+          requestPtr,
+          requestBytes.length,
+          responsePtr,
+          responseMaxLen
+        )
 
         // Deallocate request buffer
         if (typeof rawExports.deallocate === 'function') {
@@ -116,7 +124,11 @@ export async function callWasmRadarHandler(
       }
 
       // Read response from WASM memory
-      const responseBytes = new Uint8Array(memory.buffer, responsePtr, writtenLen)
+      const responseBytes = new Uint8Array(
+        memory.buffer,
+        responsePtr,
+        writtenLen
+      )
       const responseJson = new TextDecoder('utf-8').decode(responseBytes)
 
       // Deallocate response buffer
@@ -127,7 +139,9 @@ export async function callWasmRadarHandler(
       return responseJson
     }
 
-    debug(`Handler ${handlerName} not found in plugin ${pluginInstance.pluginId}`)
+    debug(
+      `Handler ${handlerName} not found in plugin ${pluginInstance.pluginId}`
+    )
     return null
   } catch (error) {
     debug(`Error calling radar handler ${handlerName}: ${error}`)
@@ -138,7 +152,10 @@ export async function callWasmRadarHandler(
 /**
  * Update radar provider references with a newly loaded plugin instance
  */
-export function updateRadarProviderInstance(pluginId: string, pluginInstance: WasmPluginInstance): void {
+export function updateRadarProviderInstance(
+  pluginId: string,
+  pluginInstance: WasmPluginInstance
+): void {
   const provider = wasmRadarProviders.get(pluginId)
   if (provider) {
     provider.pluginInstance = pluginInstance
@@ -149,7 +166,10 @@ export function updateRadarProviderInstance(pluginId: string, pluginInstance: Wa
 /**
  * Migrate radar provider registrations from old pluginId to new pluginId
  */
-export function migrateRadarProviderPluginId(oldPluginId: string, newPluginId: string): void {
+export function migrateRadarProviderPluginId(
+  oldPluginId: string,
+  newPluginId: string
+): void {
   const provider = wasmRadarProviders.get(oldPluginId)
   if (provider) {
     provider.pluginId = newPluginId
@@ -220,7 +240,7 @@ export function createRadarProviderBinding(
       wasmRadarProviders.set(pluginId, {
         pluginId,
         providerName,
-        pluginInstance: null  // Will be set after full instance creation
+        pluginInstance: null // Will be set after full instance creation
       })
 
       // Create RadarProvider object that calls into WASM handlers
@@ -239,13 +259,19 @@ export function createRadarProviderBinding(
               return []
             }
 
-            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_get_radars', '{}')
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_get_radars',
+              '{}'
+            )
 
             if (result) {
               try {
                 return JSON.parse(result)
               } catch (e) {
-                debug(`[${pluginId}] Failed to parse radar_get_radars response: ${e}`)
+                debug(
+                  `[${pluginId}] Failed to parse radar_get_radars response: ${e}`
+                )
                 return []
               }
             }
@@ -264,13 +290,19 @@ export function createRadarProviderBinding(
             }
 
             const requestJson = JSON.stringify({ radarId })
-            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_get_info', requestJson)
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_get_info',
+              requestJson
+            )
 
             if (result) {
               try {
                 return JSON.parse(result)
               } catch (e) {
-                debug(`[${pluginId}] Failed to parse radar_get_info response: ${e}`)
+                debug(
+                  `[${pluginId}] Failed to parse radar_get_info response: ${e}`
+                )
                 return null
               }
             }
@@ -282,7 +314,10 @@ export function createRadarProviderBinding(
            * @param radarId The radar ID
            * @param state Power state
            */
-          setPower: async (radarId: string, state: string): Promise<boolean> => {
+          setPower: async (
+            radarId: string,
+            state: string
+          ): Promise<boolean> => {
             const provider = wasmRadarProviders.get(pluginId)
             if (!provider || !provider.pluginInstance) {
               debug(`[${pluginId}] Radar provider instance not ready`)
@@ -290,13 +325,19 @@ export function createRadarProviderBinding(
             }
 
             const requestJson = JSON.stringify({ radarId, state })
-            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_set_power', requestJson)
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_set_power',
+              requestJson
+            )
 
             if (result) {
               try {
                 return JSON.parse(result) === true
               } catch (e) {
-                debug(`[${pluginId}] Failed to parse radar_set_power response: ${e}`)
+                debug(
+                  `[${pluginId}] Failed to parse radar_set_power response: ${e}`
+                )
                 return false
               }
             }
@@ -308,7 +349,10 @@ export function createRadarProviderBinding(
            * @param radarId The radar ID
            * @param range Range in meters
            */
-          setRange: async (radarId: string, range: number): Promise<boolean> => {
+          setRange: async (
+            radarId: string,
+            range: number
+          ): Promise<boolean> => {
             const provider = wasmRadarProviders.get(pluginId)
             if (!provider || !provider.pluginInstance) {
               debug(`[${pluginId}] Radar provider instance not ready`)
@@ -316,13 +360,19 @@ export function createRadarProviderBinding(
             }
 
             const requestJson = JSON.stringify({ radarId, range })
-            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_set_range', requestJson)
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_set_range',
+              requestJson
+            )
 
             if (result) {
               try {
                 return JSON.parse(result) === true
               } catch (e) {
-                debug(`[${pluginId}] Failed to parse radar_set_range response: ${e}`)
+                debug(
+                  `[${pluginId}] Failed to parse radar_set_range response: ${e}`
+                )
                 return false
               }
             }
@@ -334,7 +384,10 @@ export function createRadarProviderBinding(
            * @param radarId The radar ID
            * @param gain Gain settings
            */
-          setGain: async (radarId: string, gain: { auto: boolean; value?: number }): Promise<boolean> => {
+          setGain: async (
+            radarId: string,
+            gain: { auto: boolean; value?: number }
+          ): Promise<boolean> => {
             const provider = wasmRadarProviders.get(pluginId)
             if (!provider || !provider.pluginInstance) {
               debug(`[${pluginId}] Radar provider instance not ready`)
@@ -342,13 +395,19 @@ export function createRadarProviderBinding(
             }
 
             const requestJson = JSON.stringify({ radarId, gain })
-            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_set_gain', requestJson)
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_set_gain',
+              requestJson
+            )
 
             if (result) {
               try {
                 return JSON.parse(result) === true
               } catch (e) {
-                debug(`[${pluginId}] Failed to parse radar_set_gain response: ${e}`)
+                debug(
+                  `[${pluginId}] Failed to parse radar_set_gain response: ${e}`
+                )
                 return false
               }
             }
@@ -360,7 +419,10 @@ export function createRadarProviderBinding(
            * @param radarId The radar ID
            * @param controls Controls to update
            */
-          setControls: async (radarId: string, controls: any): Promise<boolean> => {
+          setControls: async (
+            radarId: string,
+            controls: any
+          ): Promise<boolean> => {
             const provider = wasmRadarProviders.get(pluginId)
             if (!provider || !provider.pluginInstance) {
               debug(`[${pluginId}] Radar provider instance not ready`)
@@ -368,13 +430,19 @@ export function createRadarProviderBinding(
             }
 
             const requestJson = JSON.stringify({ radarId, controls })
-            const result = await callWasmRadarHandler(provider.pluginInstance, 'radar_set_controls', requestJson)
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_set_controls',
+              requestJson
+            )
 
             if (result) {
               try {
                 return JSON.parse(result) === true
               } catch (e) {
-                debug(`[${pluginId}] Failed to parse radar_set_controls response: ${e}`)
+                debug(
+                  `[${pluginId}] Failed to parse radar_set_controls response: ${e}`
+                )
                 return false
               }
             }
@@ -386,7 +454,9 @@ export function createRadarProviderBinding(
       // Register with Signal K RadarApi
       app.radarApi.register(pluginId, radarProvider)
 
-      debug(`[${pluginId}] Successfully registered as radar provider: ${providerName}`)
+      debug(
+        `[${pluginId}] Successfully registered as radar provider: ${providerName}`
+      )
       return 1 // Success
     } catch (error) {
       debug(`Plugin register radar provider error: ${error}`)
@@ -414,8 +484,18 @@ export function createRadarEmitSpokesBinding(
   app: any,
   readUtf8String: (ptr: number, len: number) => string,
   readBinaryData: (ptr: number, len: number) => Buffer
-): (radarIdPtr: number, radarIdLen: number, spokeDataPtr: number, spokeDataLen: number) => number {
-  return (radarIdPtr: number, radarIdLen: number, spokeDataPtr: number, spokeDataLen: number): number => {
+): (
+  radarIdPtr: number,
+  radarIdLen: number,
+  spokeDataPtr: number,
+  spokeDataLen: number
+) => number {
+  return (
+    radarIdPtr: number,
+    radarIdLen: number,
+    spokeDataPtr: number,
+    spokeDataLen: number
+  ): number => {
     try {
       // Check radar provider capability
       if (!capabilities.radarProvider) {
@@ -431,7 +511,7 @@ export function createRadarEmitSpokesBinding(
       if (Math.random() < 0.001) {
         debug(
           `[${pluginId}] sk_radar_emit_spokes: radarId="${radarId}", ` +
-          `dataLen=${spokeDataLen} bytes`
+            `dataLen=${spokeDataLen} bytes`
         )
       }
 

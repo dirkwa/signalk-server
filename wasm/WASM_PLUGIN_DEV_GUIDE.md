@@ -17,6 +17,7 @@ A WASM plugin is identified by the **`wasmManifest`** field in `package.json`:
 ```
 
 **Key points:**
+
 - **`wasmManifest`** (required): Path to the compiled `.wasm` file. This field tells Signal K to load this as a WASM plugin instead of a Node.js plugin.
 - **`wasmCapabilities`** (required): Declares what permissions the plugin needs (network, storage, etc.)
 - **Package name** (flexible): Can be anything - `my-plugin`, `@myorg/my-plugin`, etc. There is **no requirement** to use `@signalk/` scope.
@@ -99,18 +100,21 @@ tinygo version
 ### AssemblyScript - Recommended for JS/TS Developers
 
 **Best for:**
+
 - Quick prototypes
 - Simple data processing
 - Migrating existing Node.js plugins
 - Developers familiar with TypeScript
 
 **Pros:**
+
 - TypeScript-like syntax
 - Fast development
 - Smallest binaries (3-10 KB)
 - Familiar tooling (npm)
 
 **Cons:**
+
 - Smaller ecosystem than Rust
 - Some TypeScript features unavailable
 - Manual memory management
@@ -120,18 +124,21 @@ tinygo version
 ### Rust - Recommended for Performance-Critical Plugins
 
 **Best for:**
+
 - Performance-critical plugins
 - Complex algorithms
 - Low-level operations
 - Production plugins
 
 **Pros:**
+
 - Best performance
 - Memory safety
 - Rich ecosystem
 - Strong typing
 
 **Cons:**
+
 - Steeper learning curve
 - Longer compile times
 - Larger binaries (50-200 KB)
@@ -141,17 +148,20 @@ tinygo version
 ### Go/TinyGo - For Go Developers
 
 **Best for:**
+
 - Go developers wanting to write plugins
 - Medium complexity plugins
 - Resource providers with hybrid patterns
 
 **Pros:**
+
 - Familiar Go syntax
 - Good standard library support
 - Medium binaries (50-150 KB)
 - Strong typing
 
 **Cons:**
+
 - Requires TinyGo (not standard Go)
 - Some Go features unavailable
 - Slower than Rust
@@ -170,12 +180,14 @@ function tables fail to initialize properly in V8, causing runtime crashes.
 **Error:** `RuntimeError: null function or function signature mismatch`
 
 **What was tried (Dec 2024):**
+
 - jco transpilation with various flags
 - Manual `_initialize()` calls
 - Removing `[ThreadStatic]` attribute
 - Different .NET versions (8, 9, 10)
 
 **What would be needed:**
+
 - Native `@bytecodealliance/wasmtime` npm package (doesn't exist)
 - Improved jco support for .NET NativeAOT
 - Alternative .NET toolchain for V8-compatible output
@@ -255,9 +267,15 @@ class MyPlugin extends Plugin {
 
 // Export for Signal K
 const plugin = new MyPlugin()
-export function plugin_id(): string { return plugin.id() }
-export function plugin_name(): string { return plugin.name() }
-export function plugin_schema(): string { return plugin.schema() }
+export function plugin_id(): string {
+  return plugin.id()
+}
+export function plugin_name(): string {
+  return plugin.name()
+}
+export function plugin_schema(): string {
+  return plugin.schema()
+}
 export function plugin_start(configPtr: usize, configLen: usize): i32 {
   const configBytes = new Uint8Array(configLen)
   for (let i = 0; i < configLen; i++) {
@@ -266,7 +284,9 @@ export function plugin_start(configPtr: usize, configLen: usize): i32 {
   const configJson = String.UTF8.decode(configBytes.buffer)
   return plugin.start(configJson)
 }
-export function plugin_stop(): i32 { return plugin.stop() }
+export function plugin_stop(): i32 {
+  return plugin.stop()
+}
 ```
 
 ### Step 3: Configure Build
@@ -313,10 +333,7 @@ npx asc assembly/index.ts --target release
 {
   "name": "my-wasm-plugin",
   "version": "0.1.0",
-  "keywords": [
-    "signalk-node-server-plugin",
-    "signalk-wasm-plugin"
-  ],
+  "keywords": ["signalk-node-server-plugin", "signalk-wasm-plugin"],
   "wasmManifest": "plugin.wasm",
   "wasmCapabilities": {
     "dataRead": true,
@@ -335,6 +352,7 @@ npx asc assembly/index.ts --target release
 ### Step 6: Install to Signal K
 
 **Option 1: Direct Copy (Recommended for Development)**
+
 ```bash
 mkdir -p ~/.signalk/node_modules/my-wasm-plugin
 cp plugin.wasm package.json ~/.signalk/node_modules/my-wasm-plugin/
@@ -344,6 +362,7 @@ cp -r public ~/.signalk/node_modules/my-wasm-plugin/
 ```
 
 **Option 2: NPM Package Install**
+
 ```bash
 # If you've packaged with `npm pack`
 npm install -g ./my-wasm-plugin-1.0.0.tgz
@@ -398,6 +417,7 @@ After installing your plugin, verify it appears in the Admin UI:
 ## HTTP Endpoints (Phase 2)
 
 WASM plugins can register custom HTTP endpoints to provide REST APIs or serve dynamic content. This is useful for:
+
 - Providing plugin-specific APIs
 - Implementing webhook receivers
 - Creating custom data queries
@@ -449,11 +469,11 @@ export function handle_get_data(requestPtr: usize, requestLen: usize): string {
 
   // 3. Process request and build response data
   const data = {
-    "items": [
-      {"id": 1, "value": "Item 1"},
-      {"id": 2, "value": "Item 2"}
+    items: [
+      { id: 1, value: 'Item 1' },
+      { id: 2, value: 'Item 2' }
     ],
-    "count": 2
+    count: 2
   }
   const bodyJson = JSON.stringify(data)
 
@@ -471,7 +491,10 @@ export function handle_get_data(requestPtr: usize, requestLen: usize): string {
   }`
 }
 
-export function handle_post_update(requestPtr: usize, requestLen: usize): string {
+export function handle_post_update(
+  requestPtr: usize,
+  requestLen: usize
+): string {
   const requestBytes = new Uint8Array(i32(requestLen))
   for (let i: i32 = 0; i < i32(requestLen); i++) {
     requestBytes[i] = load<u8>(requestPtr + <usize>i)
@@ -526,6 +549,7 @@ Handler functions must return a JSON string with:
 ```
 
 **Important Notes:**
+
 - The `body` field must be a JSON-escaped string
 - Use double escaping for quotes: `\\"` not `"`
 - Endpoints are mounted at `/plugins/your-plugin-id/api/...`
@@ -536,10 +560,12 @@ Handler functions must return a JSON string with:
 The server uses the **AssemblyScript loader** for automatic string handling:
 
 **For plugin metadata (id, name, schema, http_endpoints):**
+
 - Return AssemblyScript strings directly
 - Server automatically decodes with `__getString()`
 
 **For HTTP handlers:**
+
 - Receive: `(requestPtr: usize, requestLen: usize)` - raw memory pointer
 - Manually decode UTF-8 bytes from WASM memory
 - Return: AssemblyScript string with escaped JSON
@@ -551,6 +577,7 @@ The request is passed as raw UTF-8 bytes for efficiency, but the response is ret
 ### Complete Example
 
 See [signalk-logviewer](../../../signalk-logviewer) for a complete real-world example:
+
 - HTTP endpoint registration
 - Shell command execution (journalctl, tail)
 - Large response handling
@@ -629,7 +656,10 @@ function parseFloat64FromJson(json: string, key: string): f64 {
   if (match < 0) return 0.0
 
   let start = match + searchKey.length
-  while (start < json.length && (json.charCodeAt(start) == 32 || json.charCodeAt(start) == 9)) {
+  while (
+    start < json.length &&
+    (json.charCodeAt(start) == 32 || json.charCodeAt(start) == 9)
+  ) {
     start++
   }
 
@@ -652,14 +682,19 @@ Deltas are delivered as JSON strings with this structure:
 ```json
 {
   "context": "vessels.self",
-  "updates": [{
-    "source": {"label": "gps", "type": "NMEA2000"},
-    "timestamp": "2024-01-15T12:30:00.000Z",
-    "values": [
-      {"path": "navigation.position", "value": {"latitude": -17.68, "longitude": 177.39}},
-      {"path": "navigation.speedOverGround", "value": 5.2}
-    ]
-  }]
+  "updates": [
+    {
+      "source": { "label": "gps", "type": "NMEA2000" },
+      "timestamp": "2024-01-15T12:30:00.000Z",
+      "values": [
+        {
+          "path": "navigation.position",
+          "value": { "latitude": -17.68, "longitude": 177.39 }
+        },
+        { "path": "navigation.speedOverGround", "value": 5.2 }
+      ]
+    }
+  ]
 }
 ```
 
@@ -689,7 +724,10 @@ export function delta_handler(deltaJson: string): void {
     } else {
       // Check if this is a null/clear operation
       const pathIdx = deltaJson.indexOf('"path":"navigation.course.nextPoint"')
-      const checkRange = deltaJson.substring(pathIdx, Math.min(pathIdx + 100, deltaJson.length) as i32)
+      const checkRange = deltaJson.substring(
+        pathIdx,
+        Math.min(pathIdx + 100, deltaJson.length) as i32
+      )
       if (checkRange.indexOf('"value":null') >= 0) {
         hasDestination = false
         debug('Destination cleared')
@@ -716,6 +754,7 @@ export function delta_handler(deltaJson: string): void {
 WASM plugins running in Node.js have **~64KB buffer limitations** for stdin/stdout operations. This is a fundamental limitation of the Node.js WASI implementation, not a Signal K restriction.
 
 **Impact:**
+
 - ✅ Small JSON responses (< 64KB): Work fine in pure WASM
 - ⚠️ Medium data (64KB - 1MB): May freeze or fail
 - ❌ Large data (> 1MB): Will fail or freeze the server
@@ -725,6 +764,7 @@ WASM plugins running in Node.js have **~64KB buffer limitations** for stdin/stdo
 For plugins that need to handle large data volumes (logs, file streaming, large JSON responses), use a **hybrid approach**:
 
 **Architecture:**
+
 - **WASM Plugin**: Registers HTTP endpoints and provides configuration UI
 - **Node.js Handler**: Server intercepts specific endpoints and handles I/O directly in Node.js
 - **Result**: Can handle unlimited data without memory constraints
@@ -732,6 +772,7 @@ For plugins that need to handle large data volumes (logs, file streaming, large 
 ### When to Use Hybrid Architecture
 
 Use this pattern when your plugin needs to:
+
 - Stream large log files (journalctl, syslog)
 - Return large JSON responses (> 64KB)
 - Process large file uploads
@@ -772,7 +813,10 @@ The server intercepts the endpoint before it reaches WASM:
 
 ```typescript
 // In src/wasm/wasm-loader.ts
-async function handleLogViewerRequest(req: Request, res: Response): Promise<void> {
+async function handleLogViewerRequest(
+  req: Request,
+  res: Response
+): Promise<void> {
   const lines = parseInt(req.query.lines as string) || 2000
   const maxLines = Math.min(lines, 50000)
 
@@ -798,7 +842,11 @@ async function handleLogViewerRequest(req: Request, res: Response): Promise<void
 }
 
 // Add interception logic in endpoint handler
-if (plugin.id === 'my-plugin' && endpointPath === '/api/logs' && method === 'GET') {
+if (
+  plugin.id === 'my-plugin' &&
+  endpointPath === '/api/logs' &&
+  method === 'GET'
+) {
   debug(`Intercepting /api/logs - handling in Node.js`)
   return handleLogViewerRequest(req, res)
 }
@@ -822,6 +870,7 @@ See [signalk-logviewer](https://github.com/dirkwa/signalk-logviewer/tree/WASM) f
 ### When NOT to Use This Pattern
 
 Don't use hybrid architecture for:
+
 - Small responses (< 10KB)
 - Simple data processing
 - Standard delta emissions
@@ -837,12 +886,12 @@ Rust is excellent for WASM plugins due to its zero-cost abstractions, memory saf
 
 ### Rust vs AssemblyScript: Key Differences
 
-| Aspect | AssemblyScript | Rust |
-|--------|---------------|------|
-| String passing | Automatic via AS loader | Manual buffer-based FFI |
-| Memory management | AS runtime handles | `allocate`/`deallocate` exports |
-| Binary size | 3-10 KB | 50-200 KB |
-| Target | `wasm32` (AS compiler) | `wasm32-wasip1` |
+| Aspect            | AssemblyScript          | Rust                            |
+| ----------------- | ----------------------- | ------------------------------- |
+| String passing    | Automatic via AS loader | Manual buffer-based FFI         |
+| Memory management | AS runtime handles      | `allocate`/`deallocate` exports |
+| Binary size       | 3-10 KB                 | 50-200 KB                       |
+| Target            | `wasm32` (AS compiler)  | `wasm32-wasip1`                 |
 
 ### Step 1: Project Structure
 
@@ -1068,10 +1117,7 @@ fn write_string(s: &str, ptr: *mut u8, max_len: usize) -> i32 {
   "name": "my-rust-wasm-plugin",
   "version": "0.1.0",
   "description": "My Rust WASM plugin for Signal K",
-  "keywords": [
-    "signalk-node-server-plugin",
-    "signalk-wasm-plugin"
-  ],
+  "keywords": ["signalk-node-server-plugin", "signalk-wasm-plugin"],
   "wasmManifest": "plugin.wasm",
   "wasmCapabilities": {
     "network": false,
@@ -1102,12 +1148,14 @@ cp target/wasm32-wasip1/release/my_rust_plugin.wasm plugin.wasm
 ### Step 6: Install
 
 **Option 1: Direct Copy (Recommended for Development)**
+
 ```bash
 mkdir -p ~/.signalk/node_modules/my-rust-wasm-plugin
 cp plugin.wasm package.json ~/.signalk/node_modules/my-rust-wasm-plugin/
 ```
 
 **Option 2: NPM Package Install**
+
 ```bash
 npm pack
 npm install -g ./my-rust-wasm-plugin-0.1.0.tgz
@@ -1125,22 +1173,24 @@ npm install -g ./my-rust-wasm-plugin-0.1.0.tgz
 
 Signal K provides these FFI imports in the `env` module:
 
-| Function | Parameters | Description |
-|----------|------------|-------------|
-| `sk_debug` | `(ptr, len)` | Log debug message |
-| `sk_set_status` | `(ptr, len)` | Set plugin status |
-| `sk_set_error` | `(ptr, len)` | Set error message |
-| `sk_handle_message` | `(ptr, len)` | Emit delta message |
+| Function                  | Parameters                               | Description          |
+| ------------------------- | ---------------------------------------- | -------------------- |
+| `sk_debug`                | `(ptr, len)`                             | Log debug message    |
+| `sk_set_status`           | `(ptr, len)`                             | Set plugin status    |
+| `sk_set_error`            | `(ptr, len)`                             | Set error message    |
+| `sk_handle_message`       | `(ptr, len)`                             | Emit delta message   |
 | `sk_register_put_handler` | `(ctx_ptr, ctx_len, path_ptr, path_len)` | Register PUT handler |
 
 > **⚠️ IMPORTANT: Use Exact Function Names**
 >
 > You MUST use the exact function names listed above. Common mistakes:
+>
 > - ❌ `sk_log_debug`, `sk_log_info`, `sk_log_warn` → ✅ Use `sk_debug` for all logging
 > - ❌ `sk_emit_delta` → ✅ Use `sk_handle_message`
 > - ❌ `sk_udp_recv_from` → ✅ Use `sk_udp_recv`
 >
 > There is only one logging function (`sk_debug`). If you need log levels, prefix your message:
+>
 > ```rust
 > debug("[INFO] Starting radar scan");
 > debug("[WARN] Connection timeout");
@@ -1148,23 +1198,23 @@ Signal K provides these FFI imports in the `env` module:
 
 Your plugin MUST export:
 
-| Export | Signature | Description |
-|--------|-----------|-------------|
-| `plugin_id` | `(out_ptr, max_len) -> len` | Return plugin ID |
-| `plugin_name` | `(out_ptr, max_len) -> len` | Return plugin name |
-| `plugin_schema` | `(out_ptr, max_len) -> len` | Return JSON schema |
-| `plugin_start` | `(config_ptr, config_len) -> status` | Start plugin |
-| `plugin_stop` | `() -> status` | Stop plugin |
-| `allocate` | `(size) -> ptr` | Allocate memory |
-| `deallocate` | `(ptr, size)` | Free memory |
+| Export          | Signature                            | Description        |
+| --------------- | ------------------------------------ | ------------------ |
+| `plugin_id`     | `(out_ptr, max_len) -> len`          | Return plugin ID   |
+| `plugin_name`   | `(out_ptr, max_len) -> len`          | Return plugin name |
+| `plugin_schema` | `(out_ptr, max_len) -> len`          | Return JSON schema |
+| `plugin_start`  | `(config_ptr, config_len) -> status` | Start plugin       |
+| `plugin_stop`   | `() -> status`                       | Stop plugin        |
+| `allocate`      | `(size) -> ptr`                      | Allocate memory    |
+| `deallocate`    | `(ptr, size)`                        | Free memory        |
 
 Your plugin MAY export (optional):
 
-| Export | Signature | Description |
-|--------|-----------|-------------|
-| `poll` | `() -> status` | Called every 1 second while plugin is running. Useful for polling hardware, sockets, or external systems. Return 0 for success, non-zero for errors. |
-| `http_endpoints` | `() -> json` | Return JSON array of HTTP endpoint definitions |
-| `delta_handler` | `(delta_ptr, delta_len)` | Receives Signal K deltas as JSON strings. Called for every delta emitted by the server. |
+| Export           | Signature                | Description                                                                                                                                          |
+| ---------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `poll`           | `() -> status`           | Called every 1 second while plugin is running. Useful for polling hardware, sockets, or external systems. Return 0 for success, non-zero for errors. |
+| `http_endpoints` | `() -> json`             | Return JSON array of HTTP endpoint definitions                                                                                                       |
+| `delta_handler`  | `(delta_ptr, delta_len)` | Receives Signal K deltas as JSON strings. Called for every delta emitted by the server.                                                              |
 
 📁 **See [anchor-watch-rust example](../examples/wasm-plugins/anchor-watch-rust/) for a complete working plugin with PUT handlers**
 
@@ -1316,10 +1366,7 @@ func main() {}
   "name": "my-go-wasm-plugin",
   "version": "0.1.0",
   "description": "My Go WASM plugin",
-  "keywords": [
-    "signalk-node-server-plugin",
-    "signalk-wasm-plugin"
-  ],
+  "keywords": ["signalk-node-server-plugin", "signalk-wasm-plugin"],
   "wasmManifest": "plugin.wasm",
   "wasmCapabilities": {
     "dataRead": true,
@@ -1352,33 +1399,33 @@ cp plugin.wasm package.json ~/.signalk/node_modules/my-go-wasm-plugin/
 
 Signal K provides these FFI imports in the `env` module:
 
-| Function | Parameters | Description |
-|----------|------------|-------------|
-| `sk_debug` | `(ptr, len)` | Log debug message |
-| `sk_set_status` | `(ptr, len)` | Set plugin status |
-| `sk_set_error` | `(ptr, len)` | Set error message |
-| `sk_handle_message` | `(ptr, len)` | Emit delta message |
+| Function                        | Parameters   | Description                   |
+| ------------------------------- | ------------ | ----------------------------- |
+| `sk_debug`                      | `(ptr, len)` | Log debug message             |
+| `sk_set_status`                 | `(ptr, len)` | Set plugin status             |
+| `sk_set_error`                  | `(ptr, len)` | Set error message             |
+| `sk_handle_message`             | `(ptr, len)` | Emit delta message            |
 | `sk_register_resource_provider` | `(ptr, len)` | Register as resource provider |
 
 Your plugin MUST export:
 
-| Export | Signature | Description |
-|--------|-----------|-------------|
-| `plugin_id` | `(out_ptr, max_len) -> len` | Return plugin ID |
-| `plugin_name` | `(out_ptr, max_len) -> len` | Return plugin name |
-| `plugin_schema` | `(out_ptr, max_len) -> len` | Return JSON schema |
-| `plugin_start` | `(config_ptr, config_len) -> status` | Start plugin |
-| `plugin_stop` | `() -> status` | Stop plugin |
-| `allocate` | `(size) -> ptr` | Allocate memory |
-| `deallocate` | `(ptr, size)` | Free memory |
+| Export          | Signature                            | Description        |
+| --------------- | ------------------------------------ | ------------------ |
+| `plugin_id`     | `(out_ptr, max_len) -> len`          | Return plugin ID   |
+| `plugin_name`   | `(out_ptr, max_len) -> len`          | Return plugin name |
+| `plugin_schema` | `(out_ptr, max_len) -> len`          | Return JSON schema |
+| `plugin_start`  | `(config_ptr, config_len) -> status` | Start plugin       |
+| `plugin_stop`   | `() -> status`                       | Stop plugin        |
+| `allocate`      | `(size) -> ptr`                      | Allocate memory    |
+| `deallocate`    | `(ptr, size)`                        | Free memory        |
 
 Your plugin MAY export (optional):
 
-| Export | Signature | Description |
-|--------|-----------|-------------|
-| `poll` | `() -> status` | Called every 1 second while plugin is running. Useful for polling hardware, sockets, or external systems. Return 0 for success, non-zero for errors. |
-| `http_endpoints` | `() -> json` | Return JSON array of HTTP endpoint definitions |
-| `delta_handler` | `(delta_ptr, delta_len)` | Receives Signal K deltas as JSON strings. Called for every delta emitted by the server. |
+| Export           | Signature                | Description                                                                                                                                          |
+| ---------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `poll`           | `() -> status`           | Called every 1 second while plugin is running. Useful for polling hardware, sockets, or external systems. Return 0 for success, non-zero for errors. |
+| `http_endpoints` | `() -> json`             | Return JSON array of HTTP endpoint definitions                                                                                                       |
+| `delta_handler`  | `(delta_ptr, delta_len)` | Receives Signal K deltas as JSON strings. Called for every delta emitted by the server.                                                              |
 
 ### TinyGo Limitations
 
@@ -1418,6 +1465,7 @@ This happens because .NET NativeAOT uses indirect call tables that are initializ
 remain null, causing every function call to fail.
 
 **Workarounds attempted:**
+
 - Manual `_initialize()` call - no effect
 - `InitializeModules()` call - crashes (already called by `_initialize`)
 - Removing `[ThreadStatic]` attribute - fixed build but not runtime
@@ -1437,12 +1485,13 @@ tooling matures. The code compiles and transpiles successfully, but cannot execu
 
 .NET 10 produces **WASI Component Model** (P2/P3) binaries, not WASI Preview 1 (P1) format:
 
-| Format | Version Magic | Compatible Runtimes |
-|--------|--------------|---------------------|
-| WASI P1 | `0x01` | Node.js WASI, wasmer |
-| Component Model | `0x0d` | wasmtime, jco transpile |
+| Format          | Version Magic | Compatible Runtimes     |
+| --------------- | ------------- | ----------------------- |
+| WASI P1         | `0x01`        | Node.js WASI, wasmer    |
+| Component Model | `0x0d`        | wasmtime, jco transpile |
 
 Signal K currently uses WASI P1. To run .NET plugins, either:
+
 1. **Upgrade runtime** to wasmtime with component support
 2. **Transpile** with `jco` to JavaScript + P1 WASM
 
@@ -1760,6 +1809,7 @@ dotnet build
 ```
 
 Expected output:
+
 ```
 Wiederherstellung abgeschlossen (1.7s)
   AnchorWatch net10.0 wasi-wasm erfolgreich mit 1 Warnung(en) (16.9s)
@@ -1779,6 +1829,7 @@ npx @bytecodealliance/jco wit bin\Debug\net10.0\wasi-wasm\publish\AnchorWatch.wa
 ```
 
 Expected WIT output:
+
 ```wit
 package root:component;
 
@@ -1795,23 +1846,30 @@ world root {
 ### Troubleshooting .NET Builds
 
 #### Error: ThreadStaticAttribute not found
+
 The `patch-threadstatic.ps1` script should fix this automatically. If it persists:
+
 1. Delete the `obj` folder completely
 2. Ensure the patch script path is correct in `.csproj`
 3. Run `dotnet build` again
 
 #### Error: Microsoft.DotNet.ILCompiler.LLVM not found
+
 Ensure `nuget.config` is present with the `dotnet-experimental` feed.
 
 #### Error: List<> or Span<> not found
+
 The patch script adds missing `using` statements. If errors persist, manually add to the generated files:
+
 ```csharp
 using System;
 using System.Collections.Generic;
 ```
 
 #### Large binary size (~20 MB)
+
 This is expected for NativeAOT-LLVM compilation. The binary includes:
+
 - .NET runtime (trimmed)
 - WASI Component Model adapter
 - Your plugin code
@@ -1863,6 +1921,7 @@ Replace Node.js WASI with wasmtime (supports Component Model natively).
 
 **Option 2: jco Transpilation**
 Transpile to JavaScript + WASI P1:
+
 ```bash
 npx @bytecodealliance/jco transpile AnchorWatch.wasm -o ./transpiled
 ```
@@ -1879,23 +1938,24 @@ This generates JavaScript bindings that work with the current Node.js runtime.
 
 Declare required capabilities in `package.json`:
 
-| Capability | Description | Status |
-|------------|-------------|--------|
-| `dataRead` | Read Signal K data model | ✅ Supported |
-| `dataWrite` | Emit delta messages | ✅ Supported |
-| `storage` | Write to VFS (`vfs-only`) | ✅ Supported |
-| `httpEndpoints` | Register custom HTTP endpoints | ✅ Supported |
-| `staticFiles` | Serve HTML/CSS/JS from `public/` folder | ✅ Supported |
-| `network` | HTTP requests (via as-fetch) | ✅ Supported (AssemblyScript only) |
-| `putHandlers` | Register PUT handlers for vessel control | ✅ Supported |
-| `rawSockets` | UDP socket access for radar, NMEA, etc. | ✅ Supported |
-| `serialPorts` | Serial port access | ⏳ Planned (Phase 3) |
+| Capability      | Description                              | Status                             |
+| --------------- | ---------------------------------------- | ---------------------------------- |
+| `dataRead`      | Read Signal K data model                 | ✅ Supported                       |
+| `dataWrite`     | Emit delta messages                      | ✅ Supported                       |
+| `storage`       | Write to VFS (`vfs-only`)                | ✅ Supported                       |
+| `httpEndpoints` | Register custom HTTP endpoints           | ✅ Supported                       |
+| `staticFiles`   | Serve HTML/CSS/JS from `public/` folder  | ✅ Supported                       |
+| `network`       | HTTP requests (via as-fetch)             | ✅ Supported (AssemblyScript only) |
+| `putHandlers`   | Register PUT handlers for vessel control | ✅ Supported                       |
+| `rawSockets`    | UDP socket access for radar, NMEA, etc.  | ✅ Supported                       |
+| `serialPorts`   | Serial port access                       | ⏳ Planned (Phase 3)               |
 
 ### Network API (AssemblyScript)
 
 AssemblyScript plugins can make HTTP requests using the `as-fetch` library integrated into the SDK:
 
 **Requirements:**
+
 - Plugin must declare `"network": true` in manifest
 - Server must be running Node.js 18+ (for native fetch support)
 - Import network functions from SDK
@@ -1905,7 +1965,10 @@ AssemblyScript plugins can make HTTP requests using the `as-fetch` library integ
 **Example: HTTP GET Request**
 
 ```typescript
-import { httpGet, hasNetworkCapability } from 'signalk-assemblyscript-plugin-sdk/assembly/network'
+import {
+  httpGet,
+  hasNetworkCapability
+} from 'signalk-assemblyscript-plugin-sdk/assembly/network'
 import { debug, setError } from 'signalk-assemblyscript-plugin-sdk/assembly'
 
 class MyPlugin extends Plugin {
@@ -1982,6 +2045,7 @@ For plugins using network capability, your `asconfig.json` must include:
 ```
 
 **Key requirements:**
+
 - `"exportRuntime": true` - Required for AssemblyScript loader string handling
 - `"transform": ["as-fetch/transform"]` - Required for as-fetch HTTP support
 
@@ -2005,6 +2069,7 @@ For plugins using network capability, your `asconfig.json` must include:
 See [examples/wasm-plugins/weather-plugin](examples/wasm-plugins/weather-plugin/) for a full working example that fetches weather data from OpenWeatherMap.
 
 **Security Notes:**
+
 - Requests are subject to standard browser/Node.js security policies
 - CORS applies for cross-origin requests
 - No rate limiting enforced by server (implement in your plugin)
@@ -2013,12 +2078,14 @@ See [examples/wasm-plugins/weather-plugin](examples/wasm-plugins/weather-plugin/
 ### Raw Sockets API (UDP)
 
 The `rawSockets` capability enables direct UDP socket access for plugins that need to communicate with devices like:
+
 - Marine radars (Navico, Raymarine, Furuno, Garmin)
 - NMEA 0183 over UDP
 - AIS receivers
 - Other marine electronics using UDP multicast
 
 **Requirements:**
+
 - Plugin must declare `"rawSockets": true` in manifest
 - Sockets are non-blocking (poll-based receive)
 - Automatic cleanup when plugin stops
@@ -2038,19 +2105,19 @@ The `rawSockets` capability enables direct UDP socket access for plugins that ne
 
 **FFI Functions Available:**
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `sk_udp_create` | `(type: i32) -> i32` | Create socket (0=udp4, 1=udp6). Returns socket_id or -1 |
-| `sk_udp_bind` | `(socket_id, port) -> i32` | Bind to port (0=any). Returns 0 or -1 |
-| `sk_udp_join_multicast` | `(socket_id, addr_ptr, addr_len, iface_ptr, iface_len) -> i32` | Join multicast group |
-| `sk_udp_leave_multicast` | `(socket_id, addr_ptr, addr_len, iface_ptr, iface_len) -> i32` | Leave multicast group |
-| `sk_udp_set_multicast_ttl` | `(socket_id, ttl) -> i32` | Set multicast TTL |
-| `sk_udp_set_multicast_loopback` | `(socket_id, enabled) -> i32` | Enable/disable loopback |
-| `sk_udp_set_broadcast` | `(socket_id, enabled) -> i32` | Enable/disable broadcast |
-| `sk_udp_send` | `(socket_id, addr_ptr, addr_len, port, data_ptr, data_len) -> i32` | Send datagram |
-| `sk_udp_recv` | `(socket_id, buf_ptr, buf_max_len, addr_out_ptr, port_out_ptr) -> i32` | Receive datagram (non-blocking) |
-| `sk_udp_pending` | `(socket_id) -> i32` | Get number of buffered datagrams |
-| `sk_udp_close` | `(socket_id) -> void` | Close socket |
+| Function                        | Signature                                                              | Description                                             |
+| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| `sk_udp_create`                 | `(type: i32) -> i32`                                                   | Create socket (0=udp4, 1=udp6). Returns socket_id or -1 |
+| `sk_udp_bind`                   | `(socket_id, port) -> i32`                                             | Bind to port (0=any). Returns 0 or -1                   |
+| `sk_udp_join_multicast`         | `(socket_id, addr_ptr, addr_len, iface_ptr, iface_len) -> i32`         | Join multicast group                                    |
+| `sk_udp_leave_multicast`        | `(socket_id, addr_ptr, addr_len, iface_ptr, iface_len) -> i32`         | Leave multicast group                                   |
+| `sk_udp_set_multicast_ttl`      | `(socket_id, ttl) -> i32`                                              | Set multicast TTL                                       |
+| `sk_udp_set_multicast_loopback` | `(socket_id, enabled) -> i32`                                          | Enable/disable loopback                                 |
+| `sk_udp_set_broadcast`          | `(socket_id, enabled) -> i32`                                          | Enable/disable broadcast                                |
+| `sk_udp_send`                   | `(socket_id, addr_ptr, addr_len, port, data_ptr, data_len) -> i32`     | Send datagram                                           |
+| `sk_udp_recv`                   | `(socket_id, buf_ptr, buf_max_len, addr_out_ptr, port_out_ptr) -> i32` | Receive datagram (non-blocking)                         |
+| `sk_udp_pending`                | `(socket_id) -> i32`                                                   | Get number of buffered datagrams                        |
+| `sk_udp_close`                  | `(socket_id) -> void`                                                  | Close socket                                            |
 
 > **⚠️ Note:** Use exact function names. Do NOT use `sk_udp_recv_from` - the correct name is `sk_udp_recv`.
 
@@ -2134,6 +2201,7 @@ fn poll_radar_data(socket_id: i32) {
 ```
 
 **Important Notes:**
+
 - Receive is non-blocking - returns 0 if no data available
 - Incoming datagrams are buffered (max 1000 per socket)
 - Oldest datagrams are dropped if buffer is full
@@ -2172,6 +2240,7 @@ while let Some((len, addr, port)) = socket.recv_from(&mut buf, &mut addr_buf)? {
 ### Custom HTTP Endpoints API
 
 WASM plugins can register custom HTTP endpoints to expose REST APIs. This enables:
+
 - Custom data APIs for dashboards
 - Configuration endpoints
 - Integration with external services
@@ -2180,6 +2249,7 @@ WASM plugins can register custom HTTP endpoints to expose REST APIs. This enable
 #### Enabling HTTP Endpoints
 
 **Requirements:**
+
 - Plugin must declare `"httpEndpoints": true` in manifest
 - Export `http_endpoints()` function returning JSON array of endpoint definitions
 - Export handler functions for each endpoint
@@ -2209,9 +2279,9 @@ WASM plugins can register custom HTTP endpoints to expose REST APIs. This enable
 // Export endpoint definitions
 export function http_endpoints(): string {
   return JSON.stringify([
-    { method: "GET", path: "/api/data", handler: "handle_get_data" },
-    { method: "POST", path: "/api/submit", handler: "handle_post_submit" },
-    { method: "GET", path: "/api/status", handler: "handle_get_status" }
+    { method: 'GET', path: '/api/data', handler: 'handle_get_data' },
+    { method: 'POST', path: '/api/submit', handler: 'handle_post_submit' },
+    { method: 'GET', path: '/api/status', handler: 'handle_get_status' }
   ])
 }
 
@@ -2225,8 +2295,8 @@ export function handle_get_data(requestPtr: i32, requestLen: i32): string {
   // Process request and return response
   return JSON.stringify({
     statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: "Hello from WASM!", timestamp: Date.now() })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'Hello from WASM!', timestamp: Date.now() })
   })
 }
 
@@ -2239,7 +2309,7 @@ export function handle_post_submit(requestPtr: i32, requestLen: i32): string {
 
   return JSON.stringify({
     statusCode: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ received: true, data: body })
   })
 }
@@ -2354,20 +2424,20 @@ Handlers must return a JSON object:
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `statusCode` | number | HTTP status code (200, 400, 404, 500, etc.) |
-| `headers` | object | Optional response headers |
-| `body` | string/object | Response body (string for text, object for JSON) |
+| Field        | Type          | Description                                      |
+| ------------ | ------------- | ------------------------------------------------ |
+| `statusCode` | number        | HTTP status code (200, 400, 404, 500, etc.)      |
+| `headers`    | object        | Optional response headers                        |
+| `body`       | string/object | Response body (string for text, object for JSON) |
 
 #### URL Routing
 
 Endpoints are mounted under `/plugins/{plugin-id}/`:
 
-| Plugin ID | Endpoint Path | Full URL |
-|-----------|--------------|----------|
-| `my-plugin` | `/api/data` | `http://localhost:3000/plugins/my-plugin/api/data` |
-| `my-plugin` | `/status` | `http://localhost:3000/plugins/my-plugin/status` |
+| Plugin ID   | Endpoint Path | Full URL                                           |
+| ----------- | ------------- | -------------------------------------------------- |
+| `my-plugin` | `/api/data`   | `http://localhost:3000/plugins/my-plugin/api/data` |
+| `my-plugin` | `/status`     | `http://localhost:3000/plugins/my-plugin/status`   |
 
 #### Testing HTTP Endpoints
 
@@ -2395,6 +2465,7 @@ curl "http://localhost:3000/plugins/my-plugin/api/data?format=json&limit=10"
 ### PUT Handlers API
 
 WASM plugins can register PUT handlers to respond to PUT requests from clients, enabling vessel control and configuration management. This is useful for:
+
 - Controlling autopilot and steering
 - Managing anchor watch and alarms
 - Configuring devices and sensors
@@ -2403,6 +2474,7 @@ WASM plugins can register PUT handlers to respond to PUT requests from clients, 
 #### Enabling PUT Handlers
 
 **Requirements:**
+
 - Plugin must declare `"putHandlers": true` in manifest
 - Import PUT handler functions from FFI
 - Register handlers during `plugin_start()`
@@ -2504,6 +2576,7 @@ pub extern "C" fn handle_put_vessels_self_navigation_anchor_position(
 Handler functions must follow this naming pattern:
 
 **Format:** `handle_put_{context}_{path}`
+
 - Replace all dots (`.`) with underscores (`_`)
 - Convert to lowercase (recommended)
 
@@ -2530,6 +2603,7 @@ PUT handlers receive a JSON request with this structure:
 ```
 
 **Request Fields:**
+
 - `context` - Signal K context (e.g., `vessels.self`)
 - `path` - Signal K path (e.g., `navigation.anchor.position`)
 - `value` - The value to set (type depends on path)
@@ -2547,6 +2621,7 @@ PUT handlers must return a JSON response:
 ```
 
 **Response Fields:**
+
 - `state` - Request state: `COMPLETED` or `PENDING`
   - `COMPLETED` - Request finished (success or error)
   - `PENDING` - Request accepted but still processing
@@ -2616,6 +2691,7 @@ If multiple sources provide the same path and you omit the `source` parameter:
 #### Best Practices
 
 **1. Validate Input**
+
 ```csharp
 if (radius <= 0 || radius > 1000) {
     return MarshalJson(new PutResponse {
@@ -2672,6 +2748,7 @@ The server automatically sets `meta.supportsPut: true` for paths with registered
 #### Complete Example
 
 See [examples/wasm-plugins/anchor-watch-dotnet](examples/wasm-plugins/anchor-watch-dotnet/) for a complete working example demonstrating:
+
 - C# / .NET 8 WASM development
 - PUT handler registration and implementation
 - State management with VFS storage
@@ -2706,6 +2783,7 @@ fn load_state() -> String {
 ```
 
 **VFS Structure:**
+
 ```
 / (VFS root)
 ├── data/      # Persistent storage
@@ -2784,6 +2862,7 @@ Server can watch for `.wasm` file changes and auto-reload (coming soon).
 ### Reload Behavior
 
 During reload:
+
 - `stop()` is called on old instance
 - Subscriptions are preserved
 - Deltas are buffered (not lost)
@@ -2921,6 +3000,7 @@ journalctl -u signalk -f | grep wasm
 ### 1. Assess Compatibility
 
 Check if your plugin:
+
 - ✅ Processes deltas
 - ✅ Reads/writes configuration
 - ✅ Uses data model APIs
@@ -2933,8 +3013,9 @@ Check if your plugin:
 Convert TypeScript/JavaScript logic to Rust:
 
 **Before (Node.js):**
+
 ```javascript
-plugin.start = function(config) {
+plugin.start = function (config) {
   app.handleMessage('my-plugin', {
     updates: [{ values: [{ path: 'foo', value: 'bar' }] }]
   })
@@ -2942,6 +3023,7 @@ plugin.start = function(config) {
 ```
 
 **After (WASM/Rust):**
+
 ```rust
 fn start(config_ptr: *const u8, config_len: usize) -> i32 {
     let delta = json!({
@@ -3017,6 +3099,7 @@ fn calculate_true_wind() {
 Plugins can serve HTML, CSS, JavaScript and other static files:
 
 **Structure:**
+
 ```
 @signalk/my-plugin/
 ├── public/           # Automatically served at /plugins/my-plugin/
@@ -3034,16 +3117,18 @@ Plugins can serve HTML, CSS, JavaScript and other static files:
 Register custom REST API endpoints:
 
 **Important**: Custom endpoints are mounted at `/plugins/your-plugin-id/`. For example:
+
 - Plugin registers: `/api/logs`
 - Actual endpoint: `http://localhost:3000/plugins/my-plugin/api/logs`
 - In your web UI: Use absolute paths like `/plugins/my-plugin/api/logs` or relative paths will resolve correctly from your plugin's static files
 
 **AssemblyScript Example:**
+
 ```typescript
 export function http_endpoints(): string {
   return JSON.stringify([
-    { method: "GET", path: "/api/logs", handler: "handle_get_logs" },
-    { method: "POST", path: "/api/clear", handler: "handle_clear_logs" }
+    { method: 'GET', path: '/api/logs', handler: 'handle_get_logs' },
+    { method: 'POST', path: '/api/clear', handler: 'handle_clear_logs' }
   ])
 }
 
@@ -3066,6 +3151,7 @@ export function handle_get_logs(requestJson: string): string {
 ```
 
 **Rust Example:**
+
 ```rust
 #[no_mangle]
 pub extern "C" fn http_endpoints() -> *const u8 {
@@ -3087,6 +3173,7 @@ pub extern "C" fn handle_status(req_ptr: *const u8, req_len: usize) -> *const u8
 ```
 
 **Request Context:**
+
 ```json
 {
   "method": "GET",
@@ -3099,6 +3186,7 @@ pub extern "C" fn handle_status(req_ptr: *const u8, req_len: usize) -> *const u8
 ```
 
 **Response Format:**
+
 ```json
 {
   "statusCode": 200,
@@ -3164,11 +3252,13 @@ function readSystemLogs(lines: i32 = 100): string {
 #### 4. Recompile
 
 After adding the FFI declaration, **recompile your WASM module**:
+
 ```bash
 npm run asbuild
 ```
 
 **Allowed Commands (Whitelisted for Security):**
+
 - `journalctl -u signalk*` - Read SignalK service logs
 - `cat /var/log/*` - Read log files
 - `tail -n <N> /*` - Tail log files
@@ -3180,6 +3270,7 @@ npm run asbuild
 WASM plugins can act as **resource providers** for Signal K resources like weather data, routes, waypoints, or custom resource types.
 
 **Example Plugins:**
+
 - [weather-plugin](../examples/wasm-plugins/weather-plugin/) - Custom resource type (`weather`)
 - [routes-waypoints-plugin](../examples/wasm-plugins/routes-waypoints-plugin/) - Standard types (`routes`, `waypoints`)
 
@@ -3206,8 +3297,8 @@ Add `resourceProvider: true` to your package.json:
 import { registerResourceProvider } from 'signalk-assemblyscript-plugin-sdk/assembly/resources'
 
 // In plugin start():
-if (!registerResourceProvider("weather-forecasts")) {
-  setError("Failed to register as resource provider")
+if (!registerResourceProvider('weather-forecasts')) {
+  setError('Failed to register as resource provider')
   return 1
 }
 ```
@@ -3239,6 +3330,7 @@ After registering, your plugin must export these handler functions:
 #### `resource_list` - List resources matching a query
 
 **AssemblyScript:**
+
 ```typescript
 export function resource_list(queryJson: string): string {
   // queryJson: {"bbox": [...], "distance": 1000, ...}
@@ -3248,6 +3340,7 @@ export function resource_list(queryJson: string): string {
 ```
 
 **Rust:**
+
 ```rust
 #[no_mangle]
 pub extern "C" fn resource_list(
@@ -3263,6 +3356,7 @@ pub extern "C" fn resource_list(
 #### `resource_get` - Get a single resource
 
 **AssemblyScript:**
+
 ```typescript
 export function resource_get(requestJson: string): string {
   // requestJson: {"id": "forecast-1", "property": null}
@@ -3271,6 +3365,7 @@ export function resource_get(requestJson: string): string {
 ```
 
 **Rust:**
+
 ```rust
 #[no_mangle]
 pub extern "C" fn resource_get(
@@ -3286,6 +3381,7 @@ pub extern "C" fn resource_get(
 #### `resource_set` - Create or update a resource
 
 **AssemblyScript:**
+
 ```typescript
 export function resource_set(requestJson: string): string {
   // requestJson: {"id": "forecast-1", "value": {...}}
@@ -3297,6 +3393,7 @@ export function resource_set(requestJson: string): string {
 #### `resource_delete` - Delete a resource
 
 **AssemblyScript:**
+
 ```typescript
 export function resource_delete(requestJson: string): string {
   // requestJson: {"id": "forecast-1"}
@@ -3316,6 +3413,7 @@ DELETE /signalk/v2/api/resources/{type}/{id}    # Delete
 ```
 
 Example for a weather provider:
+
 ```bash
 # List all weather forecasts
 curl http://localhost:3000/signalk/v2/api/resources/weather-forecasts
@@ -3327,6 +3425,7 @@ curl http://localhost:3000/signalk/v2/api/resources/weather-forecasts/forecast-1
 ### Standard vs Custom Resource Types
 
 Signal K defines standard resource types with validation:
+
 - `routes` - Navigation routes
 - `waypoints` - Navigation waypoints
 - `notes` - Freeform notes
@@ -3341,13 +3440,13 @@ WASM plugins can act as **weather providers** for Signal K's specialized Weather
 
 ### Weather Provider vs Resource Provider
 
-| Feature | Weather Provider | Resource Provider |
-|---------|-----------------|-------------------|
-| API Path | `/signalk/v2/api/weather/*` | `/signalk/v2/api/resources/{type}` |
-| Methods | getObservations, getForecasts, getWarnings | list, get, set, delete |
-| Use Case | Standardized weather data | Generic data storage |
-| Capability | `weatherProvider: true` | `resourceProvider: true` |
-| FFI | `sk_register_weather_provider` | `sk_register_resource_provider` |
+| Feature    | Weather Provider                           | Resource Provider                  |
+| ---------- | ------------------------------------------ | ---------------------------------- |
+| API Path   | `/signalk/v2/api/weather/*`                | `/signalk/v2/api/resources/{type}` |
+| Methods    | getObservations, getForecasts, getWarnings | list, get, set, delete             |
+| Use Case   | Standardized weather data                  | Generic data storage               |
+| Capability | `weatherProvider: true`                    | `resourceProvider: true`           |
+| FFI        | `sk_register_weather_provider`             | `sk_register_resource_provider`    |
 
 ### Enabling Weather Provider Capability
 
@@ -3414,17 +3513,21 @@ After registering, your plugin must export these handler functions:
 #### `weather_get_observations` - Get current weather observations
 
 **AssemblyScript:**
+
 ```typescript
 export function weather_get_observations(requestJson: string): string {
   // requestJson: {"position": {"latitude": 60.17, "longitude": 24.94}, "options": {...}}
   // Return JSON array of observation objects
-  return '[{"date":"2025-01-01T00:00:00Z","type":"observation","description":"Clear sky",' +
+  return (
+    '[{"date":"2025-01-01T00:00:00Z","type":"observation","description":"Clear sky",' +
     '"outside":{"temperature":280.15,"relativeHumidity":0.65,"pressure":101300,"cloudCover":0.1},' +
     '"wind":{"speedTrue":5.0,"directionTrue":1.57}}]'
+  )
 }
 ```
 
 **Rust:**
+
 ```rust
 #[no_mangle]
 pub extern "C" fn weather_get_observations(
@@ -3440,6 +3543,7 @@ pub extern "C" fn weather_get_observations(
 #### `weather_get_forecasts` - Get weather forecasts
 
 **AssemblyScript:**
+
 ```typescript
 export function weather_get_forecasts(requestJson: string): string {
   // requestJson: {"position": {...}, "type": "daily"|"point", "options": {"maxCount": 7}}
@@ -3451,6 +3555,7 @@ export function weather_get_forecasts(requestJson: string): string {
 #### `weather_get_warnings` - Get weather warnings/alerts
 
 **AssemblyScript:**
+
 ```typescript
 export function weather_get_warnings(requestJson: string): string {
   // requestJson: {"position": {...}}
@@ -3486,6 +3591,7 @@ export function weather_get_warnings(requestJson: string): string {
 ```
 
 Units:
+
 - Temperature: Kelvin
 - Humidity: Ratio (0-1)
 - Pressure: Pascals
@@ -3528,6 +3634,7 @@ curl "http://localhost:3000/signalk/v2/api/weather/warnings?lat=60.17&lon=24.94"
 ### Example: OpenWeatherMap Provider
 
 See `examples/wasm-plugins/weather-provider-plugin/` for a complete working example that:
+
 - Fetches real weather data from OpenWeatherMap API
 - Implements all three Weather Provider methods
 - Uses Asyncify for async HTTP requests
@@ -3540,6 +3647,7 @@ WASM plugins can act as **radar providers** for Signal K's Radar API at `/signal
 ### Radar API Overview
 
 The Radar API supports:
+
 - Listing all radars from all providers
 - Getting radar info (status, range, controls, streamUrl)
 - Controlling radar (power, range, gain)
@@ -3565,6 +3673,7 @@ In your `package.json`:
 Call `sk_register_radar_provider` in your plugin's `start()` function:
 
 **AssemblyScript:**
+
 ```typescript
 // Declare the host function
 @external("env", "sk_register_radar_provider")
@@ -3595,18 +3704,18 @@ Radar providers must export these handler functions:
 ```typescript
 // Return JSON array of radar IDs this provider manages
 export function radar_get_radars(): string {
-  return JSON.stringify(["radar-0", "radar-1"]);
+  return JSON.stringify(['radar-0', 'radar-1'])
 }
 
 // Return RadarInfo JSON for a specific radar
 export function radar_get_info(requestJson: string): string {
-  const req = JSON.parse<RadarGetInfoRequest>(requestJson);
+  const req = JSON.parse<RadarGetInfoRequest>(requestJson)
 
   const info: RadarInfo = {
     id: req.radarId,
-    name: "Furuno DRS4D-NXT",
-    brand: "Furuno",
-    status: "transmit",
+    name: 'Furuno DRS4D-NXT',
+    brand: 'Furuno',
+    status: 'transmit',
     spokesPerRevolution: 2048,
     maxSpokeLen: 1024,
     range: 2000,
@@ -3615,42 +3724,42 @@ export function radar_get_info(requestJson: string): string {
       sea: { auto: true, value: 30 }
     },
     // Optional: external stream URL (if absent, clients use /radars/{id}/stream)
-    streamUrl: "ws://192.168.1.100:3001/v1/api/stream/radar-0"
-  };
+    streamUrl: 'ws://192.168.1.100:3001/v1/api/stream/radar-0'
+  }
 
-  return JSON.stringify(info);
+  return JSON.stringify(info)
 }
 
 // Optional: Set radar power state
 export function radar_set_power(requestJson: string): string {
-  const req = JSON.parse<RadarSetPowerRequest>(requestJson);
+  const req = JSON.parse<RadarSetPowerRequest>(requestJson)
   // req.radarId, req.state ("off" | "standby" | "transmit" | "warming")
   // ... send command to hardware ...
-  return "true"; // or "false" on failure
+  return 'true' // or "false" on failure
 }
 
 // Optional: Set radar range
 export function radar_set_range(requestJson: string): string {
-  const req = JSON.parse<RadarSetRangeRequest>(requestJson);
+  const req = JSON.parse<RadarSetRangeRequest>(requestJson)
   // req.radarId, req.range (meters)
   // ... send command to hardware ...
-  return "true";
+  return 'true'
 }
 
 // Optional: Set radar gain
 export function radar_set_gain(requestJson: string): string {
-  const req = JSON.parse<RadarSetGainRequest>(requestJson);
+  const req = JSON.parse<RadarSetGainRequest>(requestJson)
   // req.radarId, req.gain { auto: boolean, value?: number }
   // ... send command to hardware ...
-  return "true";
+  return 'true'
 }
 
 // Optional: Set multiple controls at once
 export function radar_set_controls(requestJson: string): string {
-  const req = JSON.parse<RadarSetControlsRequest>(requestJson);
+  const req = JSON.parse<RadarSetControlsRequest>(requestJson)
   // req.radarId, req.controls (partial RadarControls)
   // ... send commands to hardware ...
-  return "true";
+  return 'true'
 }
 ```
 
@@ -3658,22 +3767,22 @@ export function radar_set_controls(requestJson: string): string {
 
 ```typescript
 interface RadarInfo {
-  id: string;                    // Unique radar ID
-  name: string;                  // Display name
-  brand?: string;                // Manufacturer
-  status: "off" | "standby" | "transmit" | "warming";
-  spokesPerRevolution: number;   // Spokes per rotation
-  maxSpokeLen: number;           // Max spoke samples
-  range: number;                 // Current range (meters)
-  controls: RadarControls;       // Current control values
-  legend?: LegendEntry[];        // Color legend for display
-  streamUrl?: string;            // Optional external WebSocket URL
+  id: string // Unique radar ID
+  name: string // Display name
+  brand?: string // Manufacturer
+  status: 'off' | 'standby' | 'transmit' | 'warming'
+  spokesPerRevolution: number // Spokes per rotation
+  maxSpokeLen: number // Max spoke samples
+  range: number // Current range (meters)
+  controls: RadarControls // Current control values
+  legend?: LegendEntry[] // Color legend for display
+  streamUrl?: string // Optional external WebSocket URL
 }
 
 interface RadarControls {
-  gain: { auto: boolean; value: number };
-  sea?: { auto: boolean; value: number };
-  rain?: { value: number };
+  gain: { auto: boolean; value: number }
+  sea?: { auto: boolean; value: number }
+  rain?: { value: number }
   // ... extensible for other controls
 }
 ```
@@ -3689,7 +3798,7 @@ Radar spoke data arrives at ~60Hz (2048 spokes/rotation × 30-60 RPM). Emitting 
 #### AssemblyScript Example
 
 ```typescript
-import { sk_radar_emit_spokes } from './signalk-api';
+import { sk_radar_emit_spokes } from './signalk-api'
 
 // Called when spoke data received via UDP multicast
 function processSpokeData(radarId: string, spokeProtobuf: Uint8Array): void {
@@ -3698,30 +3807,30 @@ function processSpokeData(radarId: string, spokeProtobuf: Uint8Array): void {
     radarId,
     spokeProtobuf.buffer,
     spokeProtobuf.byteLength
-  );
+  )
 
   if (result === 0) {
-    sk_debug('Failed to emit spoke - no clients connected or error');
+    sk_debug('Failed to emit spoke - no clients connected or error')
   }
 }
 
 // Example: Process UDP packet and emit spoke
 export function poll(): i32 {
-  const socketId = getRadarSocketId();
-  const datagram = sk_udp_recv(socketId);
+  const socketId = getRadarSocketId()
+  const datagram = sk_udp_recv(socketId)
 
   if (datagram) {
     // Decode spoke from UDP packet (Halo/DRS protocol)
-    const spoke = decodeRadarSpoke(datagram.data);
+    const spoke = decodeRadarSpoke(datagram.data)
 
     // Encode as protobuf RadarMessage
-    const protobuf = encodeRadarMessage(spoke);
+    const protobuf = encodeRadarMessage(spoke)
 
     // Stream to clients
-    sk_radar_emit_spokes("radar-0", protobuf.buffer, protobuf.byteLength);
+    sk_radar_emit_spokes('radar-0', protobuf.buffer, protobuf.byteLength)
   }
 
-  return 0;
+  return 0
 }
 ```
 
@@ -3772,25 +3881,26 @@ Web clients connect to the built-in stream endpoint:
 
 ```javascript
 // Get radar info
-const response = await fetch('/signalk/v2/api/vessels/self/radars/radar-0');
-const radar = await response.json();
+const response = await fetch('/signalk/v2/api/vessels/self/radars/radar-0')
+const radar = await response.json()
 
 // Connect to WebSocket stream
 // Use streamUrl if present (external server), otherwise built-in endpoint
-const wsUrl = radar.streamUrl ??
-  `ws://${location.host}/signalk/v2/api/vessels/self/radars/radar-0/stream`;
+const wsUrl =
+  radar.streamUrl ??
+  `ws://${location.host}/signalk/v2/api/vessels/self/radars/radar-0/stream`
 
-const ws = new WebSocket(wsUrl);
-ws.binaryType = 'arraybuffer';
+const ws = new WebSocket(wsUrl)
+ws.binaryType = 'arraybuffer'
 
 ws.onmessage = (event) => {
   // Decode binary protobuf RadarMessage
-  const spokeData = new Uint8Array(event.data);
-  const radarMessage = RadarMessage.decode(spokeData); // protobuf.js
+  const spokeData = new Uint8Array(event.data)
+  const radarMessage = RadarMessage.decode(spokeData) // protobuf.js
 
   // Render spoke on canvas/WebGL
-  renderSpoke(radarMessage);
-};
+  renderSpoke(radarMessage)
+}
 ```
 
 #### Protobuf Format
@@ -3820,8 +3930,8 @@ For custom binary streams beyond radar (e.g., AIS targets, sonar, video):
 
 ```typescript
 // General-purpose streaming
-const streamId = `plugins/${myPluginId}/custom-data`;
-sk_emit_binary_stream(streamId, binaryData.buffer, binaryData.byteLength);
+const streamId = `plugins/${myPluginId}/custom-data`
+sk_emit_binary_stream(streamId, binaryData.buffer, binaryData.byteLength)
 
 // Clients connect to:
 // ws://server/signalk/v2/api/streams/plugins/{pluginId}/custom-data
@@ -3830,11 +3940,13 @@ sk_emit_binary_stream(streamId, binaryData.buffer, binaryData.byteLength);
 ### Stream URL Strategy
 
 When `streamUrl` is present in RadarInfo:
+
 - Client connects directly to external server (e.g., Go radar-server, mayara-server)
 - Signal K handles only metadata and controls
 - Lower latency for high-bandwidth spoke data
 
 When `streamUrl` is absent:
+
 - Client connects to `/signalk/v2/api/vessels/self/radars/{id}/stream`
 - Signal K proxies or generates the stream
 - Simpler deployment (single server)
@@ -3843,20 +3955,22 @@ When `streamUrl` is absent:
 
 ```javascript
 // Get radar info
-const radar = await fetch('/signalk/v2/api/vessels/self/radars/radar-0')
-  .then(r => r.json());
+const radar = await fetch('/signalk/v2/api/vessels/self/radars/radar-0').then(
+  (r) => r.json()
+)
 
 // Connect to stream (auto-detect internal vs external)
-const wsUrl = radar.streamUrl ??
-  `ws://${location.host}/signalk/v2/api/vessels/self/radars/${radar.id}/stream`;
-const socket = new WebSocket(wsUrl);
+const wsUrl =
+  radar.streamUrl ??
+  `ws://${location.host}/signalk/v2/api/vessels/self/radars/${radar.id}/stream`
+const socket = new WebSocket(wsUrl)
 
 // Control radar
 await fetch('/signalk/v2/api/vessels/self/radars/radar-0/power', {
   method: 'PUT',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ value: 'transmit' })
-});
+})
 ```
 
 ## Resources

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * MBTiles Hybrid Handler for WASM Charts Provider
  *
@@ -33,7 +35,9 @@ function getBetterSqlite3(): any {
       Database = require('better-sqlite3')
     } catch (e) {
       debug(`better-sqlite3 not available: ${e}`)
-      throw new Error('SQLite support not available. Install better-sqlite3: npm install better-sqlite3')
+      throw new Error(
+        'SQLite support not available. Install better-sqlite3: npm install better-sqlite3'
+      )
     }
   }
   return Database
@@ -44,7 +48,11 @@ function getBetterSqlite3(): any {
  */
 function getChartsDirectory(plugin: WasmPlugin, configPath: string): string {
   // Use the same storage path logic as the rest of the WASM infrastructure
-  const storagePaths = getPluginStoragePaths(configPath, plugin.id, plugin.packageName)
+  const storagePaths = getPluginStoragePaths(
+    configPath,
+    plugin.id,
+    plugin.packageName
+  )
   const chartsDir = path.join(storagePaths.vfsRoot, 'charts')
 
   // Ensure directory exists
@@ -68,7 +76,11 @@ export async function handleMBTileRequest(
   // Parse URL: /tiles/{chartId}/{z}/{x}/{y}
   const match = req.path.match(/\/tiles\/([\w-]+)\/(\d+)\/(\d+)\/(\d+)/)
   if (!match) {
-    res.status(400).json({ error: 'Invalid tile path. Expected: /tiles/{chartId}/{z}/{x}/{y}' })
+    res
+      .status(400)
+      .json({
+        error: 'Invalid tile path. Expected: /tiles/{chartId}/{z}/{x}/{y}'
+      })
     return
   }
 
@@ -97,7 +109,9 @@ export async function handleMBTileRequest(
     // TMS Y = 2^zoom - 1 - XYZ Y
     const tmsY = Math.pow(2, z) - 1 - y
 
-    const stmt = db.prepare('SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?')
+    const stmt = db.prepare(
+      'SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?'
+    )
     const row = stmt.get(z, x, tmsY) as { tile_data: Buffer } | undefined
 
     db.close()
@@ -113,11 +127,16 @@ export async function handleMBTileRequest(
     const tileData = row.tile_data
     let contentType = 'image/png'
 
-    if (tileData[0] === 0xFF && tileData[1] === 0xD8) {
+    if (tileData[0] === 0xff && tileData[1] === 0xd8) {
       contentType = 'image/jpeg'
-    } else if (tileData[0] === 0x89 && tileData[1] === 0x50 && tileData[2] === 0x4E && tileData[3] === 0x47) {
+    } else if (
+      tileData[0] === 0x89 &&
+      tileData[1] === 0x50 &&
+      tileData[2] === 0x4e &&
+      tileData[3] === 0x47
+    ) {
       contentType = 'image/png'
-    } else if (tileData[0] === 0x1F && tileData[1] === 0x8B) {
+    } else if (tileData[0] === 0x1f && tileData[1] === 0x8b) {
       // gzip compressed - likely PBF vector tile
       contentType = 'application/x-protobuf'
       res.setHeader('Content-Encoding', 'gzip')
@@ -129,7 +148,6 @@ export async function handleMBTileRequest(
     res.send(tileData)
 
     debug(`Served tile: z=${z}, x=${x}, y=${y}, size=${tileData.length} bytes`)
-
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error)
     debug(`Error reading tile: ${errMsg}`)
@@ -174,7 +192,9 @@ function extractMBTilesMetadata(mbtilesPath: string): {
     const metadata: any = {}
 
     try {
-      const rows = db.prepare('SELECT name, value FROM metadata').all() as Array<{ name: string; value: string }>
+      const rows = db
+        .prepare('SELECT name, value FROM metadata')
+        .all() as Array<{ name: string; value: string }>
 
       for (const row of rows) {
         switch (row.name) {
@@ -238,33 +258,40 @@ export async function handleChartUpload(
 
     // Promise to track upload completion
     await new Promise<void>((resolve, reject) => {
-      bb.on('file', (fieldname: string, file: NodeJS.ReadableStream, info: { filename: string }) => {
-        const { filename } = info
-        debug(`Receiving file: fieldname=${fieldname}, filename=${filename}`)
+      bb.on(
+        'file',
+        (
+          fieldname: string,
+          file: NodeJS.ReadableStream,
+          info: { filename: string }
+        ) => {
+          const { filename } = info
+          debug(`Receiving file: fieldname=${fieldname}, filename=${filename}`)
 
-        if (fieldname !== 'chart') {
-          debug(`Ignoring field ${fieldname}, expected 'chart'`)
-          file.resume() // Drain the stream
-          return
+          if (fieldname !== 'chart') {
+            debug(`Ignoring field ${fieldname}, expected 'chart'`)
+            file.resume() // Drain the stream
+            return
+          }
+
+          if (!filename.endsWith('.mbtiles')) {
+            uploadError = new Error('File must have .mbtiles extension')
+            file.resume()
+            return
+          }
+
+          originalFilename = filename
+          tempFilePath = path.join(tmpDir, filename)
+
+          const writeStream = fs.createWriteStream(tempFilePath)
+          file.pipe(writeStream)
+
+          writeStream.on('error', (err) => {
+            debug(`Write stream error: ${err.message}`)
+            uploadError = err
+          })
         }
-
-        if (!filename.endsWith('.mbtiles')) {
-          uploadError = new Error('File must have .mbtiles extension')
-          file.resume()
-          return
-        }
-
-        originalFilename = filename
-        tempFilePath = path.join(tmpDir, filename)
-
-        const writeStream = fs.createWriteStream(tempFilePath)
-        file.pipe(writeStream)
-
-        writeStream.on('error', (err) => {
-          debug(`Write stream error: ${err.message}`)
-          uploadError = err
-        })
-      })
+      )
 
       bb.on('error', (err: Error) => {
         debug(`Busboy error: ${err.message}`)
@@ -288,7 +315,8 @@ export async function handleChartUpload(
       res.status(400).json({
         error: 'No file uploaded',
         hint: 'Upload a .mbtiles file using multipart/form-data with field name "chart"',
-        example: 'curl -F "chart=@myfile.mbtiles" http://localhost:3000/plugins/charts-provider-go/api/charts/upload'
+        example:
+          'curl -F "chart=@myfile.mbtiles" http://localhost:3000/plugins/charts-provider-go/api/charts/upload'
       })
       return
     }
@@ -331,9 +359,18 @@ export async function handleChartUpload(
       const requestJson = JSON.stringify({ id: chartId, value: chartMetadata })
       const requestPtr = asLoader.exports.__newString(requestJson)
       const responsePtr = asLoader.exports.__newString('') // Dummy output
-      asLoader.exports.resource_set(requestPtr, requestJson.length, responsePtr, 1024)
+      asLoader.exports.resource_set(
+        requestPtr,
+        requestJson.length,
+        responsePtr,
+        1024
+      )
       debug(`Registered chart with AssemblyScript plugin`)
-    } else if (rawExports && typeof rawExports.resource_set === 'function' && typeof rawExports.allocate === 'function') {
+    } else if (
+      rawExports &&
+      typeof rawExports.resource_set === 'function' &&
+      typeof rawExports.allocate === 'function'
+    ) {
       // Rust/Go plugin
       const requestJson = JSON.stringify({ id: chartId, value: chartMetadata })
       const requestBytes = Buffer.from(requestJson, 'utf8')
@@ -343,7 +380,12 @@ export async function handleChartUpload(
       const memory = rawExports.memory as WebAssembly.Memory
       new Uint8Array(memory.buffer).set(requestBytes, requestPtr)
 
-      rawExports.resource_set(requestPtr, requestBytes.length, responsePtr, 1024)
+      rawExports.resource_set(
+        requestPtr,
+        requestBytes.length,
+        responsePtr,
+        1024
+      )
 
       if (typeof rawExports.deallocate === 'function') {
         rawExports.deallocate(requestPtr, requestBytes.length)
@@ -351,7 +393,9 @@ export async function handleChartUpload(
       }
       debug(`Registered chart with Rust/Go plugin`)
     } else {
-      debug(`Warning: Could not register chart with WASM plugin - no resource_set export`)
+      debug(
+        `Warning: Could not register chart with WASM plugin - no resource_set export`
+      )
     }
 
     res.json({
@@ -360,7 +404,6 @@ export async function handleChartUpload(
       chart: chartMetadata,
       message: 'Chart uploaded and registered successfully'
     })
-
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error)
     debug(`Error uploading chart: ${errMsg}`)
@@ -400,7 +443,9 @@ export async function handleChartList(
   try {
     // List all .mbtiles files in the charts directory
     if (fs.existsSync(chartsDir)) {
-      const files = fs.readdirSync(chartsDir).filter(f => f.endsWith('.mbtiles'))
+      const files = fs
+        .readdirSync(chartsDir)
+        .filter((f) => f.endsWith('.mbtiles'))
 
       for (const file of files) {
         const chartId = path.basename(file, '.mbtiles')
@@ -476,11 +521,12 @@ export async function handleChartDelete(
       chartId,
       message: 'Chart file deleted successfully'
     })
-
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error)
     debug(`Error deleting chart: ${errMsg}`)
-    res.status(500).json({ error: 'Failed to delete chart file', details: errMsg })
+    res
+      .status(500)
+      .json({ error: 'Failed to delete chart file', details: errMsg })
   }
 }
 
@@ -502,7 +548,7 @@ export async function initializeChartsFromDisk(
     return 0
   }
 
-  const files = fs.readdirSync(chartsDir).filter(f => f.endsWith('.mbtiles'))
+  const files = fs.readdirSync(chartsDir).filter((f) => f.endsWith('.mbtiles'))
   debug(`Found ${files.length} .mbtiles files in ${chartsDir}`)
 
   for (const file of files) {
@@ -532,15 +578,30 @@ export async function initializeChartsFromDisk(
 
       if (asLoader && typeof asLoader.exports.resource_set === 'function') {
         // AssemblyScript plugin
-        const requestJson = JSON.stringify({ id: chartId, value: chartMetadata })
+        const requestJson = JSON.stringify({
+          id: chartId,
+          value: chartMetadata
+        })
         const requestPtr = asLoader.exports.__newString(requestJson)
         const responsePtr = asLoader.exports.__newString('') // Dummy output
-        asLoader.exports.resource_set(requestPtr, requestJson.length, responsePtr, 1024)
+        asLoader.exports.resource_set(
+          requestPtr,
+          requestJson.length,
+          responsePtr,
+          1024
+        )
         debug(`Registered chart ${chartId} with AssemblyScript plugin`)
         chartCount++
-      } else if (rawExports && typeof rawExports.resource_set === 'function' && typeof rawExports.allocate === 'function') {
+      } else if (
+        rawExports &&
+        typeof rawExports.resource_set === 'function' &&
+        typeof rawExports.allocate === 'function'
+      ) {
         // Rust/Go plugin
-        const requestJson = JSON.stringify({ id: chartId, value: chartMetadata })
+        const requestJson = JSON.stringify({
+          id: chartId,
+          value: chartMetadata
+        })
         const requestBytes = Buffer.from(requestJson, 'utf8')
         const requestPtr = rawExports.allocate(requestBytes.length)
         const responsePtr = rawExports.allocate(1024)
@@ -548,7 +609,12 @@ export async function initializeChartsFromDisk(
         const memory = rawExports.memory as WebAssembly.Memory
         new Uint8Array(memory.buffer).set(requestBytes, requestPtr)
 
-        rawExports.resource_set(requestPtr, requestBytes.length, responsePtr, 1024)
+        rawExports.resource_set(
+          requestPtr,
+          requestBytes.length,
+          responsePtr,
+          1024
+        )
 
         if (typeof rawExports.deallocate === 'function') {
           rawExports.deallocate(requestPtr, requestBytes.length)
@@ -557,7 +623,9 @@ export async function initializeChartsFromDisk(
         debug(`Registered chart ${chartId} with Rust/Go plugin`)
         chartCount++
       } else {
-        debug(`Warning: Could not register chart ${chartId} - no resource_set export`)
+        debug(
+          `Warning: Could not register chart ${chartId} - no resource_set export`
+        )
       }
     } catch (err) {
       debug(`Failed to initialize chart ${chartId}: ${err}`)
@@ -571,7 +639,10 @@ export async function initializeChartsFromDisk(
 /**
  * Check if a request should be intercepted for MBTiles handling
  */
-export function shouldInterceptMBTiles(plugin: WasmPlugin, req: Request): 'tile' | 'upload' | 'delete' | false {
+export function shouldInterceptMBTiles(
+  plugin: WasmPlugin,
+  req: Request
+): 'tile' | 'upload' | 'delete' | false {
   // Only intercept for charts-provider plugins
   if (!plugin.id.includes('charts-provider')) {
     return false

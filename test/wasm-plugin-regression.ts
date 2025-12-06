@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-expressions */
 import { expect } from 'chai'
 import fs from 'fs'
 import net from 'net'
@@ -146,7 +148,7 @@ describe('WASM Plugin Regression Tests', function () {
   this.timeout(60000)
 
   describe('Node.js Plugin Compatibility', function () {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     let server: any
     let port: number
 
@@ -165,7 +167,7 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('Node.js plugin loads and starts', function () {
       const plugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'testplugin'
       )
       expect(plugin).to.exist
@@ -193,7 +195,7 @@ describe('WASM Plugin Regression Tests', function () {
   })
 
   describe('WASM Plugin Functionality', function () {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     let server: any
     let port: number
 
@@ -212,7 +214,7 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('WASM plugin loads', function () {
       const plugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(plugin).to.exist
@@ -220,7 +222,7 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('WASM plugin starts', function () {
       const plugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(plugin.started).to.be.true
@@ -235,7 +237,7 @@ describe('WASM Plugin Regression Tests', function () {
       expect(resp.status).to.equal(200)
       const plugins = await resp.json()
       const wasmPlugin = plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(wasmPlugin).to.exist
@@ -245,7 +247,7 @@ describe('WASM Plugin Regression Tests', function () {
   })
 
   describe('Plugin Coexistence', function () {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     let server: any
     let port: number
 
@@ -264,11 +266,11 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('Both plugin types appear in plugins list', function () {
       const nodePlugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'testplugin'
       )
       const wasmPlugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(nodePlugin).to.exist
@@ -277,11 +279,11 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('Both plugins are started', function () {
       const nodePlugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'testplugin'
       )
       const wasmPlugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(nodePlugin.started).to.be.true
@@ -300,7 +302,7 @@ describe('WASM Plugin Regression Tests', function () {
 
       // WASM plugin should still be functional
       const wasmPlugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(wasmPlugin.started).to.be.true
@@ -311,11 +313,11 @@ describe('WASM Plugin Regression Tests', function () {
       const plugins = await resp.json()
 
       const nodePlugin = plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'testplugin'
       )
       const wasmPlugin = plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'anchor-watch-rust'
       )
 
@@ -345,10 +347,13 @@ describe('WASM Plugin Regression Tests', function () {
         console.log(`Loaded plugins: ${pluginIds.join(', ')}`)
 
         const wasmPlugin = server.app.plugins.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (p: any) => p.id === 'anchor-watch-rust'
         )
-        expect(wasmPlugin, `WASM plugin not found. Available: ${pluginIds.join(', ')}`).to.exist
+        expect(
+          wasmPlugin,
+          `WASM plugin not found. Available: ${pluginIds.join(', ')}`
+        ).to.exist
         expect(wasmPlugin.started).to.be.true
 
         // Stop the plugin
@@ -371,16 +376,22 @@ describe('WASM Plugin Regression Tests', function () {
         console.log(`Loaded plugins: ${pluginIds.join(', ')}`)
 
         const nodePlugin = server.app.plugins.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (p: any) => p.id === 'testplugin'
         )
         const wasmPlugin = server.app.plugins.find(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           (p: any) => p.id === 'anchor-watch-rust'
         )
 
-        expect(nodePlugin, `Node.js plugin not found. Available: ${pluginIds.join(', ')}`).to.exist
-        expect(wasmPlugin, `WASM plugin not found. Available: ${pluginIds.join(', ')}`).to.exist
+        expect(
+          nodePlugin,
+          `Node.js plugin not found. Available: ${pluginIds.join(', ')}`
+        ).to.exist
+        expect(
+          wasmPlugin,
+          `WASM plugin not found. Available: ${pluginIds.join(', ')}`
+        ).to.exist
         expect(nodePlugin.started).to.be.true
         expect(wasmPlugin.started).to.be.true
 
@@ -407,15 +418,21 @@ describe('WASM Plugin Regression Tests', function () {
 
       // Verify both plugins started
       const nodePlugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'testplugin'
       )
       const wasmPlugin = server.app.plugins.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (p: any) => p.id === 'anchor-watch-rust'
       )
-      expect(nodePlugin, `Node.js plugin not found. Available: ${pluginIds.join(', ')}`).to.exist
-      expect(wasmPlugin, `WASM plugin not found. Available: ${pluginIds.join(', ')}`).to.exist
+      expect(
+        nodePlugin,
+        `Node.js plugin not found. Available: ${pluginIds.join(', ')}`
+      ).to.exist
+      expect(
+        wasmPlugin,
+        `WASM plugin not found. Available: ${pluginIds.join(', ')}`
+      ).to.exist
       expect(nodePlugin.started).to.be.true
       expect(wasmPlugin.started).to.be.true
 

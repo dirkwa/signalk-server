@@ -17,9 +17,7 @@ import {
   getCurrentTimestamp
 } from 'signalk-assemblyscript-plugin-sdk/assembly'
 
-import {
-  hasNetworkCapability
-} from 'signalk-assemblyscript-plugin-sdk/assembly/network'
+import { hasNetworkCapability } from 'signalk-assemblyscript-plugin-sdk/assembly/network'
 
 import {
   registerResourceProvider,
@@ -50,14 +48,26 @@ class WeatherData {
   longitude: f64 = 0.0
 
   toJSON(): string {
-    return '{"temperature":' + this.temperature.toString() +
-      ',"humidity":' + this.humidity.toString() +
-      ',"pressure":' + this.pressure.toString() +
-      ',"windSpeed":' + this.windSpeed.toString() +
-      ',"windDirection":' + this.windDirection.toString() +
-      ',"timestamp":"' + this.timestamp + '"' +
-      ',"location":{"latitude":' + this.latitude.toString() +
-      ',"longitude":' + this.longitude.toString() + '}}'
+    return (
+      '{"temperature":' +
+      this.temperature.toString() +
+      ',"humidity":' +
+      this.humidity.toString() +
+      ',"pressure":' +
+      this.pressure.toString() +
+      ',"windSpeed":' +
+      this.windSpeed.toString() +
+      ',"windDirection":' +
+      this.windDirection.toString() +
+      ',"timestamp":"' +
+      this.timestamp +
+      '"' +
+      ',"location":{"latitude":' +
+      this.latitude.toString() +
+      ',"longitude":' +
+      this.longitude.toString() +
+      '}}'
+    )
   }
 
   static parse(json: string): WeatherData | null {
@@ -71,7 +81,11 @@ class WeatherData {
     if (tempMatch >= 0) {
       const tempStart = tempMatch + 7
       let tempEnd = tempStart
-      while (tempEnd < json.length && (json.charCodeAt(tempEnd) >= 48 && json.charCodeAt(tempEnd) <= 57 || json.charCodeAt(tempEnd) === 46)) {
+      while (
+        tempEnd < json.length &&
+        ((json.charCodeAt(tempEnd) >= 48 && json.charCodeAt(tempEnd) <= 57) ||
+          json.charCodeAt(tempEnd) === 46)
+      ) {
         tempEnd++
       }
       const tempStr = json.substring(tempStart, tempEnd)
@@ -83,7 +97,11 @@ class WeatherData {
     if (humMatch >= 0) {
       const humStart = humMatch + 11
       let humEnd = humStart
-      while (humEnd < json.length && (json.charCodeAt(humEnd) >= 48 && json.charCodeAt(humEnd) <= 57)) {
+      while (
+        humEnd < json.length &&
+        json.charCodeAt(humEnd) >= 48 &&
+        json.charCodeAt(humEnd) <= 57
+      ) {
         humEnd++
       }
       const humStr = json.substring(humStart, humEnd)
@@ -95,7 +113,11 @@ class WeatherData {
     if (pressMatch >= 0) {
       const pressStart = pressMatch + 11
       let pressEnd = pressStart
-      while (pressEnd < json.length && (json.charCodeAt(pressEnd) >= 48 && json.charCodeAt(pressEnd) <= 57)) {
+      while (
+        pressEnd < json.length &&
+        json.charCodeAt(pressEnd) >= 48 &&
+        json.charCodeAt(pressEnd) <= 57
+      ) {
         pressEnd++
       }
       const pressStr = json.substring(pressStart, pressEnd)
@@ -107,7 +129,11 @@ class WeatherData {
     if (speedMatch >= 0) {
       const speedStart = speedMatch + 8
       let speedEnd = speedStart
-      while (speedEnd < json.length && (json.charCodeAt(speedEnd) >= 48 && json.charCodeAt(speedEnd) <= 57 || json.charCodeAt(speedEnd) === 46)) {
+      while (
+        speedEnd < json.length &&
+        ((json.charCodeAt(speedEnd) >= 48 && json.charCodeAt(speedEnd) <= 57) ||
+          json.charCodeAt(speedEnd) === 46)
+      ) {
         speedEnd++
       }
       const speedStr = json.substring(speedStart, speedEnd)
@@ -119,12 +145,16 @@ class WeatherData {
     if (degMatch >= 0) {
       const degStart = degMatch + 6
       let degEnd = degStart
-      while (degEnd < json.length && (json.charCodeAt(degEnd) >= 48 && json.charCodeAt(degEnd) <= 57)) {
+      while (
+        degEnd < json.length &&
+        json.charCodeAt(degEnd) >= 48 &&
+        json.charCodeAt(degEnd) <= 57
+      ) {
         degEnd++
       }
       const degStr = json.substring(degStart, degEnd)
       // Convert degrees to radians
-      data.windDirection = parseFloat(degStr) * 3.14159265359 / 180.0
+      data.windDirection = (parseFloat(degStr) * 3.14159265359) / 180.0
     }
 
     return data
@@ -172,8 +202,8 @@ class WeatherPlugin extends Plugin {
         const colonPos = configJson.indexOf(':', apiKeyMatch)
         const quoteStart = configJson.indexOf('"', colonPos)
         if (quoteStart >= 0) {
-          const keyStart = quoteStart + 1  // Position after opening quote
-          const keyEnd = configJson.indexOf('"', keyStart)  // Find closing quote
+          const keyStart = quoteStart + 1 // Position after opening quote
+          const keyEnd = configJson.indexOf('"', keyStart) // Find closing quote
           if (keyEnd > keyStart) {
             this.config.apiKey = configJson.substring(keyStart, keyEnd)
           }
@@ -186,16 +216,28 @@ class WeatherPlugin extends Plugin {
         let latStart = colonPos + 1
         let latEnd = latStart
         // Skip whitespace
-        while (latEnd < configJson.length && (configJson.charCodeAt(latEnd) === 32 || configJson.charCodeAt(latEnd) === 9)) {
+        while (
+          latEnd < configJson.length &&
+          (configJson.charCodeAt(latEnd) === 32 ||
+            configJson.charCodeAt(latEnd) === 9)
+        ) {
           latEnd++
         }
         latStart = latEnd
         // Read number
-        while (latEnd < configJson.length && (configJson.charCodeAt(latEnd) >= 48 && configJson.charCodeAt(latEnd) <= 57 || configJson.charCodeAt(latEnd) === 46 || configJson.charCodeAt(latEnd) === 45)) {
+        while (
+          latEnd < configJson.length &&
+          ((configJson.charCodeAt(latEnd) >= 48 &&
+            configJson.charCodeAt(latEnd) <= 57) ||
+            configJson.charCodeAt(latEnd) === 46 ||
+            configJson.charCodeAt(latEnd) === 45)
+        ) {
           latEnd++
         }
         if (latEnd > latStart) {
-          this.config.latitude = parseFloat(configJson.substring(latStart, latEnd))
+          this.config.latitude = parseFloat(
+            configJson.substring(latStart, latEnd)
+          )
         }
       }
 
@@ -205,23 +247,37 @@ class WeatherPlugin extends Plugin {
         let lonStart = colonPos + 1
         let lonEnd = lonStart
         // Skip whitespace
-        while (lonEnd < configJson.length && (configJson.charCodeAt(lonEnd) === 32 || configJson.charCodeAt(lonEnd) === 9)) {
+        while (
+          lonEnd < configJson.length &&
+          (configJson.charCodeAt(lonEnd) === 32 ||
+            configJson.charCodeAt(lonEnd) === 9)
+        ) {
           lonEnd++
         }
         lonStart = lonEnd
         // Read number
-        while (lonEnd < configJson.length && (configJson.charCodeAt(lonEnd) >= 48 && configJson.charCodeAt(lonEnd) <= 57 || configJson.charCodeAt(lonEnd) === 46 || configJson.charCodeAt(lonEnd) === 45)) {
+        while (
+          lonEnd < configJson.length &&
+          ((configJson.charCodeAt(lonEnd) >= 48 &&
+            configJson.charCodeAt(lonEnd) <= 57) ||
+            configJson.charCodeAt(lonEnd) === 46 ||
+            configJson.charCodeAt(lonEnd) === 45)
+        ) {
           lonEnd++
         }
         if (lonEnd > lonStart) {
-          this.config.longitude = parseFloat(configJson.substring(lonStart, lonEnd))
+          this.config.longitude = parseFloat(
+            configJson.substring(lonStart, lonEnd)
+          )
         }
       }
     }
 
     // Validate configuration
     if (this.config.apiKey.length === 0) {
-      setError('No API key configured - get one from https://openweathermap.org/api')
+      setError(
+        'No API key configured - get one from https://openweathermap.org/api'
+      )
       return 1
     }
 
@@ -233,7 +289,9 @@ class WeatherPlugin extends Plugin {
     if (registerResourceProvider('weather')) {
       debug('Successfully registered as weather resource provider')
     } else {
-      debug('Warning: Failed to register as resource provider (capability may not be granted)')
+      debug(
+        'Warning: Failed to register as resource provider (capability may not be granted)'
+      )
     }
 
     // Fetch and emit real weather data using as-fetch
@@ -289,7 +347,7 @@ class WeatherPlugin extends Plugin {
     const tempDelta = createSimpleDelta(
       'weather-example',
       'environment.outside.temperature',
-      '288.15'  // 15°C in Kelvin
+      '288.15' // 15°C in Kelvin
     )
     emit(tempDelta)
 
@@ -332,7 +390,13 @@ class WeatherPlugin extends Plugin {
     // Build API URL
     const lat = this.config.latitude.toString()
     const lon = this.config.longitude.toString()
-    const url = 'https://api.openweathermap.org/data/2.5/weather?lat=' + lat + '&lon=' + lon + '&appid=' + this.config.apiKey
+    const url =
+      'https://api.openweathermap.org/data/2.5/weather?lat=' +
+      lat +
+      '&lon=' +
+      lon +
+      '&appid=' +
+      this.config.apiKey
 
     debug('Fetching weather data from: ' + url)
 
@@ -340,7 +404,10 @@ class WeatherPlugin extends Plugin {
     const fetchResponse = fetchSync(url)
 
     if (!fetchResponse.ok) {
-      setError('Failed to fetch weather data - HTTP status: ' + fetchResponse.status.toString())
+      setError(
+        'Failed to fetch weather data - HTTP status: ' +
+          fetchResponse.status.toString()
+      )
       return
     }
 

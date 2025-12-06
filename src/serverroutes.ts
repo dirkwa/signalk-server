@@ -664,8 +664,7 @@ module.exports = function (
     }
 
     if (!isUndefined(settings.options.enableWasmLogging)) {
-      app.config.settings.enableWasmLogging =
-        settings.options.enableWasmLogging
+      app.config.settings.enableWasmLogging = settings.options.enableWasmLogging
       // Update WASM debug logging dynamically
       updateWasmDebugLogging(settings.options.enableWasmLogging ?? true, app)
     }

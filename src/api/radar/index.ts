@@ -21,9 +21,7 @@ import {
 const RADAR_API_PATH = `/signalk/v2/api/vessels/self/radars`
 
 interface RadarApplication
-  extends WithSecurityStrategy,
-    SignalKMessageHub,
-    IRouter {}
+  extends WithSecurityStrategy, SignalKMessageHub, IRouter {}
 
 export class RadarApi {
   private radarProviders: Map<string, RadarProvider> = new Map()
@@ -352,7 +350,8 @@ export class RadarApi {
             res.status(400).json({
               statusCode: 400,
               state: 'FAILED',
-              message: 'Invalid power state. Must be: off, standby, transmit, or warming'
+              message:
+                'Invalid power state. Must be: off, standby, transmit, or warming'
             })
             return
           }
@@ -451,7 +450,8 @@ export class RadarApi {
             })
             return
           }
-          const gain: { auto: boolean; value?: number } = req.body.value ?? req.body
+          const gain: { auto: boolean; value?: number } =
+            req.body.value ?? req.body
           if (typeof gain.auto !== 'boolean') {
             res.status(400).json({
               statusCode: 400,

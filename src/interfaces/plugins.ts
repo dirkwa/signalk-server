@@ -410,7 +410,13 @@ module.exports = (theApp: any) => {
           // This is a WASM plugin - route to WASM loader
           debug(`Detected WASM plugin: ${pluginName}`)
           const { registerWasmPlugin } = require('../wasm')
-          await registerWasmPlugin(app, pluginName, metadata, location, theApp.config.configPath)
+          await registerWasmPlugin(
+            app,
+            pluginName,
+            metadata,
+            location,
+            theApp.config.configPath
+          )
           return
         }
       }

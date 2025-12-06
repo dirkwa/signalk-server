@@ -87,8 +87,10 @@ class HelloPlugin extends Plugin {
     // For this example, we do basic string parsing
 
     // Check enableDebug at root level (matches regular plugin config structure)
-    if (configJson.includes('"enableDebug":true') ||
-        configJson.includes('"enableDebug": true')) {
+    if (
+      configJson.includes('"enableDebug":true') ||
+      configJson.includes('"enableDebug": true')
+    ) {
       this.config.enableDebugLogging = true
     }
 
@@ -97,7 +99,9 @@ class HelloPlugin extends Plugin {
     this.logDebug(`Plugin ID: ${this.id()}`)
     this.logDebug(`Plugin Name: ${this.name()}`)
     this.logDebug(`Configuration received: ${configJson}`)
-    this.logDebug(`Debug logging: ${this.config.enableDebugLogging ? 'ENABLED' : 'DISABLED'}`)
+    this.logDebug(
+      `Debug logging: ${this.config.enableDebugLogging ? 'ENABLED' : 'DISABLED'}`
+    )
     this.logDebug('========================================')
 
     setStatus('Started successfully')
@@ -182,7 +186,9 @@ class HelloPlugin extends Plugin {
     const delta = new Delta('vessels.self', [update])
 
     emit(delta)
-    this.logDebug('✓ Plugin info delta emitted to path: plugins.hello-assemblyscript.info')
+    this.logDebug(
+      '✓ Plugin info delta emitted to path: plugins.hello-assemblyscript.info'
+    )
   }
 }
 
@@ -261,9 +267,7 @@ export function handle_get_info(requestPtr: usize, requestLen: usize): string {
   }`
 
   // Escape for embedding in JSON response
-  const escapedBody = bodyJson
-    .replaceAll('"', '\\"')
-    .replaceAll('\n', '\\n')
+  const escapedBody = bodyJson.replaceAll('"', '\\"').replaceAll('\n', '\\n')
 
   // Return HTTP response
   return `{
@@ -277,7 +281,10 @@ export function handle_get_info(requestPtr: usize, requestLen: usize): string {
  * Handle GET /api/status
  * Returns runtime status
  */
-export function handle_get_status(requestPtr: usize, requestLen: usize): string {
+export function handle_get_status(
+  requestPtr: usize,
+  requestLen: usize
+): string {
   const requestBytes = new Uint8Array(i32(requestLen))
   for (let i: i32 = 0; i < i32(requestLen); i++) {
     requestBytes[i] = load<u8>(requestPtr + <usize>i)
@@ -290,9 +297,7 @@ export function handle_get_status(requestPtr: usize, requestLen: usize): string 
     "memory": "sandboxed"
   }`
 
-  const escapedBody = bodyJson
-    .replaceAll('"', '\\"')
-    .replaceAll('\n', '\\n')
+  const escapedBody = bodyJson.replaceAll('"', '\\"').replaceAll('\n', '\\n')
 
   return `{
     "statusCode": 200,

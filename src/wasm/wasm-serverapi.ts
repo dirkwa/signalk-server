@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * WASM ServerAPI FFI Bridge
  *
@@ -10,7 +11,11 @@
 
 import Debug from 'debug'
 import { getWasmPlugin } from './loader'
-import { getPluginStoragePaths, readPluginConfig, writePluginConfig } from './wasm-storage'
+import {
+  getPluginStoragePaths,
+  readPluginConfig,
+  writePluginConfig
+} from './wasm-storage'
 
 const debug = Debug('signalk:wasm:serverapi')
 
@@ -59,7 +64,8 @@ export function createServerAPIBridge(
             debug('Warning: app.handleMessage not available')
           }
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error)
+          const errorMsg =
+            error instanceof Error ? error.message : String(error)
           debug(`Error handling delta from ${pluginId}: ${errorMsg}`)
           throw error
         }
@@ -72,7 +78,11 @@ export function createServerAPIBridge(
        * Read plugin configuration
        */
       readPluginOptions: (): string => {
-        const storagePaths = getPluginStoragePaths(configPath, pluginId, plugin.packageName)
+        const storagePaths = getPluginStoragePaths(
+          configPath,
+          pluginId,
+          plugin.packageName
+        )
         const config = readPluginConfig(storagePaths.configFile)
         return JSON.stringify(config.configuration || {})
       },
@@ -83,7 +93,11 @@ export function createServerAPIBridge(
       savePluginOptions: (configJson: string): number => {
         try {
           const configuration = JSON.parse(configJson)
-          const storagePaths = getPluginStoragePaths(configPath, pluginId, plugin.packageName)
+          const storagePaths = getPluginStoragePaths(
+            configPath,
+            pluginId,
+            plugin.packageName
+          )
           const config = {
             enabled: plugin.enabled,
             configuration
@@ -93,7 +107,8 @@ export function createServerAPIBridge(
           debug(`Plugin ${pluginId} saved configuration`)
           return 0 // Success
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error)
+          const errorMsg =
+            error instanceof Error ? error.message : String(error)
           debug(`Error saving config for ${pluginId}: ${errorMsg}`)
           return 1 // Error
         }
@@ -210,34 +225,58 @@ export function createWasmImports(
   return {
     env: {
       // Delta handling
-      sk_handle_message: (deltaPtr: number, deltaLen: number, memory: WebAssembly.Memory) => {
+      sk_handle_message: (
+        deltaPtr: number,
+        deltaLen: number,
+        memory: WebAssembly.Memory
+      ) => {
         const deltaJson = readStringFromMemory(memory, deltaPtr, deltaLen)
         bridge['delta-handler'].handleMessage(pluginId, deltaJson)
       },
 
       // Configuration
-      sk_read_config: (bufPtr: number, bufLen: number, memory: WebAssembly.Memory): number => {
+      sk_read_config: (
+        bufPtr: number,
+        bufLen: number,
+        memory: WebAssembly.Memory
+      ): number => {
         const configJson = bridge['plugin-config'].readPluginOptions()
         return writeStringToMemory(memory, bufPtr, bufLen, configJson)
       },
 
-      sk_save_config: (configPtr: number, configLen: number, memory: WebAssembly.Memory): number => {
+      sk_save_config: (
+        configPtr: number,
+        configLen: number,
+        memory: WebAssembly.Memory
+      ): number => {
         const configJson = readStringFromMemory(memory, configPtr, configLen)
         return bridge['plugin-config'].savePluginOptions(configJson)
       },
 
       // Status
-      sk_set_status: (msgPtr: number, msgLen: number, memory: WebAssembly.Memory) => {
+      sk_set_status: (
+        msgPtr: number,
+        msgLen: number,
+        memory: WebAssembly.Memory
+      ) => {
         const message = readStringFromMemory(memory, msgPtr, msgLen)
         bridge['plugin-status'].setPluginStatus(message)
       },
 
-      sk_set_error: (msgPtr: number, msgLen: number, memory: WebAssembly.Memory) => {
+      sk_set_error: (
+        msgPtr: number,
+        msgLen: number,
+        memory: WebAssembly.Memory
+      ) => {
         const message = readStringFromMemory(memory, msgPtr, msgLen)
         bridge['plugin-status'].setPluginError(message)
       },
 
-      sk_debug: (msgPtr: number, msgLen: number, memory: WebAssembly.Memory) => {
+      sk_debug: (
+        msgPtr: number,
+        msgLen: number,
+        memory: WebAssembly.Memory
+      ) => {
         const message = readStringFromMemory(memory, msgPtr, msgLen)
         bridge['plugin-status'].debug(message)
       },

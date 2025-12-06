@@ -60,6 +60,7 @@ export const startApis = (
   // Initialize binary stream manager for WASM plugin streaming
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(app as any).binaryStreamManager = binaryStreamManager
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initializeBinaryStreams(app as any)
 
   const resourcesApi = new ResourcesApi(app)

@@ -15,6 +15,7 @@ DELETE /signalk/v2/api/resources/{type}/{id}      # Delete
 ```
 
 Standard resource types include:
+
 - `routes` - Navigation routes (GeoJSON LineString)
 - `waypoints` - Navigation waypoints (GeoJSON Point)
 - `notes` - Freeform notes
@@ -24,6 +25,7 @@ Standard resource types include:
 ## Features
 
 This plugin demonstrates:
+
 - Registering as a resource provider for **multiple types** (routes AND waypoints)
 - Implementing all 4 CRUD handlers
 - GeoJSON-compliant data structures
@@ -35,11 +37,13 @@ This plugin demonstrates:
 The plugin comes with sample Helsinki-area navigation data:
 
 **Waypoints:**
+
 - Helsinki Marina (60.1695°N, 24.9560°E)
 - Suomenlinna Anchorage (60.1450°N, 24.9880°E)
 - Fuel Dock (60.1680°N, 24.9620°E)
 
 **Routes:**
+
 - "Marina to Suomenlinna" - 3.5km route with 3 waypoints
 
 ## Building
@@ -142,9 +146,9 @@ curl -X DELETE http://localhost:3000/signalk/v2/api/resources/waypoints/a1b2c3d4
     },
     "properties": {
       "coordinatesMeta": [
-        {"name": "Start - Marina"},
-        {"name": "Channel marker"},
-        {"name": "End - Anchorage"}
+        { "name": "Start - Marina" },
+        { "name": "Channel marker" },
+        { "name": "End - Anchorage" }
       ]
     }
   }
@@ -156,6 +160,7 @@ curl -X DELETE http://localhost:3000/signalk/v2/api/resources/waypoints/a1b2c3d4
 ### Capability Declaration
 
 In `package.json`:
+
 ```json
 {
   "wasmManifest": "build/plugin.wasm",
@@ -171,6 +176,7 @@ In `package.json`:
 ### Multiple Resource Type Registration
 
 The plugin registers for BOTH resource types in `start()`:
+
 ```typescript
 registerResourceProvider('routes')
 registerResourceProvider('waypoints')

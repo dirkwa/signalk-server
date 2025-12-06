@@ -62,11 +62,13 @@ When started, the plugin:
 The plugin exposes two REST API endpoints:
 
 **GET /plugins/hello-assemblyscript/api/info**
+
 ```bash
 curl http://localhost:3000/plugins/hello-assemblyscript/api/info
 ```
 
 Returns:
+
 ```json
 {
   "pluginId": "hello-assemblyscript",
@@ -79,11 +81,13 @@ Returns:
 ```
 
 **GET /plugins/hello-assemblyscript/api/status**
+
 ```bash
 curl http://localhost:3000/plugins/hello-assemblyscript/api/status
 ```
 
 Returns:
+
 ```json
 {
   "status": "running",

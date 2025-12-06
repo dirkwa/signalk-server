@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * JCO Pre-Transpiled Loader
  *
@@ -58,8 +60,11 @@ export async function loadJcoPlugin(
             debug: signalkApi.skDebug || signalkApi['sk-debug'],
             setStatus: signalkApi.skSetStatus || signalkApi['sk-set-status'],
             setError: signalkApi.skSetError || signalkApi['sk-set-error'],
-            handleMessage: signalkApi.skHandleMessage || signalkApi['sk-handle-message'],
-            registerPutHandler: signalkApi.skRegisterPutHandler || signalkApi['sk-register-put-handler']
+            handleMessage:
+              signalkApi.skHandleMessage || signalkApi['sk-handle-message'],
+            registerPutHandler:
+              signalkApi.skRegisterPutHandler ||
+              signalkApi['sk-register-put-handler']
           })
           debug(`Signal K API callbacks injected successfully`)
         }
@@ -70,10 +75,15 @@ export async function loadJcoPlugin(
 
     // Import the pre-transpiled module
     const componentModule = await import(jsUrl)
-    debug(`Module imported, exports: ${Object.keys(componentModule).join(', ')}`)
+    debug(
+      `Module imported, exports: ${Object.keys(componentModule).join(', ')}`
+    )
 
     // Wait for WASM initialization if $init is exported (jco --tla-compat mode)
-    if (componentModule.$init && typeof componentModule.$init.then === 'function') {
+    if (
+      componentModule.$init &&
+      typeof componentModule.$init.then === 'function'
+    ) {
       debug(`Waiting for WASM $init promise...`)
       try {
         await componentModule.$init
@@ -85,13 +95,23 @@ export async function loadJcoPlugin(
     }
 
     // Debug: Log all exports from the componentModule after $init
-    debug(`After $init, componentModule keys: ${Object.keys(componentModule).join(', ')}`)
+    debug(
+      `After $init, componentModule keys: ${Object.keys(componentModule).join(', ')}`
+    )
     if (componentModule.plugin) {
-      debug(`componentModule.plugin keys: ${Object.keys(componentModule.plugin).join(', ')}`)
+      debug(
+        `componentModule.plugin keys: ${Object.keys(componentModule.plugin).join(', ')}`
+      )
       const pluginFuncs = componentModule.plugin
-      debug(`pluginId type: ${typeof pluginFuncs.pluginId}, value: ${pluginFuncs.pluginId}`)
-      debug(`pluginName type: ${typeof pluginFuncs.pluginName}, value: ${pluginFuncs.pluginName}`)
-      debug(`pluginStart type: ${typeof pluginFuncs.pluginStart}, value: ${pluginFuncs.pluginStart}`)
+      debug(
+        `pluginId type: ${typeof pluginFuncs.pluginId}, value: ${pluginFuncs.pluginId}`
+      )
+      debug(
+        `pluginName type: ${typeof pluginFuncs.pluginName}, value: ${pluginFuncs.pluginName}`
+      )
+      debug(
+        `pluginStart type: ${typeof pluginFuncs.pluginStart}, value: ${pluginFuncs.pluginStart}`
+      )
     }
 
     // Instantiate the component
@@ -120,15 +140,20 @@ export async function loadJcoPlugin(
       componentInstance = componentModule
     }
 
-    debug(`Component instance created, keys: ${Object.keys(componentInstance || {}).join(', ')}`)
+    debug(
+      `Component instance created, keys: ${Object.keys(componentInstance || {}).join(', ')}`
+    )
 
     // Find the plugin exports
-    let pluginExports = componentInstance?.['signalk:plugin/plugin@1.0.0']
-      || componentInstance?.plugin
-      || componentInstance?.['signalk:plugin/plugin']
-      || componentInstance
+    const pluginExports =
+      componentInstance?.['signalk:plugin/plugin@1.0.0'] ||
+      componentInstance?.plugin ||
+      componentInstance?.['signalk:plugin/plugin'] ||
+      componentInstance
 
-    debug(`Plugin exports found, keys: ${Object.keys(pluginExports || {}).join(', ')}`)
+    debug(
+      `Plugin exports found, keys: ${Object.keys(pluginExports || {}).join(', ')}`
+    )
 
     // Map Component Model exports to our standard interface
     const exports = {
@@ -151,7 +176,8 @@ export async function loadJcoPlugin(
         return result || pluginId
       },
       schema: () => {
-        const fn = pluginExports?.pluginSchema || pluginExports?.['plugin-schema']
+        const fn =
+          pluginExports?.pluginSchema || pluginExports?.['plugin-schema']
         const result = typeof fn === 'function' ? fn() : fn
         debug(`plugin_schema() = ${result}`)
         return result || '{}'
@@ -159,7 +185,9 @@ export async function loadJcoPlugin(
       start: async (config: string) => {
         const fn = pluginExports?.pluginStart || pluginExports?.['plugin-start']
         if (typeof fn === 'function') {
-          debug(`Calling plugin_start with config: ${config.substring(0, 100)}...`)
+          debug(
+            `Calling plugin_start with config: ${config.substring(0, 100)}...`
+          )
           const result = await fn(config)
           debug(`plugin_start() = ${result}`)
           return typeof result === 'number' ? result : 0
@@ -215,6 +243,8 @@ export async function loadJcoPlugin(
     if (error instanceof Error && error.stack) {
       debug(`Stack: ${error.stack}`)
     }
-    throw new Error(`Failed to load pre-transpiled plugin ${pluginId}: ${errorMsg}`)
+    throw new Error(
+      `Failed to load pre-transpiled plugin ${pluginId}: ${errorMsg}`
+    )
   }
 }

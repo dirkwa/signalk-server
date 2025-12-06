@@ -9,6 +9,7 @@
 > **Status:** ❌ **Non-functional** - documented for future reference
 >
 > **For working examples, see:**
+>
 > - `../anchor-watch/` - AssemblyScript (recommended, fully working)
 > - `../simple-plugin/` - AssemblyScript (fully working)
 
@@ -103,6 +104,7 @@ This plugin registers three PUT handlers that allow external clients to control 
   Download from: https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-25
 
   **Windows:**
+
   ```powershell
   # Download and extract wasi-sdk-25
   Invoke-WebRequest -Uri "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-windows.tar.gz" -OutFile wasi-sdk-25.tar.gz
@@ -113,6 +115,7 @@ This plugin registers three PUT handlers that allow external clients to control 
   ```
 
   **Linux:**
+
   ```bash
   # Download and extract wasi-sdk-25
   wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz
@@ -123,6 +126,7 @@ This plugin registers three PUT handlers that allow external clients to control 
   ```
 
   **macOS:**
+
   ```bash
   # Download and extract wasi-sdk-25
   wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-arm64-macos.tar.gz
@@ -164,6 +168,7 @@ cp bin/Release/net10.0/wasi-wasm/AnchorWatch.wasm plugin.wasm
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 copy bin\Release\net10.0\wasi-wasm\AnchorWatch.wasm plugin.wasm
 ```
@@ -304,6 +309,7 @@ public static IntPtr HandleSetAnchorPosition(IntPtr requestPtr, int requestLen)
 ```
 
 **Handler Naming Convention:**
+
 - Format: `handle_put_{context}_{path}` with dots replaced by underscores
 - Example: `handle_put_vessels_self_navigation_anchor_position`
 
@@ -363,11 +369,11 @@ Configure the plugin through the Admin UI or by editing `~/.signalk/plugin-confi
 
 ### Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `maxRadius` | number | 50 | Default drag alarm radius in meters |
-| `alarmEnabled` | boolean | false | Enable alarm on startup |
-| `enableDebug` | boolean | false | Enable debug logging |
+| Option         | Type    | Default | Description                         |
+| -------------- | ------- | ------- | ----------------------------------- |
+| `maxRadius`    | number  | 50      | Default drag alarm radius in meters |
+| `alarmEnabled` | boolean | false   | Enable alarm on startup             |
+| `enableDebug`  | boolean | false   | Enable debug logging                |
 
 ## PUT Request/Response Format
 
@@ -399,10 +405,12 @@ PUT handlers return a response indicating success or failure:
 ```
 
 **Response States:**
+
 - `COMPLETED` - Request completed (success or error)
 - `PENDING` - Request accepted but still processing (not used in this plugin)
 
 **Status Codes:**
+
 - `200` - Success
 - `400` - Bad request (invalid input)
 - `500` - Server error (handler exception)
@@ -495,12 +503,14 @@ After making changes:
 ### Plugin doesn't load
 
 **Check:**
+
 - .NET 10 SDK installed: `dotnet --version`
 - WASI SDK 25.0 installed and `WASI_SDK_PATH` environment variable set
 - WASM file exists: `ls -lh plugin.wasm`
 - WASM file is not empty: `file plugin.wasm`
 
 **Solution:**
+
 ```bash
 # Ensure WASI_SDK_PATH is set
 export WASI_SDK_PATH=/path/to/wasi-sdk-25.0
@@ -515,6 +525,7 @@ cp bin/Release/net10.0/wasi-wasm/AnchorWatch.wasm plugin.wasm
 **Error:** `Handler function not found: handle_put_vessels_self_navigation_anchor_position`
 
 **Check:**
+
 - Handler function name matches the pattern: `handle_put_{context}_{path}` with dots → underscores
 - Function has `[UnmanagedCallersOnly(EntryPoint = "...")]` attribute
 - Function is `public static`
@@ -524,6 +535,7 @@ cp bin/Release/net10.0/wasi-wasm/AnchorWatch.wasm plugin.wasm
 **Error:** `error NU1100: Unable to resolve 'Microsoft.NET.Runtime.WebAssembly.Wasi.Sdk'`
 
 **Solution:**
+
 ```bash
 dotnet workload install wasi-experimental
 dotnet workload restore
@@ -532,6 +544,7 @@ dotnet workload restore
 **Error:** `The type or namespace name 'UnmanagedCallersOnly' could not be found`
 
 **Solution:** Ensure you're using .NET 10:
+
 ```bash
 dotnet --version  # Should show 10.0.x
 ```
@@ -543,6 +556,7 @@ dotnet --version  # Should show 10.0.x
 **Cause:** Handler function export name doesn't match the registered path
 
 **Solution:**
+
 1. Check the path you registered: `navigation.anchor.position`
 2. Convert to handler name: `handle_put_vessels_self_navigation_anchor_position`
 3. Ensure the function is exported with exactly that name
@@ -648,12 +662,14 @@ Even though jco can transpile the Component Model WASM to JavaScript, the underl
 .NET NativeAOT function table initialization fails in V8.
 
 **Error observed:**
+
 ```
 RuntimeError: null function or function signature mismatch
     at pluginId (wasm://wasm/...)
 ```
 
 This error occurs because:
+
 1. .NET NativeAOT uses WASM indirect call tables
 2. These tables are initialized by `_initialize()` which works in Wasmtime
 3. In V8 (via jco), the table entries remain null
@@ -667,6 +683,7 @@ This error occurs because:
 ### Binary Size
 
 ~20 MB for a simple plugin due to bundled .NET runtime. Compare to:
+
 - AssemblyScript: 3-10 KB
 - Rust: 50-200 KB
 

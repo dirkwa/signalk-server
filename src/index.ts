@@ -162,7 +162,10 @@ class Server {
 
     // Initialize WASM runtime for WASM/WASIX plugins
     try {
-      const { initializeWasmRuntime, initializeSubscriptionManager } = require('./wasm')
+      const {
+        initializeWasmRuntime,
+        initializeSubscriptionManager
+      } = require('./wasm')
       const wasmRuntime = initializeWasmRuntime()
       const subscriptionManager = initializeSubscriptionManager()
       app.wasmRuntime = wasmRuntime

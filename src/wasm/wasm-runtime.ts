@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * WASM Runtime Management
  *
@@ -29,8 +30,14 @@ import { loadJcoPlugin } from './loaders/jco-loader'
 import { loadComponentModelPlugin } from './loaders/component-loader'
 
 // Import bindings
-import { cleanupResourceProviders, wasmResourceProviders } from './bindings/resource-provider'
-import { cleanupWeatherProviders, wasmWeatherProviders } from './bindings/weather-provider'
+import {
+  cleanupResourceProviders,
+  wasmResourceProviders
+} from './bindings/resource-provider'
+import {
+  cleanupWeatherProviders,
+  wasmWeatherProviders
+} from './bindings/weather-provider'
 
 // Import utilities
 import { detectWasmFormat } from './utils/format-detection'
@@ -93,7 +100,13 @@ export class WasmRuntime {
       // Check if wasmPath points to a pre-transpiled jco JavaScript module
       if (wasmPath.endsWith('.js')) {
         debug(`Detected pre-transpiled jco module: ${wasmPath}`)
-        pluginInstance = await loadJcoPlugin(pluginId, wasmPath, vfsRoot, capabilities, app)
+        pluginInstance = await loadJcoPlugin(
+          pluginId,
+          wasmPath,
+          vfsRoot,
+          capabilities,
+          app
+        )
       } else {
         // Load WASM binary and detect format
         debug(`Reading WASM file: ${wasmPath}`)
@@ -105,10 +118,24 @@ export class WasmRuntime {
 
         if (wasmFormat === 'component-model') {
           debug(`Component Model detected - using jco transpilation`)
-          pluginInstance = await loadComponentModelPlugin(pluginId, wasmPath, wasmBuffer, vfsRoot, capabilities, app)
+          pluginInstance = await loadComponentModelPlugin(
+            pluginId,
+            wasmPath,
+            wasmBuffer,
+            vfsRoot,
+            capabilities,
+            app
+          )
         } else {
           // Standard WASI P1 plugin (AssemblyScript or Rust)
-          pluginInstance = await loadStandardPlugin(pluginId, wasmPath, wasmBuffer, vfsRoot, capabilities, app)
+          pluginInstance = await loadStandardPlugin(
+            pluginId,
+            wasmPath,
+            wasmBuffer,
+            vfsRoot,
+            capabilities,
+            app
+          )
         }
       }
 

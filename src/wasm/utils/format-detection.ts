@@ -17,7 +17,12 @@ export function detectWasmFormat(buffer: Buffer): WasmFormat {
   }
 
   // Check WASM magic number: \0asm
-  if (buffer[0] !== 0x00 || buffer[1] !== 0x61 || buffer[2] !== 0x73 || buffer[3] !== 0x6d) {
+  if (
+    buffer[0] !== 0x00 ||
+    buffer[1] !== 0x61 ||
+    buffer[2] !== 0x73 ||
+    buffer[3] !== 0x6d
+  ) {
     return 'unknown'
   }
 

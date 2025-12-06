@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * WASM Plugin Delta Subscription Management
  *
@@ -87,9 +88,7 @@ class WasmSubscriptionManager {
 
     // Simple glob-style matching
     // "navigation.*" matches "navigation.position", "navigation.courseOverGroundTrue", etc.
-    const regexPattern = pattern
-      .replace(/\./g, '\\.')
-      .replace(/\*/g, '.*')
+    const regexPattern = pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')
 
     const regex = new RegExp(`^${regexPattern}$`)
     return regex.test(path)

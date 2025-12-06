@@ -73,6 +73,7 @@ cp plugin.wasm package.json public/ ~/.signalk/node_modules/@signalk/charts-prov
 ### Web Interface
 
 Access the chart manager at:
+
 ```
 http://localhost:3000/plugins/charts-provider-go/
 ```
@@ -80,6 +81,7 @@ http://localhost:3000/plugins/charts-provider-go/
 ### API Endpoints
 
 #### Resource API (via Signal K)
+
 ```bash
 # List all charts
 curl http://localhost:3000/signalk/v2/api/resources/charts
@@ -89,6 +91,7 @@ curl http://localhost:3000/signalk/v2/api/resources/charts/my-chart
 ```
 
 #### Plugin Endpoints
+
 ```bash
 # Get plugin status
 curl http://localhost:3000/plugins/charts-provider-go/api/status
@@ -102,6 +105,7 @@ curl -X DELETE http://localhost:3000/plugins/charts-provider-go/api/charts/my-ch
 ```
 
 #### Tile Serving
+
 ```bash
 # Get a tile (z/x/y)
 curl http://localhost:3000/plugins/charts-provider-go/tiles/my-chart/10/512/384
@@ -164,20 +168,20 @@ func sk_register_resource_provider(ptr *byte, len uint32) int32
 
 The plugin exports these functions:
 
-| Export | Description |
-|--------|-------------|
-| `allocate` | Memory allocation for string passing |
-| `deallocate` | Memory deallocation |
-| `plugin_id` | Returns plugin ID |
-| `plugin_name` | Returns plugin name |
-| `plugin_schema` | Returns JSON schema |
-| `plugin_start` | Initialize plugin |
-| `plugin_stop` | Stop plugin |
-| `http_endpoints` | Custom HTTP endpoint definitions |
-| `resource_list` | List all charts |
-| `resource_get` | Get chart metadata |
-| `resource_set` | Update chart metadata |
-| `resource_delete` | Remove chart |
+| Export            | Description                          |
+| ----------------- | ------------------------------------ |
+| `allocate`        | Memory allocation for string passing |
+| `deallocate`      | Memory deallocation                  |
+| `plugin_id`       | Returns plugin ID                    |
+| `plugin_name`     | Returns plugin name                  |
+| `plugin_schema`   | Returns JSON schema                  |
+| `plugin_start`    | Initialize plugin                    |
+| `plugin_stop`     | Stop plugin                          |
+| `http_endpoints`  | Custom HTTP endpoint definitions     |
+| `resource_list`   | List all charts                      |
+| `resource_get`    | Get chart metadata                   |
+| `resource_set`    | Update chart metadata                |
+| `resource_delete` | Remove chart                         |
 
 ## Delta Notifications
 
@@ -185,21 +189,25 @@ When charts are added/removed, the plugin emits Signal K deltas:
 
 ```json
 {
-  "updates": [{
-    "values": [{
-      "path": "resources.charts.my-chart",
-      "value": {
-        "identifier": "my-chart",
-        "name": "My Chart",
-        "tilemapUrl": "/plugins/charts-provider-go/tiles/my-chart/{z}/{x}/{y}",
-        "bounds": [3.0, 51.0, 10.0, 56.0],
-        "minzoom": 5,
-        "maxzoom": 16,
-        "format": "mbtiles",
-        "type": "baselayer"
-      }
-    }]
-  }]
+  "updates": [
+    {
+      "values": [
+        {
+          "path": "resources.charts.my-chart",
+          "value": {
+            "identifier": "my-chart",
+            "name": "My Chart",
+            "tilemapUrl": "/plugins/charts-provider-go/tiles/my-chart/{z}/{x}/{y}",
+            "bounds": [3.0, 51.0, 10.0, 56.0],
+            "minzoom": 5,
+            "maxzoom": 16,
+            "format": "mbtiles",
+            "type": "baselayer"
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 

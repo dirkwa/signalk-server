@@ -3,26 +3,32 @@
 > **Note**: This document is a historical record of WASM plugin development. For current status and quick reference, see [README.md](README.md).
 
 ## Phase 1: Core Infrastructure - ✅ COMPLETE
+
 **Timeline**: December 2025
 **Status**: All core components implemented and integrated
 
 ## Phase 1A: AssemblyScript Support - ✅ COMPLETE
+
 **Timeline**: December 2025
 **Status**: AssemblyScript SDK and tooling complete, multiple plugins deployed
 
 ## Phase 1B: Rust Support - ✅ COMPLETE
+
 **Timeline**: December 2025
 **Status**: Rust WASM plugins working with buffer-based FFI, PUT handlers working
 
 ## Phase 2: Network Capabilities - ✅ COMPLETE
+
 **Timeline**: January 2025
 **Status**: Asyncify integration complete, HTTP requests working in production
 
 ## Phase 2A: PUT Handlers - ✅ COMPLETE
+
 **Timeline**: December 2025
 **Status**: PUT handlers working for both AssemblyScript and Rust plugins
 
 ## Phase 3: Resource Providers - ✅ COMPLETE
+
 **Timeline**: December 2025
 **Status**: Fully working with weather plugin demonstration
 
@@ -49,6 +55,7 @@ curl http://localhost:3000/signalk/v2/api/resources/routes
 ```
 
 **Key Features:**
+
 - ✅ Multiple resource type registration (routes AND waypoints from same plugin)
 - ✅ GeoJSON Point geometry for waypoints
 - ✅ GeoJSON LineString geometry for routes with coordinatesMeta
@@ -58,6 +65,7 @@ curl http://localhost:3000/signalk/v2/api/resources/routes
 **Bug Fix:** Resource handlers now receive `resourceType` parameter correctly.
 
 **Files Created:**
+
 - `examples/wasm-plugins/routes-waypoints-plugin/` - Complete example
 
 ---
@@ -67,6 +75,7 @@ curl http://localhost:3000/signalk/v2/api/resources/routes
 **Major Milestone**: Comprehensive regression test suite proving WASM and Node.js plugins coexist without issues!
 
 **16 automated tests passing:**
+
 - ✅ Node.js plugin loads and starts
 - ✅ Node.js plugin appears in pluginsMap
 - ✅ Node.js plugin can emit deltas
@@ -85,6 +94,7 @@ curl http://localhost:3000/signalk/v2/api/resources/routes
 - ✅ Server stops cleanly with both plugin types
 
 **Key Fixes Applied:**
+
 - ✅ **`started` Property Compatibility**: Added `Object.defineProperty` getter to WASM plugins for Node.js API compatibility
 - ✅ **Plugin ID Resolution**: Config files now use WASM binary's plugin ID, not npm package name
 - ✅ **Server Shutdown**: `server.stop()` now properly calls `shutdownAllWasmPlugins()`
@@ -95,6 +105,7 @@ curl http://localhost:3000/signalk/v2/api/resources/routes
 **Test Config**: `test/wasm-regression-config/` with both Node.js and WASM plugins
 
 **Run Tests:**
+
 ```bash
 npm run build && npx mocha test/wasm-plugin-regression.ts
 ```
@@ -117,11 +128,13 @@ curl http://localhost:3000/signalk/v2/api/resources/weather/current
 ```
 
 **Key Fixes Applied:**
+
 - ✅ **AssemblyScript String Passing**: Use `__newString()` to allocate strings in WASM memory
 - ✅ **Plugin Instance Timing**: Update resource provider references AFTER `plugin_start()` completes
 - ✅ **Closure Key Capture**: Keep original Map keys since closures capture them
 
 **Files Modified:**
+
 - `src/wasm/bindings/resource-provider.ts` - Fixed string passing, simplified migration
 - `src/wasm/loader/plugin-lifecycle.ts` - Added `updateResourceProviderInstance()` after start
 - `src/wasm/loader/plugin-registry.ts` - Added migration and update calls
@@ -137,6 +150,7 @@ curl http://localhost:3000/signalk/v2/api/resources/weather/current
 **After**: Modular architecture with clear separation of concerns
 
 **New Directory Structure:**
+
 ```
 src/wasm/
 ├── wasm-runtime.ts        # Main entry (~240 lines, was ~1650)
@@ -158,6 +172,7 @@ src/wasm/
 ```
 
 **Benefits:**
+
 - ✅ Each loader is independently testable
 - ✅ Host bindings (`env-imports.ts`) clearly documented
 - ✅ Resource provider logic isolated for easier debugging
@@ -170,6 +185,7 @@ src/wasm/
 ### 🔧 Resource Provider Infrastructure Added! (December 2025)
 
 **Infrastructure for WASM Resource Providers:**
+
 - ✅ **Host Binding**: `sk_register_resource_provider()` added to wasm-runtime.ts
 - ✅ **Capability Flag**: `resourceProvider: true` in wasmCapabilities
 - ✅ **ResourcesApi Integration**: WASM providers register with Signal K ResourcesApi
@@ -178,6 +194,7 @@ src/wasm/
 - ✅ **Documentation**: Added Resource Providers section to WASM_PLUGIN_DEV_GUIDE.md
 
 **How It Works:**
+
 ```typescript
 // In package.json:
 "wasmCapabilities": { "resourceProvider": true }
@@ -191,6 +208,7 @@ export function resource_get(requestJson: string): string { ... }
 ```
 
 **Resources Accessible At:**
+
 ```
 GET  /signalk/v2/api/resources/{type}
 GET  /signalk/v2/api/resources/{type}/{id}
@@ -205,12 +223,14 @@ DELETE /signalk/v2/api/resources/{type}/{id}
 **Major Milestone**: Rust WASM plugins can now expose custom REST APIs!
 
 **What Was Fixed:**
+
 - ✅ **Root Cause Found**: `http_endpoints()` assumed AssemblyScript string return, but Rust uses buffer-based FFI
 - ✅ **Solution**: Added dual-mode detection in plugin-routes.ts for both plugin types
 - ✅ **Rust FFI Pattern**: `(out_ptr, out_max_len) -> written_len` with allocate/deallocate memory management
 - ✅ **Verified Working**: anchor-watch-rust plugin HTTP endpoints tested successfully
 
 **Rust Plugin HTTP Endpoints Example:**
+
 ```rust
 #[no_mangle]
 pub extern "C" fn http_endpoints(out_ptr: *mut u8, out_max_len: usize) -> i32 {
@@ -232,6 +252,7 @@ pub extern "C" fn http_get_status(
 ```
 
 **Test Results:**
+
 ```bash
 curl -b cookies.txt http://localhost:3000/plugins/anchor-watch-rust/api/status
 {"running":true,"alarmActive":false,"position":{"latitude":0,"longitude":0},"maxRadius":50,"checkInterval":10}
@@ -244,12 +265,14 @@ curl -b cookies.txt http://localhost:3000/plugins/anchor-watch-rust/api/status
 **Major Milestone**: WASM plugins can now register PUT handlers for vessel control!
 
 **What Was Fixed:**
+
 - ✅ **Root Cause Found**: `app.registerPutHandler()` only exists on wrapped `appCopy`, not main `app`
 - ✅ **Solution**: Changed to use `app.registerActionHandler()` which is available on main `app`
 - ✅ **Source Parameter**: Documented that PUT requests require `source` in body when multiple handlers exist
 - ✅ **Meta Emission**: Added `supportsPut` meta for path discoverability
 
 **Rust Plugin Example Created:**
+
 - `examples/wasm-plugins/anchor-watch-rust/` - Complete working example
 - Buffer-based FFI with `allocate`/`deallocate` exports
 - PUT handlers for `navigation.anchor.position`, `maxRadius`, `state`
@@ -257,6 +280,7 @@ curl -b cookies.txt http://localhost:3000/plugins/anchor-watch-rust/api/status
 - Comprehensive documentation
 
 **Technical Details:**
+
 ```rust
 // Register PUT handler
 register_put_handler("vessels.self", "navigation.anchor.position");
@@ -270,6 +294,7 @@ pub extern "C" fn handle_put_vessels_self_navigation_anchor_position(
 ```
 
 **Key Finding - Source Parameter:**
+
 ```bash
 # Must include source in body for paths with multiple handlers
 curl -X PUT .../navigation/anchor/position \
@@ -283,6 +308,7 @@ curl -X PUT .../navigation/anchor/position \
 **Major Milestone**: WASM plugins can now make HTTP requests using synchronous-style async API!
 
 **What Was Implemented:**
+
 - ✅ **Asyncify Integration**: Full state machine implementation (Normal → Unwound → Rewound)
 - ✅ **FetchHandler Bridge**: as-fetch library integrated with Node.js native fetch
 - ✅ **Race Condition Prevention**: Promise/callback setup before plugin_start() execution
@@ -292,9 +318,12 @@ curl -X PUT .../navigation/anchor/position \
 - ✅ **Comprehensive Docs**: Asyncify implementation guide + developer onboarding
 
 **Technical Achievement:**
+
 ```typescript
 // This looks synchronous but uses Asyncify under the hood!
-const response = fetchSync('https://api.openweathermap.org/data/2.5/weather?...')
+const response = fetchSync(
+  'https://api.openweathermap.org/data/2.5/weather?...'
+)
 if (response && response.status === 200) {
   const data = response.text()
   // WASM execution paused during fetch, resumed with response
@@ -302,23 +331,27 @@ if (response && response.status === 200) {
 ```
 
 **Production Deployment:**
+
 - Weather Plugin v0.1.8 running on Raspberry Pi 5
 - Real API calls working in production
 - Auto-restart on server boot verified
 - Dashboard visibility confirmed
 
 **Files Modified:**
+
 - `src/wasm/wasm-runtime.ts` - Asyncify state machine + FetchHandler init
 - `src/wasm/loader/plugin-lifecycle.ts` - Async await for plugin_start()
 - `src/wasm/loader/plugin-registry.ts` - Config file path resolution fix
 - `examples/wasm-plugins/weather-plugin/` - Complete production example
 
 **Documentation Created:**
+
 - `wasm/ASYNCIFY_IMPLEMENTATION.md` - Technical deep dive
 - `examples/wasm-plugins/weather-plugin/README.md` - Developer onboarding
 - `wasm/IMPLEMENTATION_STATUS.md` - Complete implementation status (this document)
 
 **Dependencies Added:**
+
 - `as-fetch` (^2.1.4) - HTTP client for AssemblyScript with Asyncify
 - `@assemblyscript/loader` (^0.27.x) - WASM instance management
 
@@ -329,6 +362,7 @@ if (response && response.status === 200) {
 **Deployment Success**: hello-assemblyscript example deployed to Raspberry Pi 5
 
 **Achievements:**
+
 - ✅ Built with AssemblyScript compiler (13 KB binary)
 - ✅ Loaded by Signal K Server 3.0-alpha.4
 - ✅ Deployed to Raspberry Pi 5 (ARM64 architecture)
@@ -338,6 +372,7 @@ if (response && response.status === 200) {
 - ✅ Plugin metadata displayed properly
 
 **Key Technical Milestones:**
+
 1. **ARM Compatibility**: Resolved @wasmer/wasi incompatibility by switching to Node.js native WASI
 2. **AssemblyScript Runtime**: Successfully using "stub" runtime for minimal overhead
 3. **String Memory Reading**: Implemented UTF-16LE string decoding from WASM memory
@@ -345,6 +380,7 @@ if (response && response.status === 200) {
 5. **Debug Logging**: Plugin messages now properly routed to Node.js debug system
 
 **Binary Sizes Achieved:**
+
 - AssemblyScript hello-world: 13.2 KB
 - AssemblyScript weather plugin: 22.9 KB (with HTTP + JSON parsing)
 - Includes full Signal K SDK and runtime helpers
@@ -359,10 +395,12 @@ if (response && response.status === 200) {
 **File**: [package.json](../package.json)
 
 **WASM Runtime Dependencies:**
+
 - `@assemblyscript/loader` (^0.27.x) - AssemblyScript WASM loader
 - `as-fetch` (^2.1.4) - HTTP client with Asyncify support
 
 **Optional Dependencies:**
+
 - `better-sqlite3` (^11.0.0) - SQLite support for MBTiles chart serving
 
 **Node.js Requirement**: `>=18` (for native fetch API)
@@ -370,10 +408,12 @@ if (response && response.status === 200) {
 ### 2. Asyncify Support for Network Requests ✅
 
 **Files**:
+
 - [src/wasm/wasm-runtime.ts](../src/wasm/wasm-runtime.ts) - Lines 451-566
 - [src/wasm/loader/plugin-lifecycle.ts](../src/wasm/loader/plugin-lifecycle.ts) - Line 106
 
 **Features:**
+
 - FetchHandler initialization with resume callback
 - Asyncify state machine (0=Normal, 1=Unwound, 2=Rewound)
 - Race condition prevention via Promise setup before plugin_start()
@@ -381,6 +421,7 @@ if (response && response.status === 200) {
 - Type-safe async/await pattern: `start: (config: string) => number | Promise<number>`
 
 **State Machine Flow:**
+
 ```
 State 0 (Normal)     - Regular execution
     ↓
@@ -392,10 +433,14 @@ State 0 (Normal)     - Execution continues
 ```
 
 **Key Implementation Details:**
+
 ```typescript
 // Race condition prevention - callback set BEFORE plugin_start()
 asyncifyResumeFunction = () => {
-  const resumeResult = asLoaderInstance.exports.plugin_start(configPtr, configLen)
+  const resumeResult = asLoaderInstance.exports.plugin_start(
+    configPtr,
+    configLen
+  )
   resumePromiseResolve()
 }
 
@@ -404,7 +449,7 @@ let result = asLoaderInstance.exports.plugin_start(configPtr, configLen)
 
 // If unwound (state=1), wait for async completion
 if (state === 1) {
-  await resumePromise  // Blocks until HTTP response arrives
+  await resumePromise // Blocks until HTTP response arrives
 }
 ```
 
@@ -413,11 +458,13 @@ if (state === 1) {
 **File**: [src/wasm/loader/plugin-registry.ts](../src/wasm/loader/plugin-registry.ts) - Lines 85-185
 
 **Problem Solved:**
+
 - **Before**: Used package name to derive plugin ID → `weather-plugin-example`
 - **After**: Load WASM first to extract real ID → `weather-example`
 - **Result**: Config file found correctly, auto-restart works on server boot
 
 **Implementation:**
+
 ```typescript
 // Load WASM temporarily to get real plugin ID
 const tempInstance = await runtime.loadPlugin(...)
@@ -438,6 +485,7 @@ const instance = tempInstance
 Defines type-safe API contract between WASM plugins and Signal K server.
 
 **Interfaces Defined:**
+
 - `plugin-interface` - Plugin lifecycle (id, name, schema, start, stop)
 - `delta-handler` - Delta message emission and reception
 - `plugin-config` - Configuration read/write, data directory access
@@ -451,6 +499,7 @@ Defines type-safe API contract between WASM plugins and Signal K server.
 **Main Entry Point**: [src/wasm/wasm-runtime.ts](../src/wasm/wasm-runtime.ts) (~240 lines)
 
 **Modular Architecture** (refactored December 2025):
+
 ```
 src/wasm/
 ├── wasm-runtime.ts        # Main coordinator, singleton pattern
@@ -469,6 +518,7 @@ src/wasm/
 ```
 
 **Features:**
+
 - Node.js native WASI support (with @wasmer/wasi fallback)
 - Dual-mode plugin detection (Rust vs AssemblyScript)
 - WASM module loading and compilation
@@ -483,6 +533,7 @@ src/wasm/
 - Graceful shutdown
 
 **Key Functions:**
+
 - `loadPlugin()` - Load and instantiate WASM module with FetchHandler
 - `unloadPlugin()` - Clean unload of plugin
 - `reloadPlugin()` - Hot-reload without server restart
@@ -494,6 +545,7 @@ src/wasm/
 **File**: [src/wasm/wasm-storage.ts](../src/wasm/wasm-storage.ts) (~200 lines)
 
 **Features:**
+
 - Per-plugin isolated VFS using WASI
 - Server-managed vs plugin-managed configuration
 - Node.js to WASM data migration
@@ -502,6 +554,7 @@ src/wasm/
 - Path management utilities
 
 **Directory Structure:**
+
 ```
 $CONFIG_DIR/plugin-config-data/{plugin-id}/
 ├── {plugin-id}.json        # Server-managed config
@@ -516,6 +569,7 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 **File**: [src/wasm/wasm-loader.ts](../src/wasm/wasm-loader.ts) (~550 lines)
 
 **Features:**
+
 - Plugin registration and discovery
 - Type detection (Node.js vs WASM, Rust vs AssemblyScript)
 - Lifecycle management (start, stop, reload)
@@ -526,6 +580,7 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 - Web UI integration with keywords support
 
 **Crash Recovery Policy:**
+
 - 1st crash: Restart after 1 second
 - 2nd crash: Restart after 2 seconds
 - 3rd crash: Restart after 4 seconds
@@ -536,6 +591,7 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 **File**: [src/wasm/wasm-serverapi.ts](../src/wasm/wasm-serverapi.ts) (~300 lines)
 
 **Features:**
+
 - FFI bridge between WASM and JavaScript
 - Capability enforcement (network, dataRead, dataWrite, etc.)
 - Memory-safe string handling
@@ -543,6 +599,7 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 - Error propagation
 
 **API Categories:**
+
 - **Delta Handler**: `handleMessage()` - Emit delta to server
 - **Plugin Config**: `readPluginOptions()`, `savePluginOptions()`, `getDataDirPath()`
 - **Plugin Status**: `setPluginStatus()`, `setPluginError()`, `debug()`, `error()`
@@ -554,6 +611,7 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 **File**: [src/wasm/wasm-subscriptions.ts](../src/wasm/wasm-subscriptions.ts) (~250 lines)
 
 **Features:**
+
 - Pattern-based delta routing
 - Subscription state tracking
 - Delta buffering during reload
@@ -561,6 +619,7 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 - Subscription statistics
 
 **Reload Process:**
+
 ```
 1. Start buffering for plugin
 2. Unload old instance
@@ -576,12 +635,14 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 **NPM Package**: signalk-assemblyscript-plugin-sdk@0.1.2
 
 **Recent Updates (v0.1.2 - January 2025):**
+
 - ✅ Fixed `Uint8Array.wrap()` compatibility with AssemblyScript 0.27.x
 - ✅ Removed incomplete HTTP wrapper functions
 - ✅ Updated documentation with as-fetch usage examples
 - ✅ SDK builds cleanly without errors
 
 **Features:**
+
 - Plugin base class with lifecycle methods
 - Signal K type definitions (Delta, Update, PathValue, etc.)
 - FFI bindings to Signal K server API
@@ -590,6 +651,7 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 - Network capability checking
 
 **API Categories:**
+
 - **Plugin Lifecycle**: `Plugin` base class, lifecycle exports
 - **Delta Handling**: `emit()`, Delta/Update/PathValue types
 - **Configuration**: `readConfig()`, `saveConfig()`
@@ -601,6 +663,7 @@ $CONFIG_DIR/plugin-config-data/{plugin-id}/
 **Binary Size**: 3-10 KB (vs 50-200 KB for Rust)
 
 **Note**: For HTTP requests, use `as-fetch` directly:
+
 ```typescript
 import { fetchSync } from 'as-fetch/sync'
 import { hasNetworkCapability } from 'signalk-assemblyscript-plugin-sdk'
@@ -620,6 +683,7 @@ if (hasNetworkCapability()) {
 **Status**: Production-ready, deployed on Raspberry Pi 5
 
 **Demonstrates:**
+
 - ✅ Asyncify integration with `fetchSync()`
 - ✅ Real API calls to OpenWeatherMap
 - ✅ Network capability usage
@@ -629,12 +693,14 @@ if (hasNetworkCapability()) {
 - ✅ Auto-restart on server boot
 
 **Files:**
+
 - `assembly/index.ts` - Complete implementation using fetchSync() (~350 lines)
 - `package.json` - Dependencies: as-fetch, SDK, capabilities declaration
 - `asconfig.json` - **Critical**: `"transform": ["as-fetch/transform"]` for Asyncify
 - `README.md` - Comprehensive developer onboarding (570+ lines)
 
 **Signal K Paths Emitted:**
+
 - `environment.outside.temperature` - Temperature in Kelvin
 - `environment.outside.humidity` - Relative humidity (0-1)
 - `environment.outside.pressure` - Atmospheric pressure in Pascals
@@ -650,6 +716,7 @@ if (hasNetworkCapability()) {
 **Status**: Deployed and tested on ARM64
 
 **Demonstrates:**
+
 - Plugin class implementation
 - Delta emission
 - Notification creation
@@ -666,6 +733,7 @@ if (hasNetworkCapability()) {
 **Status**: Deployed and tested on Raspberry Pi 5
 
 **Demonstrates:**
+
 - ✅ Rust WASM plugin development (`wasm32-wasip1` target)
 - ✅ Buffer-based FFI with `allocate`/`deallocate` exports
 - ✅ PUT handler registration and handling
@@ -675,16 +743,19 @@ if (hasNetworkCapability()) {
 - ✅ State management with `thread_local!`
 
 **PUT Handlers:**
+
 - `navigation.anchor.position` - Set anchor coordinates
 - `navigation.anchor.maxRadius` - Set alarm radius (10-1000m)
 - `navigation.anchor.state` - Query state (informational)
 
 **HTTP Endpoints:**
+
 - `GET /api/status` - Return anchor watch status
 - `GET /api/position` - Return current anchor position
 - `POST /api/drop` - Drop anchor at specified coordinates
 
 **Files:**
+
 - `src/lib.rs` - Rust implementation (~550 lines)
 - `Cargo.toml` - Build configuration with size optimizations
 - `package.json` - npm package with `putHandlers` + `httpEndpoints` capabilities
@@ -693,6 +764,7 @@ if (hasNetworkCapability()) {
 **Binary Size**: ~127 KB (optimized)
 
 **Build Command:**
+
 ```bash
 cargo build --release --target wasm32-wasip1
 ```
@@ -704,6 +776,7 @@ cargo build --release --target wasm32-wasip1
 **Status**: Deployed and tested
 
 **Demonstrates:**
+
 - ✅ Go/TinyGo WASM plugin development (`wasip1` target)
 - ✅ Resource provider registration (`charts`)
 - ✅ Hybrid architecture (WASM + Node.js for SQLite)
@@ -712,10 +785,12 @@ cargo build --release --target wasm32-wasip1
 - ✅ Delta notifications for chart CRUD operations
 
 **Architecture:**
+
 - Go WASM: Resource provider registration, metadata, delta emission
 - Node.js: SQLite tile reading via `better-sqlite3`, file upload handling
 
 **Files:**
+
 - `main.go` - Go/TinyGo implementation
 - `go.mod` - Go module configuration
 - `package.json` - npm package with `resourceProvider` capability
@@ -725,6 +800,7 @@ cargo build --release --target wasm32-wasip1
 **Binary Size**: ~50 KB (optimized with `-gc=leaking -no-debug`)
 
 **Build Command:**
+
 ```bash
 tinygo build -o plugin.wasm -target=wasip1 -gc=leaking -no-debug main.go
 ```
@@ -736,6 +812,7 @@ tinygo build -o plugin.wasm -target=wasip1 -gc=leaking -no-debug main.go
 **Status**: Deployed and tested
 
 **Demonstrates:**
+
 - ✅ Resource provider for standard Signal K types (routes, waypoints)
 - ✅ Multiple resource type registration from single plugin
 - ✅ GeoJSON Point geometry (waypoints)
@@ -744,10 +821,12 @@ tinygo build -o plugin.wasm -target=wasip1 -gc=leaking -no-debug main.go
 - ✅ Pre-populated sample navigation data
 
 **Sample Data:**
+
 - 3 waypoints: Helsinki Marina, Suomenlinna Anchorage, Fuel Dock
 - 1 route: "Marina to Suomenlinna" (3.5km, 3 waypoints)
 
 **Files:**
+
 - `assembly/index.ts` - AssemblyScript implementation (~540 lines)
 - `package.json` - npm package with `resourceProvider` capability
 - `README.md` - Comprehensive documentation with API examples
@@ -755,6 +834,7 @@ tinygo build -o plugin.wasm -target=wasip1 -gc=leaking -no-debug main.go
 **Binary Size**: ~23 KB (optimized)
 
 **Build Command:**
+
 ```bash
 npm run build
 ```
@@ -833,56 +913,56 @@ npm run build
 
 ### Phase 1 (Complete ✅)
 
-| Capability | Status | Description |
-|------------|--------|-------------|
-| `dataRead` | ✅ | Read Signal K data model |
-| `dataWrite` | ✅ | Emit delta messages |
-| `storage` | ✅ | VFS isolated storage |
-| Delta subscriptions | ✅ | Pattern-based routing |
-| Hot-reload | ✅ | No server restart needed |
-| Crash recovery | ✅ | Automatic restart with backoff |
-| Configuration | ✅ | Read/write plugin config |
-| Status reporting | ✅ | Status/error messages |
-| Logging | ✅ | Debug and error logs |
+| Capability          | Status | Description                    |
+| ------------------- | ------ | ------------------------------ |
+| `dataRead`          | ✅     | Read Signal K data model       |
+| `dataWrite`         | ✅     | Emit delta messages            |
+| `storage`           | ✅     | VFS isolated storage           |
+| Delta subscriptions | ✅     | Pattern-based routing          |
+| Hot-reload          | ✅     | No server restart needed       |
+| Crash recovery      | ✅     | Automatic restart with backoff |
+| Configuration       | ✅     | Read/write plugin config       |
+| Status reporting    | ✅     | Status/error messages          |
+| Logging             | ✅     | Debug and error logs           |
 
 ### Phase 2 (Complete ✅)
 
-| Capability | Status | Description |
-|------------|--------|-------------|
-| `network` | ✅ | HTTP client via as-fetch with Asyncify |
-| Asyncify state management | ✅ | Automatic pause/resume for async ops |
-| Config file resolution | ✅ | Fixed plugin ID mismatch issue |
+| Capability                | Status | Description                            |
+| ------------------------- | ------ | -------------------------------------- |
+| `network`                 | ✅     | HTTP client via as-fetch with Asyncify |
+| Asyncify state management | ✅     | Automatic pause/resume for async ops   |
+| Config file resolution    | ✅     | Fixed plugin ID mismatch issue         |
 
 ### Phase 2A (Complete ✅)
 
-| Capability | Status | Description |
-|------------|--------|-------------|
-| `putHandlers` | ✅ | Register PUT handlers (AssemblyScript + Rust) |
+| Capability    | Status | Description                                   |
+| ------------- | ------ | --------------------------------------------- |
+| `putHandlers` | ✅     | Register PUT handlers (AssemblyScript + Rust) |
 
 ### Phase 3 (In Progress)
 
-| Capability | Status | Description |
-|------------|--------|-------------|
-| `httpEndpoints` | ✅ | Custom HTTP endpoints (GET/POST/PUT/DELETE) - Tested for AssemblyScript & Rust |
-| `resourceProvider` | ✅ | Generic resource API (`/signalk/v2/api/resources/{type}`) |
-| `weatherProvider` | ✅ | Weather API (`/signalk/v2/api/weather/*`) - Tested with OpenWeatherMap |
-| Routes/Waypoints | ✅ | Standard resource types with GeoJSON compliance (routes-waypoints-plugin example) |
-| Autopilot providers | 🔄 | Autopilot control |
+| Capability          | Status | Description                                                                       |
+| ------------------- | ------ | --------------------------------------------------------------------------------- |
+| `httpEndpoints`     | ✅     | Custom HTTP endpoints (GET/POST/PUT/DELETE) - Tested for AssemblyScript & Rust    |
+| `resourceProvider`  | ✅     | Generic resource API (`/signalk/v2/api/resources/{type}`)                         |
+| `weatherProvider`   | ✅     | Weather API (`/signalk/v2/api/weather/*`) - Tested with OpenWeatherMap            |
+| Routes/Waypoints    | ✅     | Standard resource types with GeoJSON compliance (routes-waypoints-plugin example) |
+| Autopilot providers | 🔄     | Autopilot control                                                                 |
 
 ### Phase 3A (Complete ✅)
 
-| Capability | Status | Description |
-|------------|--------|-------------|
-| Go/TinyGo | ✅ | Go WASM plugins (charts-provider-go example) |
+| Capability | Status | Description                                  |
+| ---------- | ------ | -------------------------------------------- |
+| Go/TinyGo  | ✅     | Go WASM plugins (charts-provider-go example) |
 
 ### Phase 4 (Future)
 
-| Capability | Status | Description |
-|------------|--------|-------------|
-| `serialPorts` | ⏳ | Serial port access |
-| Multi-threading | ⏳ | Worker thread isolation |
-| Fine-grained caps | ⏳ | Path-level permissions |
-| Multi-language | ⏳ | Python, C++ support (Go complete) |
+| Capability        | Status | Description                       |
+| ----------------- | ------ | --------------------------------- |
+| `serialPorts`     | ⏳     | Serial port access                |
+| Multi-threading   | ⏳     | Worker thread isolation           |
+| Fine-grained caps | ⏳     | Path-level permissions            |
+| Multi-language    | ⏳     | Python, C++ support (Go complete) |
 
 ---
 
@@ -956,19 +1036,23 @@ npm run build
 The following items from the original roadmap have been completed:
 
 ### Originally Immediate
+
 - ✅ **Testing** - Regression test suite with 16 automated tests
 - ✅ **Additional Examples** - Multiple plugins demonstrating different features
 
 ### Originally Short-term
+
 - ✅ **PUT Handlers Capability** - Working for both AssemblyScript and Rust
 - ✅ **Custom REST Endpoints** - Full HTTP GET/POST/PUT/DELETE support
 - ✅ **Resource Providers** - Routes, waypoints, weather providers working
 
 ### Originally Medium-term
+
 - ✅ **UDP Sockets** - Raw socket support for radar/NMEA hardware
 - ✅ **Delta Subscriptions** - Real-time Signal K data to WASM plugins
 
 ### Post-Merge Future Work
+
 See [README.md](README.md) "Future Enhancements" section for remaining items.
 
 ---

@@ -13,11 +13,13 @@ The easiest way to enable WASM debug logging is through the SignalK Admin UI:
 3. **Submit**: Click **Submit** to save
 
 4. **Verify the logs appear**:
+
    ```bash
    journalctl -u signalk -f
    ```
 
    You should now see lines like:
+
    ```
    signalk:wasm:loader Intercepting /api/logs for logviewer - handling in Node.js +0ms
    signalk:wasm:loader [logviewer] Fetching 2000 log lines via Node.js streaming +1ms
@@ -28,34 +30,40 @@ The easiest way to enable WASM debug logging is through the SignalK Admin UI:
 ## Method 2: Systemd Service File (Advanced)
 
 1. **Edit the SignalK service file**:
+
    ```bash
    sudo systemctl edit signalk
    ```
 
 2. **Add the DEBUG environment variable**:
+
    ```ini
    [Service]
    Environment="DEBUG=signalk:wasm:*"
    ```
 
    Or for all SignalK debug output:
+
    ```ini
    [Service]
    Environment="DEBUG=signalk:*"
    ```
 
 3. **Reload and restart the service**:
+
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl restart signalk
    ```
 
 4. **Verify the logs appear**:
+
    ```bash
    journalctl -u signalk -f
    ```
 
    You should now see lines like:
+
    ```
    signalk:wasm:loader Intercepting /api/logs for logviewer - handling in Node.js +0ms
    signalk:wasm:loader [logviewer] Fetching 2000 log lines via Node.js streaming +1ms
@@ -65,13 +73,13 @@ The easiest way to enable WASM debug logging is through the SignalK Admin UI:
 
 You can enable specific debug namespaces:
 
-| Environment Variable | What it shows |
-|---------------------|---------------|
-| `DEBUG=signalk:wasm:*` | All WASM-related logs |
-| `DEBUG=signalk:wasm:loader` | Only WASM plugin loading |
-| `DEBUG=signalk:wasm:runtime` | Only WASM runtime operations |
-| `DEBUG=signalk:*` | All SignalK debug output |
-| `DEBUG=*` | All debug output (very verbose!) |
+| Environment Variable         | What it shows                    |
+| ---------------------------- | -------------------------------- |
+| `DEBUG=signalk:wasm:*`       | All WASM-related logs            |
+| `DEBUG=signalk:wasm:loader`  | Only WASM plugin loading         |
+| `DEBUG=signalk:wasm:runtime` | Only WASM runtime operations     |
+| `DEBUG=signalk:*`            | All SignalK debug output         |
+| `DEBUG=*`                    | All debug output (very verbose!) |
 
 ## Manual Testing
 
@@ -92,11 +100,13 @@ DEBUG=signalk:wasm:* signalk-server
 ### Via Systemd Service File
 
 1. **Edit the service again**:
+
    ```bash
    sudo systemctl edit signalk
    ```
 
 2. **Remove or comment out the DEBUG line**:
+
    ```ini
    [Service]
    # Environment="DEBUG=signalk:wasm:*"

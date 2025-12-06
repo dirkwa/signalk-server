@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Component Model Loader
  *
@@ -47,7 +49,11 @@ export async function loadComponentModelPlugin(
     debug(`Transpiling Component Model to JavaScript...`)
 
     // Get the output directory for transpiled files
-    const transpiledDir = path.join(path.dirname(wasmPath), '.jco-transpiled', pluginId)
+    const transpiledDir = path.join(
+      path.dirname(wasmPath),
+      '.jco-transpiled',
+      pluginId
+    )
     if (!fs.existsSync(transpiledDir)) {
       fs.mkdirSync(transpiledDir, { recursive: true })
     }
@@ -78,9 +84,14 @@ export async function loadComponentModelPlugin(
     }
 
     // Find the main module file
-    const mainModulePath = path.join(transpiledDir, `${pluginId.replace(/[^a-zA-Z0-9]/g, '_')}.js`)
+    const mainModulePath = path.join(
+      transpiledDir,
+      `${pluginId.replace(/[^a-zA-Z0-9]/g, '_')}.js`
+    )
     if (!fs.existsSync(mainModulePath)) {
-      const jsFiles = Object.keys(files).filter(f => f.endsWith('.js') && !f.endsWith('.d.ts'))
+      const jsFiles = Object.keys(files).filter(
+        (f) => f.endsWith('.js') && !f.endsWith('.d.ts')
+      )
       if (jsFiles.length === 0) {
         throw new Error('No JavaScript module found in transpiled output')
       }
@@ -99,14 +110,12 @@ export async function loadComponentModelPlugin(
     let componentInstance: any
 
     if (typeof componentModule.instantiate === 'function') {
-      componentInstance = await componentModule.instantiate(
-        (name: string) => {
-          if (name.startsWith('signalk:plugin/signalk-api')) {
-            return signalkApi
-          }
-          return {}
+      componentInstance = await componentModule.instantiate((name: string) => {
+        if (name.startsWith('signalk:plugin/signalk-api')) {
+          return signalkApi
         }
-      )
+        return {}
+      })
     } else {
       componentInstance = componentModule
     }
@@ -114,22 +123,26 @@ export async function loadComponentModelPlugin(
     debug(`Component instance created`)
 
     // Extract plugin interface exports
-    let pluginExports = componentInstance['signalk:plugin/plugin@1.0.0']
-      || componentInstance.plugin
-      || componentInstance
+    const pluginExports =
+      componentInstance['signalk:plugin/plugin@1.0.0'] ||
+      componentInstance.plugin ||
+      componentInstance
 
     // Map Component Model exports to our standard interface
     const exports = {
       id: () => {
-        const result = pluginExports.pluginId?.() || pluginExports['plugin-id']?.()
+        const result =
+          pluginExports.pluginId?.() || pluginExports['plugin-id']?.()
         return result || pluginId
       },
       name: () => {
-        const result = pluginExports.pluginName?.() || pluginExports['plugin-name']?.()
+        const result =
+          pluginExports.pluginName?.() || pluginExports['plugin-name']?.()
         return result || pluginId
       },
       schema: () => {
-        const result = pluginExports.pluginSchema?.() || pluginExports['plugin-schema']?.()
+        const result =
+          pluginExports.pluginSchema?.() || pluginExports['plugin-schema']?.()
         return result || '{}'
       },
       start: async (config: string) => {
@@ -185,6 +198,8 @@ export async function loadComponentModelPlugin(
     if (error instanceof Error && error.stack) {
       debug(`Stack trace: ${error.stack}`)
     }
-    throw new Error(`Failed to load Component Model plugin ${pluginId}: ${errorMsg}`)
+    throw new Error(
+      `Failed to load Component Model plugin ${pluginId}: ${errorMsg}`
+    )
   }
 }

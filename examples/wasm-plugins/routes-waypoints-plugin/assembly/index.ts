@@ -29,24 +29,36 @@ class Waypoint {
   id: string = ''
   name: string = ''
   description: string = ''
-  type: string = 'Waypoint'  // Waypoint, PoI, Race Mark, etc.
+  type: string = 'Waypoint' // Waypoint, PoI, Race Mark, etc.
   longitude: f64 = 0.0
   latitude: f64 = 0.0
 
   toJSON(): string {
-    return '{' +
-      '"name":"' + this.name + '",' +
-      '"description":"' + this.description + '",' +
-      '"type":"' + this.type + '",' +
+    return (
+      '{' +
+      '"name":"' +
+      this.name +
+      '",' +
+      '"description":"' +
+      this.description +
+      '",' +
+      '"type":"' +
+      this.type +
+      '",' +
       '"feature":{' +
-        '"type":"Feature",' +
-        '"geometry":{' +
-          '"type":"Point",' +
-          '"coordinates":[' + this.longitude.toString() + ',' + this.latitude.toString() + ']' +
-        '},' +
-        '"properties":{}' +
+      '"type":"Feature",' +
+      '"geometry":{' +
+      '"type":"Point",' +
+      '"coordinates":[' +
+      this.longitude.toString() +
+      ',' +
+      this.latitude.toString() +
+      ']' +
+      '},' +
+      '"properties":{}' +
       '}' +
-    '}'
+      '}'
+    )
   }
 }
 
@@ -77,36 +89,53 @@ class Route {
         coords += ','
         meta += ','
       }
-      coords += '[' + this.points[i].longitude.toString() + ',' + this.points[i].latitude.toString() + ']'
+      coords +=
+        '[' +
+        this.points[i].longitude.toString() +
+        ',' +
+        this.points[i].latitude.toString() +
+        ']'
       meta += '{"name":"' + this.points[i].name + '"}'
     }
 
-    return '{' +
-      '"name":"' + this.name + '",' +
-      '"description":"' + this.description + '",' +
-      '"distance":' + this.distance.toString() + ',' +
+    return (
+      '{' +
+      '"name":"' +
+      this.name +
+      '",' +
+      '"description":"' +
+      this.description +
+      '",' +
+      '"distance":' +
+      this.distance.toString() +
+      ',' +
       '"feature":{' +
-        '"type":"Feature",' +
-        '"geometry":{' +
-          '"type":"LineString",' +
-          '"coordinates":[' + coords + ']' +
-        '},' +
-        '"properties":{' +
-          '"coordinatesMeta":[' + meta + ']' +
-        '}' +
+      '"type":"Feature",' +
+      '"geometry":{' +
+      '"type":"LineString",' +
+      '"coordinates":[' +
+      coords +
+      ']' +
+      '},' +
+      '"properties":{' +
+      '"coordinatesMeta":[' +
+      meta +
+      ']' +
       '}' +
-    '}'
+      '}' +
+      '}'
+    )
   }
 }
 
 // ===== Storage =====
 
 // Use arrays with linear search since AssemblyScript Map has limitations
-let waypoints: Waypoint[] = []
-let routes: Route[] = []
+const waypoints: Waypoint[] = []
+const routes: Route[] = []
 
 // Track which resource type we're currently handling
-let currentResourceType: string = ''
+const currentResourceType: string = ''
 
 // ===== Helper Functions =====
 
@@ -166,10 +195,12 @@ function extractNumber(json: string, key: string): f64 {
 
   const start = match + key.length + 3
   let end = start
-  while (end < json.length &&
-    (json.charCodeAt(end) >= 48 && json.charCodeAt(end) <= 57 ||
+  while (
+    end < json.length &&
+    ((json.charCodeAt(end) >= 48 && json.charCodeAt(end) <= 57) ||
       json.charCodeAt(end) === 46 ||
-      json.charCodeAt(end) === 45)) {
+      json.charCodeAt(end) === 45)
+  ) {
     end++
   }
   if (end > start) {
@@ -195,7 +226,7 @@ function initializeSampleData(): void {
   wp1.name = 'Helsinki Marina'
   wp1.description = 'Main marina in Helsinki harbor'
   wp1.type = 'Marina'
-  wp1.longitude = 24.9560
+  wp1.longitude = 24.956
   wp1.latitude = 60.1695
   waypoints.push(wp1)
 
@@ -204,8 +235,8 @@ function initializeSampleData(): void {
   wp2.name = 'Suomenlinna Anchorage'
   wp2.description = 'Protected anchorage near Suomenlinna fortress'
   wp2.type = 'Anchorage'
-  wp2.longitude = 24.9880
-  wp2.latitude = 60.1450
+  wp2.longitude = 24.988
+  wp2.latitude = 60.145
   waypoints.push(wp2)
 
   const wp3 = new Waypoint()
@@ -213,38 +244,45 @@ function initializeSampleData(): void {
   wp3.name = 'Fuel Dock'
   wp3.description = 'Diesel and petrol available'
   wp3.type = 'Fuel Station'
-  wp3.longitude = 24.9620
-  wp3.latitude = 60.1680
+  wp3.longitude = 24.962
+  wp3.latitude = 60.168
   waypoints.push(wp3)
 
   // Sample Route: Marina to Anchorage
   const route1 = new Route()
   route1.id = 'b2c3d4e5-0001-4000-8000-000000000001'
   route1.name = 'Marina to Suomenlinna'
-  route1.description = 'Short trip from Helsinki Marina to Suomenlinna anchorage'
-  route1.distance = 3500.0  // meters
+  route1.description =
+    'Short trip from Helsinki Marina to Suomenlinna anchorage'
+  route1.distance = 3500.0 // meters
 
   const pt1 = new RoutePoint()
   pt1.name = 'Start - Marina'
-  pt1.longitude = 24.9560
+  pt1.longitude = 24.956
   pt1.latitude = 60.1695
   route1.points.push(pt1)
 
   const pt2 = new RoutePoint()
   pt2.name = 'Channel marker'
-  pt2.longitude = 24.9700
-  pt2.latitude = 60.1600
+  pt2.longitude = 24.97
+  pt2.latitude = 60.16
   route1.points.push(pt2)
 
   const pt3 = new RoutePoint()
   pt3.name = 'End - Anchorage'
-  pt3.longitude = 24.9880
-  pt3.latitude = 60.1450
+  pt3.longitude = 24.988
+  pt3.latitude = 60.145
   route1.points.push(pt3)
 
   routes.push(route1)
 
-  debug('Initialized sample data: ' + waypoints.length.toString() + ' waypoints, ' + routes.length.toString() + ' routes')
+  debug(
+    'Initialized sample data: ' +
+      waypoints.length.toString() +
+      ' waypoints, ' +
+      routes.length.toString() +
+      ' routes'
+  )
 }
 
 // ===== Plugin Class =====
@@ -279,7 +317,13 @@ class RoutesWaypointsPlugin extends Plugin {
       debug('Warning: Failed to register for waypoints')
     }
 
-    setStatus('Providing ' + waypoints.length.toString() + ' waypoints and ' + routes.length.toString() + ' routes')
+    setStatus(
+      'Providing ' +
+        waypoints.length.toString() +
+        ' waypoints and ' +
+        routes.length.toString() +
+        ' routes'
+    )
     return 0
   }
 
@@ -435,7 +479,7 @@ export function resource_set(requestJson: string): string {
     let lat: f64 = 0.0
     if (coordsMatch >= 0) {
       const coordsStart = coordsMatch + 15
-      let coordsEnd = requestJson.indexOf(']', coordsStart)
+      const coordsEnd = requestJson.indexOf(']', coordsStart)
       if (coordsEnd > coordsStart) {
         const coordsStr = requestJson.substring(coordsStart, coordsEnd)
         const commaPos = coordsStr.indexOf(',')
@@ -466,8 +510,14 @@ export function resource_set(requestJson: string): string {
     if (lon !== 0.0) w.longitude = lon
     if (lat !== 0.0) w.latitude = lat
 
-    setStatus('Providing ' + waypoints.length.toString() + ' waypoints and ' + routes.length.toString() + ' routes')
-    return ''  // Success
+    setStatus(
+      'Providing ' +
+        waypoints.length.toString() +
+        ' waypoints and ' +
+        routes.length.toString() +
+        ' routes'
+    )
+    return '' // Success
   } else if (resourceType === 'routes') {
     // Parse route data - simplified
     const name = extractString(requestJson, 'name')
@@ -495,8 +545,14 @@ export function resource_set(requestJson: string): string {
     // Note: Full route point parsing would require more complex JSON parsing
     // For this example, we just update metadata
 
-    setStatus('Providing ' + waypoints.length.toString() + ' waypoints and ' + routes.length.toString() + ' routes')
-    return ''  // Success
+    setStatus(
+      'Providing ' +
+        waypoints.length.toString() +
+        ' waypoints and ' +
+        routes.length.toString() +
+        ' routes'
+    )
+    return '' // Success
   }
 
   return 'Unknown resource type'
@@ -521,15 +577,27 @@ export function resource_delete(requestJson: string): string {
   if (resourceType === 'waypoints') {
     if (deleteWaypointById(id)) {
       debug('Deleted waypoint: ' + id)
-      setStatus('Providing ' + waypoints.length.toString() + ' waypoints and ' + routes.length.toString() + ' routes')
-      return ''  // Success
+      setStatus(
+        'Providing ' +
+          waypoints.length.toString() +
+          ' waypoints and ' +
+          routes.length.toString() +
+          ' routes'
+      )
+      return '' // Success
     }
     return 'Waypoint not found: ' + id
   } else if (resourceType === 'routes') {
     if (deleteRouteById(id)) {
       debug('Deleted route: ' + id)
-      setStatus('Providing ' + waypoints.length.toString() + ' waypoints and ' + routes.length.toString() + ' routes')
-      return ''  // Success
+      setStatus(
+        'Providing ' +
+          waypoints.length.toString() +
+          ' waypoints and ' +
+          routes.length.toString() +
+          ' routes'
+      )
+      return '' // Success
     }
     return 'Route not found: ' + id
   }

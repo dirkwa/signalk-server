@@ -7,6 +7,7 @@ Enable JavaScript and TypeScript developers to write WASM plugins without learni
 ## Approach: AssemblyScript
 
 **AssemblyScript** is the ideal choice for JS/TS → WASM:
+
 - ✅ TypeScript-like syntax (strict subset)
 - ✅ Compiles directly to WASM
 - ✅ Excellent WASI support
@@ -17,16 +18,19 @@ Enable JavaScript and TypeScript developers to write WASM plugins without learni
 ### Why Not Other Options?
 
 **JavaScript Engines (QuickJS, Javy)**:
+
 - ❌ Large binaries (>1 MB)
 - ❌ Runtime overhead
 - ❌ Complex FFI
 
 **Emscripten**:
+
 - ❌ C/C++ focused
 - ❌ Large runtime
 - ❌ Not JS/TS native
 
 **Native JS in WASM**:
+
 - ❌ Still experimental
 - ❌ Limited browser support
 - ❌ No Node.js standard
@@ -49,6 +53,7 @@ Enable JavaScript and TypeScript developers to write WASM plugins without learni
 **Package**: `@signalk/assemblyscript-plugin-sdk`
 
 **Structure**:
+
 ```
 packages/assemblyscript-plugin-sdk/
 ├── assembly/
@@ -63,6 +68,7 @@ packages/assemblyscript-plugin-sdk/
 ### 3. Plugin Development Workflow
 
 **Developer writes TypeScript:**
+
 ```typescript
 // assembly/index.ts
 import { Plugin, Delta, emit } from '@signalk/assemblyscript-plugin-sdk'
@@ -81,10 +87,14 @@ class MyPlugin extends Plugin {
     const cfg = JSON.parse<Config>(config)
 
     // Emit delta
-    emit(new Delta({
-      context: 'vessels.self',
-      updates: [/* ... */]
-    }))
+    emit(
+      new Delta({
+        context: 'vessels.self',
+        updates: [
+          /* ... */
+        ]
+      })
+    )
 
     return 0 // Success
   }
@@ -105,6 +115,7 @@ class MyPlugin extends Plugin {
 ```
 
 **Build to WASM:**
+
 ```bash
 npm run asbuild
 # Outputs: build/plugin.wasm
@@ -113,6 +124,7 @@ npm run asbuild
 ### 4. AssemblyScript SDK Implementation
 
 **assembly/index.ts**:
+
 ```typescript
 // Export base Plugin class
 export abstract class Plugin {
@@ -182,6 +194,7 @@ declare function sk_get_self_path(path: string, buffer: ArrayBuffer): i32
 ```
 
 **assembly/signalk.ts** - Signal K types:
+
 ```typescript
 export class Position {
   constructor(
@@ -209,6 +222,7 @@ npx @signalk/create-wasm-plugin my-plugin --language assemblyscript
 ```
 
 Creates:
+
 ```
 my-plugin/
 ├── assembly/
@@ -222,6 +236,7 @@ my-plugin/
 ### 6. Build Configuration
 
 **asconfig.json**:
+
 ```json
 {
   "targets": {
@@ -247,6 +262,7 @@ my-plugin/
 ```
 
 **package.json scripts**:
+
 ```json
 {
   "scripts": {
@@ -263,7 +279,15 @@ my-plugin/
 ### Hello World (AssemblyScript)
 
 ```typescript
-import { Plugin, Delta, Update, PathValue, Source, emit, setStatus } from '@signalk/assemblyscript-plugin-sdk'
+import {
+  Plugin,
+  Delta,
+  Update,
+  PathValue,
+  Source,
+  emit,
+  setStatus
+} from '@signalk/assemblyscript-plugin-sdk'
 
 class HelloPlugin extends Plugin {
   id(): string {
@@ -278,25 +302,22 @@ class HelloPlugin extends Plugin {
     setStatus('Started')
 
     // Emit a test delta
-    const delta = new Delta(
-      'vessels.self',
-      [
-        new Update(
-          new Source('hello-assemblyscript', 'plugin'),
-          new Date().toISOString(),
-          [
-            new PathValue(
-              'notifications.hello',
-              JSON.stringify({
-                state: 'normal',
-                method: ['visual'],
-                message: 'Hello from AssemblyScript!'
-              })
-            )
-          ]
-        )
-      ]
-    )
+    const delta = new Delta('vessels.self', [
+      new Update(
+        new Source('hello-assemblyscript', 'plugin'),
+        new Date().toISOString(),
+        [
+          new PathValue(
+            'notifications.hello',
+            JSON.stringify({
+              state: 'normal',
+              method: ['visual'],
+              message: 'Hello from AssemblyScript!'
+            })
+          )
+        ]
+      )
+    ])
 
     emit(delta)
     return 0
@@ -319,7 +340,11 @@ class HelloPlugin extends Plugin {
 ### Data Logger (AssemblyScript)
 
 ```typescript
-import { Plugin, getSelfPath, setStatus } from '@signalk/assemblyscript-plugin-sdk'
+import {
+  Plugin,
+  getSelfPath,
+  setStatus
+} from '@signalk/assemblyscript-plugin-sdk'
 import { Console } from 'as-wasi'
 
 class LoggerPlugin extends Plugin {
@@ -388,35 +413,43 @@ class Config {
 ## Comparison: Rust vs AssemblyScript
 
 ### Rust Plugin
+
 **Pros**:
+
 - Best performance
 - Memory safety
 - Rich ecosystem
 - Strong typing
 
 **Cons**:
+
 - Steeper learning curve
 - Longer compile times
 - More verbose
 
 **Best for**:
+
 - Performance-critical plugins
 - Complex algorithms
 - Low-level operations
 
 ### AssemblyScript Plugin
+
 **Pros**:
+
 - TypeScript-like syntax
 - Familiar to JS developers
 - Fast development
 - Good performance
 
 **Cons**:
+
 - Smaller ecosystem
 - Some TS features missing
 - Manual memory management
 
 **Best for**:
+
 - Quick prototypes
 - Simple data processing
 - JS/TS developers
@@ -425,6 +458,7 @@ class Config {
 ## Developer Experience Comparison
 
 ### Rust
+
 ```bash
 # Setup
 rustup target add wasm32-wasi
@@ -440,6 +474,7 @@ cargo build --target wasm32-wasi --release
 ```
 
 ### AssemblyScript
+
 ```bash
 # Setup
 npm install -g assemblyscript
@@ -457,21 +492,24 @@ npm run asbuild
 ## Migration Path: Node.js → AssemblyScript
 
 ### Node.js Plugin (Before)
+
 ```javascript
-module.exports = function(app) {
+module.exports = function (app) {
   const plugin = {
     id: 'my-plugin',
     name: 'My Plugin',
 
-    start: function(options) {
+    start: function (options) {
       app.handleMessage('my-plugin', {
-        updates: [{
-          values: [{ path: 'foo', value: 'bar' }]
-        }]
+        updates: [
+          {
+            values: [{ path: 'foo', value: 'bar' }]
+          }
+        ]
       })
     },
 
-    stop: function() {}
+    stop: function () {}
   }
 
   return plugin
@@ -479,24 +517,35 @@ module.exports = function(app) {
 ```
 
 ### AssemblyScript Plugin (After)
+
 ```typescript
 class MyPlugin extends Plugin {
-  id(): string { return 'my-plugin' }
-  name(): string { return 'My Plugin' }
+  id(): string {
+    return 'my-plugin'
+  }
+  name(): string {
+    return 'My Plugin'
+  }
 
   start(config: string): i32 {
-    emit(new Delta('vessels.self', [
-      new Update(
-        new Source('my-plugin', 'plugin'),
-        new Date().toISOString(),
-        [new PathValue('foo', JSON.stringify('bar'))]
-      )
-    ]))
+    emit(
+      new Delta('vessels.self', [
+        new Update(
+          new Source('my-plugin', 'plugin'),
+          new Date().toISOString(),
+          [new PathValue('foo', JSON.stringify('bar'))]
+        )
+      ])
+    )
     return 0
   }
 
-  stop(): i32 { return 0 }
-  schema(): string { return '{}' }
+  stop(): i32 {
+    return 0
+  }
+  schema(): string {
+    return '{}'
+  }
 }
 ```
 
@@ -562,6 +611,7 @@ class MyPlugin extends Plugin {
 ## Benefits
 
 ### For Developers
+
 - **Lower barrier to entry**: Use TypeScript knowledge
 - **Faster development**: Familiar syntax and tooling
 - **Easy migration**: Port Node.js plugins incrementally
@@ -569,12 +619,14 @@ class MyPlugin extends Plugin {
 - **Small binaries**: 10-50 KB typical
 
 ### For Ecosystem
+
 - **More WASM plugins**: Easier for existing developers
 - **Faster adoption**: Don't need to learn Rust
 - **Better testing**: More developers = more testing
 - **Migration path**: Gradual transition from Node.js
 
 ### For Project
+
 - **Validates architecture**: Multiple language support
 - **Proves flexibility**: Not locked to Rust
 - **Demonstrates value**: WASM benefits without Rust learning curve
@@ -589,6 +641,7 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
 **Library**: `as-fetch` - Fetch API for AssemblyScript
 **License**: MIT
 **Features**:
+
 - ✅ Async/sync fetch modes
 - ✅ Standard Fetch API (familiar to JS devs)
 - ✅ GET/POST/PUT/DELETE support
@@ -598,6 +651,7 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
 **Integration Steps:**
 
 1. **Add to SDK dependencies**
+
    ```json
    {
      "dependencies": {
@@ -608,6 +662,7 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
    ```
 
 2. **Add network API wrapper**
+
    ```typescript
    // assembly/network.ts
    import { fetch } from 'as-fetch'
@@ -641,6 +696,7 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
    ```
 
 3. **Example: Weather plugin**
+
    ```typescript
    import { Plugin } from '@signalk/assemblyscript-plugin-sdk'
    import { httpGet } from '@signalk/assemblyscript-plugin-sdk/network'
@@ -662,11 +718,13 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
    ```
 
 **Requirements:**
+
 - Plugin must declare `"network": true` in wasmCapabilities
 - Server must provide fetch implementation via WASI or ESM bindings
 - Rate limiting and domain restrictions enforced by server
 
 **Benefits:**
+
 - Familiar Fetch API for JS/TS developers
 - No need to learn low-level HTTP in Rust
 - Easier to port Node.js plugins that use fetch/axios
@@ -714,29 +772,34 @@ When implementing the `network` capability in Phase 2, integrate **[as-fetch](ht
 Network capability with as-fetch has been successfully implemented:
 
 ✅ **as-fetch Integration**
+
 - Added as-fetch ^2.1.4 dependency to AssemblyScript SDK
 - Created network.ts API wrapper with HTTP helper functions
 - Integrated FetchHandler bindings in wasm-runtime.ts
 - Added transform support in asconfig.json
 
 ✅ **Capability Enforcement**
+
 - Implemented `sk_has_capability` FFI function
 - Network capability checked at runtime before HTTP requests
 - Plugins must declare `"network": true` in manifest
 
 ✅ **Example Plugin**
+
 - Created weather-plugin example in packages/wasm-examples/
 - Fetches real weather data from OpenWeatherMap API
 - Demonstrates proper error handling and capability checks
 - Full documentation and usage guide included
 
 ✅ **Documentation**
+
 - Updated WASM_PLUGIN_DEV_GUIDE.md with Network API section
 - Updated capability tables to reflect network support
 - Added usage examples and security notes
 - Referenced weather plugin example
 
 **Requirements:**
+
 - Server must run on Node.js 18+ for native fetch support
 - Plugins must use AssemblyScript (Rust support planned for Phase 3)
 

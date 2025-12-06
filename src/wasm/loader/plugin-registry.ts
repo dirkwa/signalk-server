@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * WASM Plugin Registration and Management
  *
@@ -8,7 +10,7 @@
 import * as path from 'path'
 import * as fs from 'fs'
 import Debug from 'debug'
-import { WasmPlugin, WasmPluginMetadata } from './types'
+import { WasmPlugin } from './types'
 import { getWasmRuntime, WasmCapabilities } from '../wasm-runtime'
 import {
   getPluginStoragePaths,
@@ -40,7 +42,12 @@ export const restartTimers: Map<string, NodeJS.Timeout> = new Map()
 
 // Forward declarations for circular dependency resolution
 let _startWasmPlugin: (app: any, pluginId: string) => Promise<void>
-let _updateWasmPluginConfig: (app: any, pluginId: string, configuration: any, configPath: string) => Promise<void>
+let _updateWasmPluginConfig: (
+  app: any,
+  pluginId: string,
+  configuration: any,
+  configPath: string
+) => Promise<void>
 let _unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>
 let _stopWasmPlugin: (pluginId: string) => Promise<void>
 
@@ -49,7 +56,12 @@ let _stopWasmPlugin: (pluginId: string) => Promise<void>
  */
 export function initializeLifecycleFunctions(
   startWasmPlugin: (app: any, pluginId: string) => Promise<void>,
-  updateWasmPluginConfig: (app: any, pluginId: string, configuration: any, configPath: string) => Promise<void>,
+  updateWasmPluginConfig: (
+    app: any,
+    pluginId: string,
+    configuration: any,
+    configPath: string
+  ) => Promise<void>,
   unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>,
   stopWasmPlugin: (pluginId: string) => Promise<void>
 ) {
@@ -62,7 +74,10 @@ export function initializeLifecycleFunctions(
 /**
  * Helper to update plugin status and sync state property
  */
-export function setPluginStatus(plugin: WasmPlugin, status: WasmPlugin['status']) {
+export function setPluginStatus(
+  plugin: WasmPlugin,
+  status: WasmPlugin['status']
+) {
   plugin.status = status
   plugin.state = status
 }
@@ -74,13 +89,15 @@ export function setPluginStatus(plugin: WasmPlugin, status: WasmPlugin['status']
 function addNodejsPluginCompat(plugin: WasmPlugin, pluginId: string): void {
   // Add 'started' getter for Node.js plugin compatibility
   Object.defineProperty(plugin, 'started', {
-    get() { return this.status === 'running' },
+    get() {
+      return this.status === 'running'
+    },
     enumerable: true,
     configurable: true
   })
 
   // Add 'stop' method for Node.js plugin compatibility
-  ;(plugin as any).stop = async function() {
+  ;(plugin as any).stop = async function () {
     if (_stopWasmPlugin) {
       await _stopWasmPlugin(pluginId)
     }
@@ -101,7 +118,9 @@ export async function registerWasmPlugin(
 
   try {
     // Read package.json to get WASM metadata
-    const packageJson = require(path.join(location, packageName, 'package.json'))
+    const packageJson = require(
+      path.join(location, packageName, 'package.json')
+    )
 
     if (!packageJson.wasmManifest) {
       throw new Error('Missing wasmManifest in package.json')
@@ -124,7 +143,11 @@ export async function registerWasmPlugin(
 
     // Load WASM module temporarily just to get the plugin ID
     // We need the real plugin ID to find the correct config file
-    const tempVfsRoot = path.join(configPath, 'plugin-config-data', '.temp-' + packageName.replace(/\//g, '-'))
+    const tempVfsRoot = path.join(
+      configPath,
+      'plugin-config-data',
+      '.temp-' + packageName.replace(/\//g, '-')
+    )
     if (!fs.existsSync(tempVfsRoot)) {
       fs.mkdirSync(tempVfsRoot, { recursive: true })
     }
@@ -159,12 +182,18 @@ export async function registerWasmPlugin(
     updateRadarProviderInstance(pluginId, tempInstance)
 
     // Now check config using the REAL plugin ID
-    const storagePaths = getPluginStoragePaths(configPath, pluginId, packageName)
+    const storagePaths = getPluginStoragePaths(
+      configPath,
+      pluginId,
+      packageName
+    )
     const savedConfig = readPluginConfig(storagePaths.configFile)
 
     // If plugin is disabled, create minimal plugin object and return early
     if (savedConfig.enabled === false) {
-      debug(`Plugin ${packageName} is disabled, schema already extracted from WASM`)
+      debug(
+        `Plugin ${packageName} is disabled, schema already extracted from WASM`
+      )
 
       // Do NOT write config file here - UI shows "Configure" button when no config file exists
       // Config file will be created when user actually configures the plugin
@@ -219,14 +248,26 @@ export async function registerWasmPlugin(
 
       // Set up basic REST API routes even though plugin is disabled
       // This allows Plugin Config UI to read/write config and enable the plugin
-      setupWasmPluginRoutes(app, plugin, configPath, _updateWasmPluginConfig, _startWasmPlugin, _unloadWasmPlugin, _stopWasmPlugin)
+      setupWasmPluginRoutes(
+        app,
+        plugin,
+        configPath,
+        _updateWasmPluginConfig,
+        _startWasmPlugin,
+        _unloadWasmPlugin,
+        _stopWasmPlugin
+      )
 
-      debug(`Registered disabled WASM plugin: ${pluginId} (${pluginName}) - schema available, instance not loaded`)
+      debug(
+        `Registered disabled WASM plugin: ${pluginId} (${pluginName}) - schema available, instance not loaded`
+      )
       return plugin
     }
 
     // Plugin is enabled - proceed with full load
-    debug(`Plugin ${packageName} is enabled, initializing VFS and preparing for startup`)
+    debug(
+      `Plugin ${packageName} is enabled, initializing VFS and preparing for startup`
+    )
 
     // Initialize VFS with the real plugin ID
     initializePluginVfs(storagePaths)
@@ -294,7 +335,15 @@ export async function registerWasmPlugin(
     }
 
     // Set up REST API routes for this plugin
-    setupWasmPluginRoutes(app, plugin, configPath, _updateWasmPluginConfig, _startWasmPlugin, _unloadWasmPlugin, _stopWasmPlugin)
+    setupWasmPluginRoutes(
+      app,
+      plugin,
+      configPath,
+      _updateWasmPluginConfig,
+      _startWasmPlugin,
+      _unloadWasmPlugin,
+      _stopWasmPlugin
+    )
 
     debug(`Registered WASM plugin: ${pluginId} (${pluginName})`)
 

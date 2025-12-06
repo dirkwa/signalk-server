@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * WASM Plugin Virtual Filesystem (VFS) Management
  *
@@ -54,7 +55,7 @@ export function getPluginStoragePaths(
   return {
     pluginDataRoot,
     configFile, // e.g., ~/.signalk/plugin-config-data/hello-assemblyscript.json (matches regular plugins)
-    vfsRoot,    // e.g., ~/.signalk/plugin-config-data/@signalk-hello-assemblyscript/vfs/ (isolated by package)
+    vfsRoot, // e.g., ~/.signalk/plugin-config-data/@signalk-hello-assemblyscript/vfs/ (isolated by package)
     vfsData: path.join(vfsRoot, 'data'),
     vfsConfig: path.join(vfsRoot, 'config'),
     vfsTmp: path.join(vfsRoot, 'tmp')
@@ -120,21 +121,14 @@ export function readPluginConfig(configFile: string): any {
 /**
  * Write plugin configuration to server-managed config file
  */
-export function writePluginConfig(
-  configFile: string,
-  config: any
-): void {
+export function writePluginConfig(configFile: string, config: any): void {
   try {
     const configDir = path.dirname(configFile)
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true })
     }
 
-    fs.writeFileSync(
-      configFile,
-      JSON.stringify(config, null, 2),
-      'utf8'
-    )
+    fs.writeFileSync(configFile, JSON.stringify(config, null, 2), 'utf8')
     debug(`Wrote plugin config to ${configFile}`)
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
@@ -184,7 +178,9 @@ export function migrateFromNodeJs(
     }
   }
 
-  debug(`Migration complete: ${migratedCount}/${filesToMigrate.length} files migrated`)
+  debug(
+    `Migration complete: ${migratedCount}/${filesToMigrate.length} files migrated`
+  )
 }
 
 /**

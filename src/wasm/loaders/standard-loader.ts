@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * Standard WASM Loader
  *
@@ -63,21 +66,27 @@ export async function loadStandardPlugin(
   const imports = WebAssembly.Module.imports(module)
   const moduleExports = WebAssembly.Module.exports(module)
   debug(`Module has ${imports.length} imports, ${moduleExports.length} exports`)
-  debug(`Module imports: ${JSON.stringify(imports.map(i => `${i.module}.${i.name}`).slice(0, 20))}`)
+  debug(
+    `Module imports: ${JSON.stringify(imports.map((i) => `${i.module}.${i.name}`).slice(0, 20))}`
+  )
 
   // Detect plugin type
-  const hasPluginId = moduleExports.some(e => e.name === 'plugin_id')
-  const hasAllocate = moduleExports.some(e => e.name === 'allocate')
-  const hasStart = moduleExports.some(e => e.name === '_start')
+  const hasPluginId = moduleExports.some((e) => e.name === 'plugin_id')
+  const hasAllocate = moduleExports.some((e) => e.name === 'allocate')
+  const hasStart = moduleExports.some((e) => e.name === '_start')
 
   const isRustLibraryPlugin = hasPluginId && hasAllocate
   const isRustPlugin = hasStart
   const isAssemblyScriptPlugin = hasPluginId && !hasAllocate && !hasStart
 
-  debug(`Plugin type detection: AS=${isAssemblyScriptPlugin}, RustLib=${isRustLibraryPlugin}, RustCmd=${isRustPlugin}`)
+  debug(
+    `Plugin type detection: AS=${isAssemblyScriptPlugin}, RustLib=${isRustLibraryPlugin}, RustCmd=${isRustPlugin}`
+  )
 
   // Get WASI imports
-  const wasiImports = (wasi.getImportObject ? wasi.getImportObject() : wasi.getImports(module)) as any
+  const wasiImports = (
+    wasi.getImportObject ? wasi.getImportObject() : wasi.getImports(module)
+  ) as any
   debug(`Got WASI imports`)
 
   // Refs that will be populated after instantiation
@@ -104,7 +113,10 @@ export async function loadStandardPlugin(
     const nodeFetch = getNodeFetch()
 
     // Create a wrapper that reads strings from WASM memory
-    const fetchWrapper = async (urlPtr: number | string | URL | RequestInfo, init?: RequestInit) => {
+    const fetchWrapper = async (
+      urlPtr: number | string | URL | RequestInfo,
+      init?: RequestInit
+    ) => {
       let url: string
 
       if (typeof urlPtr === 'number') {
@@ -117,7 +129,11 @@ export async function loadStandardPlugin(
         const memView = new Uint32Array(memoryRef.current.buffer)
         const strLengthInBytes = memView[(urlPtr + SIZE_OFFSET) >>> 2]
         const strLengthInChars = strLengthInBytes >>> 1
-        const strView = new Uint16Array(memoryRef.current.buffer, urlPtr, strLengthInChars)
+        const strView = new Uint16Array(
+          memoryRef.current.buffer,
+          urlPtr,
+          strLengthInChars
+        )
         url = String.fromCharCode(...Array.from(strView))
         debug(`Converted WASM string pointer ${urlPtr} to URL: ${url}`)
       } else {
@@ -203,11 +219,15 @@ export async function loadStandardPlugin(
     asLoaderInstance,
     rawExports,
     asyncifyResumeFunction,
-    (fn) => { asyncifyResumeFunction = fn }
+    (fn) => {
+      asyncifyResumeFunction = fn
+    }
   )
 
   // Create setter for asyncify resume that can be used by external callers
-  const setAsyncifyResume = (fn: (() => any) | null) => { asyncifyResumeFunction = fn }
+  const setAsyncifyResume = (fn: (() => any) | null) => {
+    asyncifyResumeFunction = fn
+  }
 
   const pluginInstance: WasmPluginInstance = {
     pluginId,
@@ -282,21 +302,26 @@ function createPluginExports(
 
       setAsyncifyResume(() => {
         debug(`Re-calling plugin_start to resume from rewind state`)
-        const resumeResult = asLoaderInstance.exports.plugin_start(configPtr, configLen)
+        const resumeResult = asLoaderInstance.exports.plugin_start(
+          configPtr,
+          configLen
+        )
         if (resumePromiseResolve) {
           resumePromiseResolve()
         }
         return resumeResult
       })
 
-      let result = asLoaderInstance.exports.plugin_start(configPtr, configLen)
+      const result = asLoaderInstance.exports.plugin_start(configPtr, configLen)
 
       if (typeof asLoaderInstance.exports.asyncify_get_state === 'function') {
         const state = asLoaderInstance.exports.asyncify_get_state()
         debug(`Asyncify state after plugin_start: ${state}`)
 
         if (state === 1) {
-          debug(`Plugin is in unwound state - waiting for async operation to complete`)
+          debug(
+            `Plugin is in unwound state - waiting for async operation to complete`
+          )
           await resumePromise
           debug(`Async operation completed, plugin execution resumed`)
         } else {
@@ -358,7 +383,9 @@ function createPluginExports(
     schemaFunc = () => callRustStringFunc('plugin_schema')
 
     startFunc = (config: string) => {
-      debug(`Calling Rust plugin_start with config: ${config.substring(0, 100)}...`)
+      debug(
+        `Calling Rust plugin_start with config: ${config.substring(0, 100)}...`
+      )
 
       const encoder = new TextEncoder()
       const configBytes = encoder.encode(config)
@@ -399,19 +426,19 @@ function createPluginExports(
 
   // Wrap http_endpoints if it exists
   const httpEndpointsFunc = rawExports.http_endpoints
-    ? (isAssemblyScriptPlugin && asLoaderInstance
-        ? () => {
-            const ptr = asLoaderInstance.exports.http_endpoints()
-            return asLoaderInstance.exports.__getString(ptr)
-          }
-        : rawExports.http_endpoints)
+    ? isAssemblyScriptPlugin && asLoaderInstance
+      ? () => {
+          const ptr = asLoaderInstance.exports.http_endpoints()
+          return asLoaderInstance.exports.__getString(ptr)
+        }
+      : rawExports.http_endpoints
     : undefined
 
   // Wrap poll if it exists (for plugins that need periodic execution)
   const pollFunc = rawExports.poll
-    ? (isAssemblyScriptPlugin && asLoaderInstance
-        ? () => asLoaderInstance.exports.poll()
-        : rawExports.poll)
+    ? isAssemblyScriptPlugin && asLoaderInstance
+      ? () => asLoaderInstance.exports.poll()
+      : rawExports.poll
     : undefined
 
   // Wrap delta_handler if it exists (for plugins that subscribe to deltas)

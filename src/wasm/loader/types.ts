@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * WASM Plugin Type Definitions
  *
@@ -5,7 +6,11 @@
  */
 
 import { Router } from 'express'
-import { WasmPluginInstance, WasmCapabilities, WasmFormat } from '../wasm-runtime'
+import {
+  WasmPluginInstance,
+  WasmCapabilities,
+  WasmFormat
+} from '../wasm-runtime'
 
 /**
  * Plugin metadata extracted from package.json and manifest

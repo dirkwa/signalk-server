@@ -33,8 +33,15 @@ export function getNodeFetch(): typeof fetch {
       if (sanitizedInit.headers) {
         const headers = sanitizedInit.headers
 
-        if (typeof headers === 'object' && !Array.isArray(headers) && !(headers instanceof Headers)) {
-          if (Object.getPrototypeOf(headers) === Object.prototype || Object.getPrototypeOf(headers) === null) {
+        if (
+          typeof headers === 'object' &&
+          !Array.isArray(headers) &&
+          !(headers instanceof Headers)
+        ) {
+          if (
+            Object.getPrototypeOf(headers) === Object.prototype ||
+            Object.getPrototypeOf(headers) === null
+          ) {
             sanitizedInit.headers = headers as Record<string, string>
           } else {
             const headersObj: Record<string, string> = {}
@@ -72,9 +79,13 @@ export function getNodeFetch(): typeof fetch {
 
     return cachedFetch
   } catch {
-    debug('Warning: Native fetch not available, network capability will be limited')
+    debug(
+      'Warning: Native fetch not available, network capability will be limited'
+    )
     cachedFetch = async () => {
-      throw new Error('Fetch not available - Node.js 18+ required for network capability')
+      throw new Error(
+        'Fetch not available - Node.js 18+ required for network capability'
+      )
     }
     return cachedFetch
   }
