@@ -44,6 +44,8 @@ compilation-stats.json
 .babelrc
 public/*.hot-update.js
 public/*.hot-update.json
+**/stats.json
+**/*.js.map
 
 plugin-config-data/
 

@@ -148,7 +148,6 @@ describe('WASM Plugin Regression Tests', function () {
   this.timeout(60000)
 
   describe('Node.js Plugin Compatibility', function () {
-     
     let server: any
     let port: number
 
@@ -166,10 +165,7 @@ describe('WASM Plugin Regression Tests', function () {
     })
 
     it('Node.js plugin loads and starts', function () {
-      const plugin = server.app.plugins.find(
-         
-        (p: any) => p.id === 'testplugin'
-      )
+      const plugin = server.app.plugins.find((p: any) => p.id === 'testplugin')
       expect(plugin).to.exist
       expect(plugin.started).to.be.true
     })
@@ -195,7 +191,6 @@ describe('WASM Plugin Regression Tests', function () {
   })
 
   describe('WASM Plugin Functionality', function () {
-     
     let server: any
     let port: number
 
@@ -214,7 +209,6 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('WASM plugin loads', function () {
       const plugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(plugin).to.exist
@@ -222,7 +216,6 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('WASM plugin starts', function () {
       const plugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(plugin.started).to.be.true
@@ -236,10 +229,7 @@ describe('WASM Plugin Regression Tests', function () {
       const resp = await fetch(`http://localhost:${port}/skServer/plugins`)
       expect(resp.status).to.equal(200)
       const plugins = await resp.json()
-      const wasmPlugin = plugins.find(
-         
-        (p: any) => p.id === 'anchor-watch-rust'
-      )
+      const wasmPlugin = plugins.find((p: any) => p.id === 'anchor-watch-rust')
       expect(wasmPlugin).to.exist
       // The /skServer/plugins endpoint returns config data in nested 'data' object
       expect(wasmPlugin.data?.enabled).to.equal(true)
@@ -247,7 +237,6 @@ describe('WASM Plugin Regression Tests', function () {
   })
 
   describe('Plugin Coexistence', function () {
-     
     let server: any
     let port: number
 
@@ -266,11 +255,9 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('Both plugin types appear in plugins list', function () {
       const nodePlugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'testplugin'
       )
       const wasmPlugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(nodePlugin).to.exist
@@ -279,11 +266,9 @@ describe('WASM Plugin Regression Tests', function () {
 
     it('Both plugins are started', function () {
       const nodePlugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'testplugin'
       )
       const wasmPlugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(nodePlugin.started).to.be.true
@@ -302,7 +287,6 @@ describe('WASM Plugin Regression Tests', function () {
 
       // WASM plugin should still be functional
       const wasmPlugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(wasmPlugin.started).to.be.true
@@ -312,14 +296,8 @@ describe('WASM Plugin Regression Tests', function () {
       const resp = await fetch(`http://localhost:${port}/skServer/plugins`)
       const plugins = await resp.json()
 
-      const nodePlugin = plugins.find(
-         
-        (p: any) => p.id === 'testplugin'
-      )
-      const wasmPlugin = plugins.find(
-         
-        (p: any) => p.id === 'anchor-watch-rust'
-      )
+      const nodePlugin = plugins.find((p: any) => p.id === 'testplugin')
+      const wasmPlugin = plugins.find((p: any) => p.id === 'anchor-watch-rust')
 
       expect(nodePlugin).to.exist
       expect(wasmPlugin).to.exist
@@ -347,7 +325,6 @@ describe('WASM Plugin Regression Tests', function () {
         console.log(`Loaded plugins: ${pluginIds.join(', ')}`)
 
         const wasmPlugin = server.app.plugins.find(
-           
           (p: any) => p.id === 'anchor-watch-rust'
         )
         expect(
@@ -376,11 +353,9 @@ describe('WASM Plugin Regression Tests', function () {
         console.log(`Loaded plugins: ${pluginIds.join(', ')}`)
 
         const nodePlugin = server.app.plugins.find(
-           
           (p: any) => p.id === 'testplugin'
         )
         const wasmPlugin = server.app.plugins.find(
-           
           (p: any) => p.id === 'anchor-watch-rust'
         )
 
@@ -418,11 +393,9 @@ describe('WASM Plugin Regression Tests', function () {
 
       // Verify both plugins started
       const nodePlugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'testplugin'
       )
       const wasmPlugin = server.app.plugins.find(
-         
         (p: any) => p.id === 'anchor-watch-rust'
       )
       expect(

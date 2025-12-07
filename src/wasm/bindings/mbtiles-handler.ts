@@ -76,11 +76,9 @@ export async function handleMBTileRequest(
   // Parse URL: /tiles/{chartId}/{z}/{x}/{y}
   const match = req.path.match(/\/tiles\/([\w-]+)\/(\d+)\/(\d+)\/(\d+)/)
   if (!match) {
-    res
-      .status(400)
-      .json({
-        error: 'Invalid tile path. Expected: /tiles/{chartId}/{z}/{x}/{y}'
-      })
+    res.status(400).json({
+      error: 'Invalid tile path. Expected: /tiles/{chartId}/{z}/{x}/{y}'
+    })
     return
   }
 

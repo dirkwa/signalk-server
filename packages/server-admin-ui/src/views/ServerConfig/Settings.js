@@ -372,7 +372,7 @@ const SettableInterfaces = {
   logfiles: 'Data log files access',
   'nmea-tcp': 'NMEA 0183 over TCP (10110)',
   tcp: 'Signal K over TCP (8375)',
-  wasm: 'WebAssembly Plugin Runtime'
+  wasm: 'WebAssembly Runtime'
 }
 
 const ReduxedSettings = connect()(ServerSettings)

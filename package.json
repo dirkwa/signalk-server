@@ -184,6 +184,7 @@
   },
   "funding": "https://opencollective.com/signalk",
   "bundleDependencies": [
-    "@signalk/server-api"
+    "@signalk/server-api",
+    "@signalk/server-admin-ui"
   ]
 }
