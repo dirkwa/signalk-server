@@ -407,7 +407,15 @@ module.exports = (theApp: any) => {
         const packageJson = require(packageJsonPath)
 
         if (packageJson.wasmManifest) {
-          // This is a WASM plugin - route to WASM loader
+          // This is a WASM plugin - check if WASM interface is enabled
+          const wasmEnabled = app.config.settings.interfaces?.wasm !== false
+          if (!wasmEnabled) {
+            debug(
+              `WASM plugin ${pluginName} discovered but WASM interface disabled - skipping`
+            )
+            return
+          }
+          // Route to WASM loader
           debug(`Detected WASM plugin: ${pluginName}`)
           const { registerWasmPlugin } = require('../wasm')
           await registerWasmPlugin(

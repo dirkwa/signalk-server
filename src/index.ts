@@ -71,7 +71,7 @@ import checkNodeVersion from './version'
 const debug = createDebug('signalk-server')
 
 import { StreamBundle } from './streambundle'
-import { shutdownAllWasmPlugins } from './wasm'
+// WASM shutdown is now handled by the wasm interface (src/interfaces/wasm.ts)
 
 class Server {
   app: ServerApp &
@@ -160,21 +160,7 @@ class Server {
     }
     Object.assign(app, pluginManager)
 
-    // Initialize WASM runtime for WASM/WASIX plugins
-    try {
-      const {
-        initializeWasmRuntime,
-        initializeSubscriptionManager
-      } = require('./wasm')
-      const wasmRuntime = initializeWasmRuntime()
-      const subscriptionManager = initializeSubscriptionManager()
-      app.wasmRuntime = wasmRuntime
-      app.wasmSubscriptionManager = subscriptionManager
-      debug('WASM runtime initialized successfully')
-    } catch (error) {
-      debug('WASM runtime initialization skipped:', error)
-      // WASM support is optional - continue without it
-    }
+    // WASM runtime is now initialized by the wasm interface (src/interfaces/wasm.ts)
 
     app.setPluginStatus = (providerId: string, statusMessage: string) => {
       doSetProviderStatus(providerId, statusMessage, 'status', 'plugin')
@@ -560,12 +546,7 @@ class Server {
         providerHolder.pipeElements[0].end()
       })
 
-      // Shutdown WASM plugins
-      try {
-        await shutdownAllWasmPlugins()
-      } catch (err) {
-        debug('Error shutting down WASM plugins:', err)
-      }
+      // WASM shutdown is now handled by the wasm interface stop() method
 
       debug('Closing server...')
 
