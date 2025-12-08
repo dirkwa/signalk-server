@@ -4,6 +4,66 @@ All notable changes to the SignalK WASM runtime since forking from v2.18.0.
 
 ## [Unreleased]
 
+## [MERGEPREP] - 2025-12-07
+
+### Added - WASM Interface Toggle
+
+WASM is now a proper Signal K interface that can be enabled/disabled via the admin UI, just like tcp, ws, and rest interfaces.
+
+**Features:**
+
+- New `src/interfaces/wasm.ts` - WASM interface implementation following Signal K interface pattern
+- Toggle in admin UI: Server → Settings → Interfaces → "WebAssembly Runtime"
+- mDNS advertisement: `_signalk-wasm` service type when enabled
+- **Hot-plug support**: Enable/disable without server restart
+- Default: enabled (same as all other interfaces)
+
+**Settings:**
+
+```json
+{
+  "interfaces": {
+    "wasm": true,  // or false to disable
+    "tcp": true,
+    "ws": true
+  }
+}
+```
+
+**Behavior when disabled:**
+
+- WASM runtime not initialized
+- WASM plugins discovered but not loaded
+- No mDNS advertisement
+- Existing WASM plugins stopped immediately (hot-plug)
+
+**Files Created:**
+
+- `src/interfaces/wasm.ts` - Interface implementation with start/stop/mDNS
+
+**Files Modified:**
+
+- `src/index.ts` - Removed direct WASM initialization (moved to interface)
+- `src/interfaces/plugins.ts` - Skip WASM plugin registration when interface disabled
+- `src/serverroutes.ts` - Added hot-plug support for WASM interface enable/disable
+- `packages/server-admin-ui/src/views/ServerConfig/Settings.js` - Added WASM toggle to UI
+
+### Changed - Bundled Dependencies
+
+- Added `@signalk/server-admin-ui` to `bundleDependencies` in package.json
+- This ensures the admin UI with WASM toggle is included in the npm tarball
+- Previously only `@signalk/server-api` was bundled
+
+### Fixed - Package Size Optimization
+
+- Added `**/stats.json` to `.npmignore` (webpack bundle analyzer output was 47MB!)
+- Added `**/*.js.map` to `.npmignore` (source maps not needed in production)
+- Package size reduced from ~8MB to ~4.8MB (before admin-ui bundling)
+
+### Fixed - packages/server-api/package.json JSON Syntax
+
+- Fixed duplicate `dependencies` and `devDependencies` keys that caused `npm install` to fail with JSON parse errors
+
 ## [2.19.0+beta1wasm14] - 2025-12-06
 
 ### Bug Fixes

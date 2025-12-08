@@ -639,7 +639,39 @@ module.exports = function (
     forIn(settings.interfaces, (enabled, name) => {
       const interfaces =
         app.config.settings.interfaces || (app.config.settings.interfaces = {})
+      const wasEnabled = interfaces[name] !== false
       interfaces[name] = enabled
+
+      // Hot-plug support for WASM interface
+      if (name === 'wasm' && wasEnabled !== enabled) {
+        const wasmInterface = (app as any).interfaces?.wasm
+        if (enabled && !wasmInterface) {
+          // Start WASM interface
+          debug('Hot-starting WASM interface')
+          try {
+            const wasmModule = require('./interfaces/wasm')
+            const _interface = wasmModule(app)
+            ;(app as any).interfaces = (app as any).interfaces || {}
+            ;(app as any).interfaces.wasm = _interface
+            if (_interface.start) {
+              _interface.data = _interface.start()
+            }
+          } catch (error) {
+            debug('Failed to hot-start WASM interface:', error)
+          }
+        } else if (!enabled && wasmInterface) {
+          // Stop WASM interface
+          debug('Hot-stopping WASM interface')
+          try {
+            if (wasmInterface.stop) {
+              wasmInterface.stop()
+            }
+            delete (app as any).interfaces.wasm
+          } catch (error) {
+            debug('Failed to hot-stop WASM interface:', error)
+          }
+        }
+      }
     })
 
     if (!isUndefined(settings.options.mdns)) {
