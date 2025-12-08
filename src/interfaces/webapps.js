@@ -94,14 +94,11 @@ function mountWebModules(app, keyword) {
         plugin = app.plugins.find(p => p.packageName === moduleData.module)
       }
 
-      debug(`webappEnabledMiddleware: module=${moduleData.module}, pluginIdFromModule=${pluginIdFromModule}, plugin found=${!!plugin}, type=${plugin?.type}, enabled=${plugin?.enabled}`)
-
       if (plugin) {
         // For WASM plugins, check plugin.enabled directly
         // For Node.js plugins, check via getPluginOptions
         if (plugin.type === 'wasm') {
           if (plugin.enabled === false) {
-            debug(`webappEnabledMiddleware: Blocking disabled WASM plugin webapp ${moduleData.module}`)
             res.status(503).send(`Webapp ${moduleData.module} is disabled`)
             return
           }
