@@ -339,7 +339,13 @@ export default class PluginConfigurationList extends Component {
             isConfigurator={isConfigurator(this.state.selectedPlugin)}
             onClose={() => this.selectPlugin(null)}
             saveData={(data) => {
-              if (this.state.selectedPlugin.data.configuration === undefined) {
+              // Only auto-enable on first-ever configuration save
+              // Check if plugin was never configured before (no enabled state set)
+              // This allows plugins that are already enabled/disabled to be toggled
+              if (
+                this.state.selectedPlugin.data.enabled === undefined &&
+                data.enabled === undefined
+              ) {
                 data.enabled = true
               }
               return this.saveData(this.state.selectedPlugin.id, data)

@@ -822,6 +822,15 @@ module.exports = (theApp: any) => {
       startupOptions.enabled = true
       startupOptions.configuration = {}
       plugin.enabledByDefault = true
+      // Persist the default-enabled state to disk so the plugin can be disabled later
+      savePluginOptions(plugin.id, startupOptions, (err) => {
+        if (err) {
+          console.error(
+            `Error saving default-enabled options for ${plugin.id}:`,
+            err
+          )
+        }
+      })
     }
 
     plugin.enableDebug = startupOptions.enableDebug
