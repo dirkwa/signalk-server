@@ -659,6 +659,26 @@ export async function shutdownAllWasmPlugins(app?: any): Promise<void> {
 export async function discoverAndRegisterWasmPlugins(app: any): Promise<void> {
   debug('Discovering and registering WASM plugins for hotplug re-enable')
 
+  // 0. Remove any existing WASM plugin entries from app.plugins to avoid duplicates
+  // This handles the case where minimal entries were created when WASM was disabled
+  if (app.plugins) {
+    const wasmPluginIds = new Set<string>()
+    app.plugins = app.plugins.filter((p: any) => {
+      if (p.type === 'wasm') {
+        wasmPluginIds.add(p.id)
+        debug(`Removing existing WASM plugin entry: ${p.id}`)
+        return false
+      }
+      return true
+    })
+    // Also remove from pluginsMap
+    if (app.pluginsMap) {
+      wasmPluginIds.forEach((id) => {
+        delete app.pluginsMap[id]
+      })
+    }
+  }
+
   // 1. Initialize WASM runtime and subscription manager
   debug('Initializing WASM runtime')
   app.wasmRuntime = initializeWasmRuntime()

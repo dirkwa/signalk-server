@@ -58,9 +58,10 @@ export async function updateWasmPluginConfig(
   writePluginConfig(storagePaths.configFile, config)
   debug(`updateWasmPluginConfig: Config written to disk`)
 
-  // Restart plugin if running
-  if (plugin.status === 'running') {
-    debug(`updateWasmPluginConfig: Plugin is running, restarting...`)
+  // Restart plugin if running AND still enabled
+  // Don't restart if the plugin is being disabled
+  if (plugin.status === 'running' && plugin.enabled) {
+    debug(`updateWasmPluginConfig: Plugin is running and enabled, restarting...`)
     await stopWasmPlugin(pluginId)
     debug(`updateWasmPluginConfig: Plugin stopped`)
     await startWasmPlugin(app, pluginId)
@@ -68,7 +69,7 @@ export async function updateWasmPluginConfig(
     plugin.statusMessage = 'Configuration updated'
   } else {
     debug(
-      `updateWasmPluginConfig: Plugin not running (status: ${plugin.status}), skipping restart`
+      `updateWasmPluginConfig: Plugin not running (status: ${plugin.status}) or not enabled (enabled: ${plugin.enabled}), skipping restart`
     )
   }
 
