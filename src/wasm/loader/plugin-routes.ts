@@ -10,7 +10,7 @@
 
 import * as path from 'path'
 import * as express from 'express'
-import { Request, Response } from 'express'
+import { NextFunction, Request, Response } from 'express'
 import { spawn } from 'child_process'
 import * as readline from 'readline'
 import Debug from 'debug'
@@ -707,8 +707,31 @@ export function setupWasmPluginRoutes(
     debug(`MBTiles hybrid routes registered for ${plugin.id}`)
   }
 
+  // Middleware to block requests when WASM plugin is disabled (except config endpoints)
+  const pluginEnabledMiddleware = (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    // Always allow access to config endpoints for admin UI
+    if (req.path === '/config' || req.path === '/') {
+      return next()
+    }
+    if (!plugin.enabled) {
+      res.status(503).json({
+        error: `Plugin ${plugin.id} is disabled`
+      })
+      return
+    }
+    next()
+  }
+
   // Register the router for this plugin
-  app.use(backwardsCompat(`/plugins/${plugin.id}`), router)
+  app.use(
+    backwardsCompat(`/plugins/${plugin.id}`),
+    pluginEnabledMiddleware,
+    router
+  )
 
   // Store router in plugin object for later removal
   plugin.router = router

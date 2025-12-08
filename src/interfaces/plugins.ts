@@ -35,7 +35,7 @@ import {
   Delta
 } from '@signalk/server-api'
 import { getLogger } from '@signalk/streams/logging'
-import express, { Request, Response } from 'express'
+import express, { NextFunction, Request, Response } from 'express'
 import fs from 'fs'
 import { deprecate } from 'util'
 import _ from 'lodash'
@@ -402,6 +402,8 @@ module.exports = (theApp: any) => {
   async function startPlugins(app: any) {
     app.plugins = []
     app.pluginsMap = {}
+    // Expose getPluginOptions for use by other modules (e.g., webapps.js)
+    app.getPluginOptions = getPluginOptions
     const modules = modulesWithKeyword(app.config, 'signalk-node-server-plugin')
     await Promise.all(
       modules.map((moduleData: any) => {
@@ -898,7 +900,30 @@ module.exports = (theApp: any) => {
         app.setPluginOpenApi(plugin.id, plugin.getOpenApi())
       }
     }
-    app.use(backwardsCompat('/plugins/' + plugin.id), router)
+    // Middleware to block requests when plugin is disabled (except config endpoints)
+    const pluginEnabledMiddleware = (
+      req: Request,
+      res: Response,
+      next: NextFunction
+    ) => {
+      // Always allow access to config endpoints for admin UI
+      if (req.path === '/config' || req.path === '/') {
+        return next()
+      }
+      const options = getPluginOptions(plugin.id)
+      if (!options.enabled) {
+        res.status(503).json({
+          error: `Plugin ${plugin.id} is disabled`
+        })
+        return
+      }
+      next()
+    }
+    app.use(
+      backwardsCompat('/plugins/' + plugin.id),
+      pluginEnabledMiddleware,
+      router
+    )
 
     if (typeof plugin.signalKApiRoutes === 'function') {
       app.use('/signalk/v1/api', plugin.signalKApiRoutes(express.Router()))
