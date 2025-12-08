@@ -42,16 +42,9 @@ module.exports = function (app) {
       ).map((moduleData) => moduleData.metadata)
       mountApis(app)
 
-      // Filter out disabled WASM plugins from webapp arrays
-      // WASM plugins are already registered at this point, so we need to remove
-      // disabled ones from the webapp lists that were populated above
-      try {
-        const { filterDisabledWasmWebapps } = require('../wasm')
-        filterDisabledWasmWebapps(app)
-      } catch (err) {
-        // WASM support may not be available, ignore
-        debug('Could not filter WASM webapps:', err.message)
-      }
+      // Note: Filtering of disabled plugin webapps (both Node.js and WASM)
+      // is now done in index.ts after all interfaces have started.
+      // This ensures plugins are fully registered before filtering.
     },
 
     stop: function () {}

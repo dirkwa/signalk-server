@@ -300,6 +300,25 @@ export async function stopWasmPlugin(pluginId: string): Promise<void> {
 }
 
 /**
+ * Stop a WASM plugin and remove its webapp (for hotplug disable)
+ * This is called when a plugin is disabled via the config UI
+ */
+export async function stopAndRemoveWasmPluginWebapp(
+  app: any,
+  pluginId: string
+): Promise<void> {
+  const plugin = wasmPlugins.get(pluginId)
+  if (!plugin) {
+    throw new Error(`WASM plugin ${pluginId} not found`)
+  }
+
+  await stopWasmPlugin(pluginId)
+
+  // Remove webapp from app.webapps for hotplug support
+  removePluginWebapp(app, plugin)
+}
+
+/**
  * Unload a WASM plugin completely (remove from memory and unregister routes)
  */
 export async function unloadWasmPlugin(

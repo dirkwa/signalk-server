@@ -464,6 +464,15 @@ class Server {
 
         app.apis = await startApis(app)
         await startInterfaces(app)
+        // Filter out disabled plugin webapps after all interfaces have started
+        // This handles both Node.js plugins and WASM plugins
+        filterDisabledPluginWebapps(app)
+        try {
+          const { filterDisabledWasmWebapps } = require('./wasm')
+          filterDisabledWasmWebapps(app)
+        } catch (_err) {
+          // WASM support may not be available, ignore
+        }
         startMdns(app)
         app.providers = pipedProviders(app as any).start()
 
@@ -621,6 +630,89 @@ function startRedirectToSsl(
   })
 }
 
+/**
+ * Filter out disabled plugin webapps from app.webapps array
+ * Called after all interfaces have started to ensure plugins are registered
+ */
+function filterDisabledPluginWebapps(app: any) {
+  if (!app.plugins) {
+    console.log('[webapp-filter] No plugins registered, skipping webapp filter')
+    return
+  }
+
+  console.log(
+    `[webapp-filter] Filtering disabled plugin webapps. Total plugins: ${app.plugins.length}`
+  )
+
+  // Build set of plugin package names that are enabled (started)
+  const enabledPluginNames = new Set<string>()
+  const allPluginNames = new Set<string>()
+
+  for (const plugin of app.plugins) {
+    if (plugin.packageName) {
+      allPluginNames.add(plugin.packageName)
+
+      // Check if plugin is enabled - handle both Node.js and WASM plugins
+      // WASM plugins have plugin.enabled property
+      // Node.js plugins use providerStatus
+      let isEnabled = false
+
+      if (plugin.type === 'wasm') {
+        // WASM plugin - check the enabled flag directly
+        isEnabled = plugin.enabled === true
+        console.log(
+          `[webapp-filter] Plugin ${plugin.packageName} (WASM): enabled=${plugin.enabled}, status=${plugin.status}`
+        )
+      } else {
+        // Node.js plugin - check providerStatus
+        const status = app.providerStatus?.[plugin.id]
+        isEnabled = status && status !== 'Stopped'
+        debug(
+          `Plugin ${plugin.packageName} (Node.js): providerStatus=${status}`
+        )
+      }
+
+      if (isEnabled) {
+        enabledPluginNames.add(plugin.packageName)
+      }
+    }
+  }
+
+  console.log(
+    `[webapp-filter] All plugin packages: ${Array.from(allPluginNames).join(', ')}`
+  )
+  console.log(
+    `[webapp-filter] Enabled plugin packages: ${Array.from(enabledPluginNames).join(', ')}`
+  )
+
+  // Filter webapps - keep non-plugins and enabled plugins only
+  if (app.webapps) {
+    const beforeCount = app.webapps.length
+    console.log(
+      `[webapp-filter] Webapps before filter: ${app.webapps.map((w: any) => w.name).join(', ')}`
+    )
+    app.webapps = app.webapps.filter((w: any) => {
+      const isPluginWebapp = allPluginNames.has(w.name)
+      if (!isPluginWebapp) return true // Keep non-plugin webapps
+      const isEnabled = enabledPluginNames.has(w.name)
+      if (!isEnabled) {
+        console.log(`[webapp-filter] Filtering out disabled plugin webapp: ${w.name}`)
+      }
+      return isEnabled
+    })
+    console.log(`[webapp-filter] Filtered webapps: ${beforeCount} -> ${app.webapps.length}`)
+  }
+
+  // Filter embeddable webapps similarly
+  if (app.embeddablewebapps) {
+    app.embeddablewebapps = app.embeddablewebapps.filter((w: any) => {
+      const isPluginWebapp = allPluginNames.has(w.name)
+      if (!isPluginWebapp) return true
+      return enabledPluginNames.has(w.name)
+    })
+  }
+}
+
 function startMdns(app: ServerApp & WithConfig) {
   if (_.isUndefined(app.config.settings.mdns) || app.config.settings.mdns) {
     debug(`Starting interface 'mDNS'`)
@@ -674,7 +766,7 @@ async function startInterfaces(
             !_interface.forceInactive
           ) {
             debug(`Starting interface '${name}'`)
-            _interface.data = _interface.start()
+            _interface.data = await _interface.start()
           } else {
             debug(`Not starting interface '${name}' by forceInactive`)
           }

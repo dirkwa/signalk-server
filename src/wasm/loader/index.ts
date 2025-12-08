@@ -9,6 +9,7 @@
 import {
   startWasmPlugin,
   stopWasmPlugin,
+  stopAndRemoveWasmPluginWebapp,
   unloadWasmPlugin,
   reloadWasmPlugin,
   handleWasmPluginCrash,
@@ -24,7 +25,8 @@ initializeLifecycleFunctions(
   startWasmPlugin,
   updateWasmPluginConfig,
   unloadWasmPlugin,
-  stopWasmPlugin
+  stopWasmPlugin,
+  stopAndRemoveWasmPluginWebapp
 )
 
 // Export types
@@ -44,6 +46,7 @@ export {
 export {
   startWasmPlugin,
   stopWasmPlugin,
+  stopAndRemoveWasmPluginWebapp,
   unloadWasmPlugin,
   reloadWasmPlugin,
   handleWasmPluginCrash,

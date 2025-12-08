@@ -500,7 +500,8 @@ export function setupWasmPluginRoutes(
   ) => Promise<void>,
   startWasmPlugin: (app: any, pluginId: string) => Promise<void>,
   unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>,
-  stopWasmPlugin: (pluginId: string) => Promise<void>
+  stopWasmPlugin: (pluginId: string) => Promise<void>,
+  stopAndRemoveWasmPluginWebapp?: (app: any, pluginId: string) => Promise<void>
 ): void {
   const router = express.Router()
 
@@ -615,10 +616,26 @@ export function setupWasmPluginRoutes(
           debug(`Plugin enabled, starting...`)
           await startWasmPlugin(app, plugin.id)
         } else if (!plugin.enabled && plugin.status === 'running') {
-          // Only stop the plugin, don't unload it - keep routes intact for re-enabling
-          debug(`Plugin disabled, stopping (keeping routes for re-enable)...`)
-          await stopWasmPlugin(plugin.id)
+          // Stop the plugin and remove webapp from list for hotplug support
+          // Keep routes intact for re-enabling
+          debug(`Plugin disabled, stopping and removing webapp (hotplug)...`)
+          if (stopAndRemoveWasmPluginWebapp) {
+            await stopAndRemoveWasmPluginWebapp(app, plugin.id)
+          } else {
+            await stopWasmPlugin(plugin.id)
+          }
         }
+
+        // Emit server event to update admin UI webapps list (hotplug)
+        const { uniqBy } = require('lodash')
+        const allWebapps = []
+          .concat(app.webapps || [])
+          .concat(app.embeddablewebapps || [])
+        app.emit('serverevent', {
+          type: 'RECEIVE_WEBAPPS_LIST',
+          from: 'signalk-server',
+          data: uniqBy(allWebapps, 'name')
+        })
       }
 
       debug(
