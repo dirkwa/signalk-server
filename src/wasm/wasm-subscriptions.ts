@@ -270,3 +270,12 @@ export function initializeSubscriptionManager(): WasmSubscriptionManager {
   debug('Subscription manager initialized')
   return subscriptionManager
 }
+
+/**
+ * Reset the subscription manager singleton (for hotplug support)
+ * This should be called after shutdown to allow re-initialization
+ */
+export function resetSubscriptionManager(): void {
+  debug('Resetting subscription manager singleton')
+  subscriptionManager = null
+}

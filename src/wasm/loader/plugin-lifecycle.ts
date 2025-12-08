@@ -11,7 +11,8 @@
 import Debug from 'debug'
 import { WasmPlugin } from './types'
 import { wasmPlugins, restartTimers, setPluginStatus } from './plugin-registry'
-import { getWasmRuntime } from '../wasm-runtime'
+import { getWasmRuntime, resetWasmRuntime } from '../wasm-runtime'
+import { resetSubscriptionManager } from '../wasm-subscriptions'
 import { backwardsCompat } from './plugin-routes'
 import { updateResourceProviderInstance } from '../bindings/resource-provider'
 import { updateWeatherProviderInstance } from '../bindings/weather-provider'
@@ -540,6 +541,10 @@ export async function shutdownAllWasmPlugins(): Promise<void> {
   // Shutdown runtime
   const runtime = getWasmRuntime()
   await runtime.shutdown()
+
+  // Reset singletons to allow re-initialization on hotplug
+  resetWasmRuntime()
+  resetSubscriptionManager()
 
   wasmPlugins.clear()
   debug('All WASM plugins shut down')

@@ -275,3 +275,12 @@ export function initializeWasmRuntime(): WasmRuntime {
   runtimeInstance = new WasmRuntime()
   return runtimeInstance
 }
+
+/**
+ * Reset the WASM runtime singleton (for hotplug support)
+ * This should be called after shutdown to allow re-initialization
+ */
+export function resetWasmRuntime(): void {
+  debug('Resetting WASM runtime singleton')
+  runtimeInstance = null
+}
