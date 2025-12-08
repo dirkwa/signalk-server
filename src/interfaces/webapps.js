@@ -62,6 +62,13 @@ function mountWebModules(app, keyword) {
     debug('Mounting web module /' + moduleData.module + ':' + webappPath)
     // Middleware to block access when the associated plugin is disabled
     const webappEnabledMiddleware = (req, res, next) => {
+      // Always allow static assets (logos, icons, images) for the Admin UI plugin list
+      // These should be accessible even for disabled plugins so the UI can display them
+      const isStaticAsset = /\.(png|jpg|jpeg|gif|svg|ico|webp)$/i.test(req.path)
+      if (isStaticAsset) {
+        return next()
+      }
+
       // Check if this is a WASM plugin webapp and WASM runtime is disabled
       const isWasmPlugin = moduleData.metadata.keywords?.includes('signalk-wasm-plugin')
       if (isWasmPlugin) {
@@ -116,7 +123,44 @@ function mountWebModules(app, keyword) {
 
 function mountApis(app) {
   app.get(`${SERVERROUTESPREFIX}/webapps`, function (req, res) {
-    const allWebapps = [].concat(app.webapps).concat(app.embeddablewebapps)
+    let allWebapps = [].concat(app.webapps).concat(app.embeddablewebapps)
+
+    // Filter out disabled plugin webapps at request time
+    // This handles the race condition during startup where the list
+    // may not have been filtered yet by filterDisabledPluginWebapps()
+    if (app.plugins && app.getPluginOptions) {
+      const enabledPluginNames = new Set()
+      const allPluginNames = new Set()
+
+      for (const plugin of app.plugins) {
+        if (plugin.packageName) {
+          allPluginNames.add(plugin.packageName)
+
+          let isEnabled = false
+          if (plugin.type === 'wasm') {
+            isEnabled = plugin.enabled === true
+          } else {
+            const pluginOptions = app.getPluginOptions(plugin.id)
+            isEnabled = pluginOptions?.enabled === true
+          }
+
+          if (isEnabled) {
+            enabledPluginNames.add(plugin.packageName)
+          }
+        }
+      }
+
+      allWebapps = allWebapps.filter((w) => {
+        const isPluginWebapp = allPluginNames.has(w.name)
+        if (!isPluginWebapp) return true // Keep standalone webapps
+        return enabledPluginNames.has(w.name)
+      })
+    }
+
+    // Disable caching to prevent browser from showing stale data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
     res.json(uniqBy(allWebapps, 'name'))
   })
   app.get(`${SERVERROUTESPREFIX}/addons`, function (req, res) {

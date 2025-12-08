@@ -636,15 +636,10 @@ function startRedirectToSsl(
  */
 function filterDisabledPluginWebapps(app: any) {
   if (!app.plugins) {
-    console.log('[webapp-filter] No plugins registered, skipping webapp filter')
     return
   }
 
-  console.log(
-    `[webapp-filter] Filtering disabled plugin webapps. Total plugins: ${app.plugins.length}`
-  )
-
-  // Build set of plugin package names that are enabled (started)
+  // Build set of plugin package names that are enabled
   const enabledPluginNames = new Set<string>()
   const allPluginNames = new Set<string>()
 
@@ -653,23 +648,15 @@ function filterDisabledPluginWebapps(app: any) {
       allPluginNames.add(plugin.packageName)
 
       // Check if plugin is enabled - handle both Node.js and WASM plugins
-      // WASM plugins have plugin.enabled property
-      // Node.js plugins use providerStatus
       let isEnabled = false
 
       if (plugin.type === 'wasm') {
         // WASM plugin - check the enabled flag directly
         isEnabled = plugin.enabled === true
-        console.log(
-          `[webapp-filter] Plugin ${plugin.packageName} (WASM): enabled=${plugin.enabled}, status=${plugin.status}`
-        )
       } else {
-        // Node.js plugin - check providerStatus
-        const status = app.providerStatus?.[plugin.id]
-        isEnabled = status && status !== 'Stopped'
-        debug(
-          `Plugin ${plugin.packageName} (Node.js): providerStatus=${status}`
-        )
+        // Node.js plugin - check saved config for enabled state
+        const pluginOptions = app.getPluginOptions?.(plugin.id)
+        isEnabled = pluginOptions?.enabled === true
       }
 
       if (isEnabled) {
@@ -678,29 +665,13 @@ function filterDisabledPluginWebapps(app: any) {
     }
   }
 
-  console.log(
-    `[webapp-filter] All plugin packages: ${Array.from(allPluginNames).join(', ')}`
-  )
-  console.log(
-    `[webapp-filter] Enabled plugin packages: ${Array.from(enabledPluginNames).join(', ')}`
-  )
-
   // Filter webapps - keep non-plugins and enabled plugins only
   if (app.webapps) {
-    const beforeCount = app.webapps.length
-    console.log(
-      `[webapp-filter] Webapps before filter: ${app.webapps.map((w: any) => w.name).join(', ')}`
-    )
     app.webapps = app.webapps.filter((w: any) => {
       const isPluginWebapp = allPluginNames.has(w.name)
       if (!isPluginWebapp) return true // Keep non-plugin webapps
-      const isEnabled = enabledPluginNames.has(w.name)
-      if (!isEnabled) {
-        console.log(`[webapp-filter] Filtering out disabled plugin webapp: ${w.name}`)
-      }
-      return isEnabled
+      return enabledPluginNames.has(w.name)
     })
-    console.log(`[webapp-filter] Filtered webapps: ${beforeCount} -> ${app.webapps.length}`)
   }
 
   // Filter embeddable webapps similarly

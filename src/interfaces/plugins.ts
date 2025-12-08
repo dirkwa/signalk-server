@@ -86,6 +86,7 @@ interface PluginInfo extends Plugin {
   packageLocation: string
   version: string
   state: string
+  type?: string // 'wasm' for WASM plugins, undefined for Node.js plugins
   isWebapp?: boolean
   isEmbeddableWebapp?: boolean
   webappMounted?: boolean
@@ -183,12 +184,52 @@ function removePluginWebapp(app: any, plugin: PluginInfo): void {
 }
 
 /**
+ * Filter webapps to only include enabled plugin webapps
+ */
+function filterEnabledWebapps(app: any, webapps: any[]): any[] {
+  if (!app.plugins || !app.getPluginOptions) {
+    return webapps
+  }
+
+  const enabledPluginNames = new Set<string>()
+  const allPluginNames = new Set<string>()
+
+  for (const plugin of app.plugins) {
+    if (plugin.packageName) {
+      allPluginNames.add(plugin.packageName)
+
+      let isEnabled = false
+      if (plugin.type === 'wasm') {
+        isEnabled = plugin.enabled === true
+      } else {
+        const pluginOptions = app.getPluginOptions(plugin.id)
+        isEnabled = pluginOptions?.enabled === true
+      }
+
+      if (isEnabled) {
+        enabledPluginNames.add(plugin.packageName)
+      }
+    }
+  }
+
+  return webapps.filter((w: any) => {
+    const isPluginWebapp = allPluginNames.has(w.name)
+    if (!isPluginWebapp) return true // Keep standalone webapps
+    return enabledPluginNames.has(w.name)
+  })
+}
+
+/**
  * Emit server event to update admin UI webapps list (for hotplug support)
  */
 function emitWebappsUpdate(app: any): void {
-  const allWebapps = []
+  let allWebapps: any[] = []
     .concat(app.webapps || [])
     .concat(app.embeddablewebapps || [])
+
+  // Filter to only include enabled plugin webapps
+  allWebapps = filterEnabledWebapps(app, allWebapps)
+
   app.emit('serverevent', {
     type: 'RECEIVE_WEBAPPS_LIST',
     from: 'signalk-server',
@@ -322,7 +363,8 @@ module.exports = (theApp: any) => {
             statusMessage,
             uiSchema,
             state: plugin.state,
-            data
+            data,
+            type: plugin.type // Include type to identify WASM plugins in Admin UI
           })
         })
         .catch((err) => {
@@ -517,7 +559,42 @@ module.exports = (theApp: any) => {
           const wasmEnabled = app.config.settings.interfaces?.wasm !== false
           if (!wasmEnabled) {
             debug(
-              `WASM plugin ${pluginName} discovered but WASM interface disabled - skipping`
+              `WASM plugin ${pluginName} discovered but WASM interface disabled - registering minimal entry`
+            )
+            // Create minimal plugin entry so it appears in Plugin Config with "No WASM" badge
+            const pluginId =
+              packageJson.wasmManifest?.pluginId ||
+              pluginName.replace(/^@[^/]+\//, '').replace(/-/g, '_')
+            // Use signalk.displayName (standard SignalK convention) or fall back to package name
+            const pluginDisplayName =
+              packageJson.signalk?.displayName ||
+              packageJson.wasmManifest?.name ||
+              pluginName
+
+            const minimalPlugin: any = {
+              id: pluginId,
+              name: pluginDisplayName,
+              type: 'wasm',
+              packageName: pluginName,
+              version: metadata.version || packageJson.version,
+              description: packageJson.description || '',
+              keywords: packageJson.keywords || [],
+              packageLocation: location,
+              enabled: false,
+              state: 'disabled',
+              statusMessage: () => 'WASM interface disabled',
+              schema: () => ({}),
+              uiSchema: () => ({}),
+              start: () => {},
+              stop: () => Promise.resolve(),
+              enableLogging: false,
+              enableDebug: false
+            }
+
+            app.plugins.push(minimalPlugin)
+            app.pluginsMap[pluginId] = minimalPlugin
+            debug(
+              `Registered minimal WASM plugin entry: ${pluginId} (WASM disabled)`
             )
             return
           }

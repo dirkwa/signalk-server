@@ -14,7 +14,8 @@ import {
   reloadWasmPlugin,
   handleWasmPluginCrash,
   shutdownAllWasmPlugins,
-  filterDisabledWasmWebapps
+  filterDisabledWasmWebapps,
+  discoverAndRegisterWasmPlugins
 } from './plugin-lifecycle'
 
 import { updateWasmPluginConfig, setWasmPluginEnabled } from './plugin-config'
@@ -51,7 +52,8 @@ export {
   reloadWasmPlugin,
   handleWasmPluginCrash,
   shutdownAllWasmPlugins,
-  filterDisabledWasmWebapps
+  filterDisabledWasmWebapps,
+  discoverAndRegisterWasmPlugins
 }
 
 // Export configuration functions

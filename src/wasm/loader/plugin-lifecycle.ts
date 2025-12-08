@@ -8,17 +8,33 @@
  * crash handling, and shutdown. Handles state transitions and cleanup.
  */
 
+import * as path from 'path'
+import * as fs from 'fs'
 import Debug from 'debug'
+import { uniqBy } from 'lodash'
 import { WasmPlugin } from './types'
-import { wasmPlugins, restartTimers, setPluginStatus } from './plugin-registry'
-import { getWasmRuntime, resetWasmRuntime } from '../wasm-runtime'
-import { resetSubscriptionManager } from '../wasm-subscriptions'
+import {
+  wasmPlugins,
+  restartTimers,
+  setPluginStatus,
+  registerWasmPlugin
+} from './plugin-registry'
+import {
+  getWasmRuntime,
+  resetWasmRuntime,
+  initializeWasmRuntime
+} from '../wasm-runtime'
+import {
+  resetSubscriptionManager,
+  initializeSubscriptionManager
+} from '../wasm-subscriptions'
 import { backwardsCompat } from './plugin-routes'
 import { updateResourceProviderInstance } from '../bindings/resource-provider'
 import { updateWeatherProviderInstance } from '../bindings/weather-provider'
 import { updateRadarProviderInstance } from '../bindings/radar-provider'
 import { initializeChartsFromDisk } from '../bindings/mbtiles-handler'
 import { socketManager } from '../bindings/socket-manager'
+import { modulesWithKeyword } from '../../modules'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -93,6 +109,60 @@ function removePluginWebapp(app: any, plugin: WasmPlugin): void {
       (w: any) => w.name !== plugin.packageName
     )
   }
+}
+
+/**
+ * Filter webapps to only include enabled plugin webapps
+ */
+function filterEnabledWebapps(app: any, webapps: any[]): any[] {
+  if (!app.plugins || !app.getPluginOptions) {
+    return webapps
+  }
+
+  const enabledPluginNames = new Set<string>()
+  const allPluginNames = new Set<string>()
+
+  for (const plugin of app.plugins) {
+    if (plugin.packageName) {
+      allPluginNames.add(plugin.packageName)
+
+      let isEnabled = false
+      if (plugin.type === 'wasm') {
+        isEnabled = plugin.enabled === true
+      } else {
+        const pluginOptions = app.getPluginOptions(plugin.id)
+        isEnabled = pluginOptions?.enabled === true
+      }
+
+      if (isEnabled) {
+        enabledPluginNames.add(plugin.packageName)
+      }
+    }
+  }
+
+  return webapps.filter((w: any) => {
+    const isPluginWebapp = allPluginNames.has(w.name)
+    if (!isPluginWebapp) return true // Keep standalone webapps
+    return enabledPluginNames.has(w.name)
+  })
+}
+
+/**
+ * Emit server event to update admin UI webapps list (for hotplug support)
+ */
+function emitWebappsUpdate(app: any): void {
+  let allWebapps: any[] = []
+    .concat(app.webapps || [])
+    .concat(app.embeddablewebapps || [])
+
+  // Filter to only include enabled plugin webapps
+  allWebapps = filterEnabledWebapps(app, allWebapps)
+
+  app.emit('serverevent', {
+    type: 'RECEIVE_WEBAPPS_LIST',
+    from: 'signalk-server',
+    data: uniqBy(allWebapps, 'name')
+  })
 }
 
 /**
@@ -525,8 +595,9 @@ export function filterDisabledWasmWebapps(app: any): void {
 
 /**
  * Shutdown all WASM plugins
+ * @param app - The SignalK app instance (optional, for hotplug webapp updates)
  */
-export async function shutdownAllWasmPlugins(): Promise<void> {
+export async function shutdownAllWasmPlugins(app?: any): Promise<void> {
   debug('Shutting down all WASM plugins')
   debug(`Number of plugins in registry: ${wasmPlugins.size}`)
 
@@ -536,7 +607,7 @@ export async function shutdownAllWasmPlugins(): Promise<void> {
   }
   restartTimers.clear()
 
-  // Stop all plugins
+  // Stop all plugins and remove their webapps
   const plugins = Array.from(wasmPlugins.values())
   debug(
     `Plugins to shutdown: ${plugins.map((p) => `${p.id}(${p.status})`).join(', ')}`
@@ -552,9 +623,19 @@ export async function shutdownAllWasmPlugins(): Promise<void> {
           `Plugin ${plugin.id} not running (status=${plugin.status}), skipping stop`
         )
       }
+      // Remove webapp from lists (for hotplug)
+      if (app) {
+        removePluginWebapp(app, plugin)
+      }
     } catch (error) {
       debug(`Error stopping plugin ${plugin.id}:`, error)
     }
+  }
+
+  // Emit webapp update event for hotplug (so UI updates immediately)
+  if (app) {
+    emitWebappsUpdate(app)
+    debug('Emitted webapp list update event')
   }
 
   // Shutdown runtime
@@ -567,4 +648,83 @@ export async function shutdownAllWasmPlugins(): Promise<void> {
 
   wasmPlugins.clear()
   debug('All WASM plugins shut down')
+}
+
+/**
+ * Discover and register all WASM plugins (for hotplug re-enable)
+ * This is called when the WASM interface is re-enabled at runtime
+ * to re-discover and load all WASM plugins without requiring a server restart.
+ * @param app - The SignalK app instance
+ */
+export async function discoverAndRegisterWasmPlugins(app: any): Promise<void> {
+  debug('Discovering and registering WASM plugins for hotplug re-enable')
+
+  // 1. Initialize WASM runtime and subscription manager
+  debug('Initializing WASM runtime')
+  app.wasmRuntime = initializeWasmRuntime()
+  app.wasmSubscriptionManager = initializeSubscriptionManager()
+
+  // 2. Discover all plugins with signalk-node-server-plugin keyword
+  const allModules = modulesWithKeyword(app.config, 'signalk-node-server-plugin')
+  debug(`Found ${allModules.length} plugins with signalk-node-server-plugin keyword`)
+
+  // 3. Filter for WASM plugins only (those with wasmManifest in package.json)
+  const wasmModules = allModules.filter((moduleData: any) => {
+    const packageJsonPath = path.join(
+      moduleData.location,
+      moduleData.module,
+      'package.json'
+    )
+    if (fs.existsSync(packageJsonPath)) {
+      try {
+        // Clear require cache to get fresh package.json
+        delete require.cache[require.resolve(packageJsonPath)]
+        const packageJson = require(packageJsonPath)
+        return !!packageJson.wasmManifest
+      } catch (err) {
+        debug(`Error reading package.json for ${moduleData.module}:`, err)
+        return false
+      }
+    }
+    return false
+  })
+
+  debug(`Found ${wasmModules.length} WASM plugins to register`)
+
+  // 4. Register all WASM plugins
+  const registrationResults = await Promise.allSettled(
+    wasmModules.map((moduleData: any) =>
+      registerWasmPlugin(
+        app,
+        moduleData.module,
+        moduleData.metadata,
+        moduleData.location,
+        app.config.configPath
+      )
+    )
+  )
+
+  // Log results
+  let successCount = 0
+  let failCount = 0
+  registrationResults.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      successCount++
+      debug(`Successfully registered WASM plugin: ${wasmModules[index].module}`)
+    } else {
+      failCount++
+      debug(
+        `Failed to register WASM plugin ${wasmModules[index].module}:`,
+        result.reason
+      )
+    }
+  })
+
+  debug(
+    `WASM plugin discovery complete: ${successCount} succeeded, ${failCount} failed`
+  )
+
+  // 5. Emit webapp update event so UI reflects new plugins
+  emitWebappsUpdate(app)
+  debug('Emitted webapp list update event after WASM plugin discovery')
 }

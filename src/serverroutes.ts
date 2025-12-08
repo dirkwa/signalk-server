@@ -646,16 +646,23 @@ module.exports = function (
       if (name === 'wasm' && wasEnabled !== enabled) {
         const wasmInterface = (app as any).interfaces?.wasm
         if (enabled && !wasmInterface) {
-          // Start WASM interface
-          debug('Hot-starting WASM interface')
+          // Start WASM interface and re-discover WASM plugins
+          debug('Hot-starting WASM interface and discovering plugins')
           try {
             const wasmModule = require('./interfaces/wasm')
             const _interface = wasmModule(app)
             ;(app as any).interfaces = (app as any).interfaces || {}
             ;(app as any).interfaces.wasm = _interface
-            if (_interface.start) {
-              _interface.data = _interface.start()
-            }
+            // Don't call interface.start() - discoverAndRegisterWasmPlugins handles runtime init
+            // Discover and register all WASM plugins
+            const { discoverAndRegisterWasmPlugins } = require('./wasm')
+            discoverAndRegisterWasmPlugins(app)
+              .then(() => {
+                debug('WASM plugins discovered and registered successfully')
+              })
+              .catch((error: Error) => {
+                debug('Failed to discover WASM plugins:', error)
+              })
           } catch (error) {
             debug('Failed to hot-start WASM interface:', error)
           }

@@ -628,9 +628,40 @@ export function setupWasmPluginRoutes(
 
         // Emit server event to update admin UI webapps list (hotplug)
         const { uniqBy } = require('lodash')
-        const allWebapps = []
+        let allWebapps = []
           .concat(app.webapps || [])
           .concat(app.embeddablewebapps || [])
+
+        // Filter to only include enabled plugin webapps
+        if (app.plugins && app.getPluginOptions) {
+          const enabledPluginNames = new Set<string>()
+          const allPluginNames = new Set<string>()
+
+          for (const p of app.plugins) {
+            if (p.packageName) {
+              allPluginNames.add(p.packageName)
+
+              let isEnabled = false
+              if (p.type === 'wasm') {
+                isEnabled = p.enabled === true
+              } else {
+                const pluginOptions = app.getPluginOptions(p.id)
+                isEnabled = pluginOptions?.enabled === true
+              }
+
+              if (isEnabled) {
+                enabledPluginNames.add(p.packageName)
+              }
+            }
+          }
+
+          allWebapps = allWebapps.filter((w: any) => {
+            const isPluginWebapp = allPluginNames.has(w.name)
+            if (!isPluginWebapp) return true // Keep standalone webapps
+            return enabledPluginNames.has(w.name)
+          })
+        }
+
         app.emit('serverevent', {
           type: 'RECEIVE_WEBAPPS_LIST',
           from: 'signalk-server',

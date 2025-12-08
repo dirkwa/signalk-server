@@ -42,7 +42,8 @@ export {
   getAllWasmPlugins,
   getWasmPlugin,
   shutdownAllWasmPlugins,
-  filterDisabledWasmWebapps
+  filterDisabledWasmWebapps,
+  discoverAndRegisterWasmPlugins
 } from './loader'
 
 // ServerAPI Bridge
