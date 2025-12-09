@@ -473,6 +473,9 @@ class Server {
         } catch (_err) {
           // WASM support may not be available, ignore
         }
+        // Emit filtered webapps list to update lastServerEvents cache
+        // This ensures new websocket clients receive the filtered list
+        emitFilteredWebappsList(app)
         startMdns(app)
         app.providers = pipedProviders(app as any).start()
 
@@ -682,6 +685,22 @@ function filterDisabledPluginWebapps(app: any) {
       return enabledPluginNames.has(w.name)
     })
   }
+}
+
+/**
+ * Emit filtered webapps list to update lastServerEvents cache
+ * This ensures new websocket clients receive the filtered list
+ */
+function emitFilteredWebappsList(app: any) {
+  const allWebapps: any[] = []
+    .concat(app.webapps || [])
+    .concat(app.embeddablewebapps || [])
+
+  app.emit('serverevent', {
+    type: 'RECEIVE_WEBAPPS_LIST',
+    from: 'signalk-server',
+    data: _.uniqBy(allWebapps, 'name')
+  })
 }
 
 function startMdns(app: ServerApp & WithConfig) {
