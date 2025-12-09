@@ -69,7 +69,7 @@ dotnet new install BytecodeAlliance.Componentize.DotNet.Templates
 ### Step 2: Create Project Structure
 
 ```
-anchor-watch-dotnet/
+example-anchor-watch-dotnet/
 ├── AnchorWatch.csproj      # Project file with componentize-dotnet
 ├── PluginImpl.cs           # Plugin implementation
 ├── nuget.config            # NuGet feed for LLVM compiler
@@ -356,7 +356,7 @@ internal partial class SourceGenerationContext : JsonSerializerContext
 ### Step 8: Build
 
 ```powershell
-cd examples/wasm-plugins/anchor-watch-dotnet
+cd examples/wasm-plugins/example-anchor-watch-dotnet
 
 # Clean previous build
 Remove-Item -Recurse -Force obj -ErrorAction SilentlyContinue
@@ -490,4 +490,4 @@ This generates JavaScript bindings that work with the current Node.js runtime.
 
 ## Additional Resources
 
-See the anchor-watch-dotnet example in `examples/wasm-plugins/anchor-watch-dotnet/` for the complete working example.
+See the example-anchor-watch-dotnet example in `examples/wasm-plugins/example-anchor-watch-dotnet/` for the complete working example.

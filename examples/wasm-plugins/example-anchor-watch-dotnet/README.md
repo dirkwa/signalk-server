@@ -1,4 +1,4 @@
-# Anchor Watch - C# WASM Plugin
+# Example Anchor Watch - C# WASM Plugin
 
 > **🚧 NOT WORKING - Waiting for Better Tooling**
 >
@@ -10,8 +10,8 @@
 >
 > **For working examples, see:**
 >
-> - `../anchor-watch/` - AssemblyScript (recommended, fully working)
-> - `../simple-plugin/` - AssemblyScript (fully working)
+> - `../example-hello-assemblyscript/` - AssemblyScript (recommended, fully working)
+> - `../example-anchor-watch-rust/` - Rust (fully working)
 
 ---
 
@@ -152,7 +152,7 @@ echo $WASI_SDK_PATH  # Should point to wasi-sdk-25 folder
 ### 1. Build the Plugin
 
 ```bash
-cd examples/wasm-plugins/anchor-watch-dotnet
+cd examples/wasm-plugins/example-anchor-watch-dotnet
 dotnet publish -c Release
 ```
 
@@ -178,15 +178,15 @@ copy bin\Release\net10.0\wasi-wasm\AnchorWatch.wasm plugin.wasm
 **Option A: Direct Copy (Development)**
 
 ```bash
-mkdir -p ~/.signalk/node_modules/@signalk/anchor-watch-dotnet
-cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/anchor-watch-dotnet/
+mkdir -p ~/.signalk/node_modules/@signalk/example-anchor-watch-dotnet
+cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/example-anchor-watch-dotnet/
 ```
 
 **Option B: NPM Package (Production)**
 
 ```bash
 npm pack
-npm install -g signalk-anchor-watch-dotnet-0.1.0.tgz
+npm install -g signalk-example-anchor-watch-dotnet-0.1.0.tgz
 ```
 
 ### 4. Enable in Admin UI
@@ -228,7 +228,7 @@ curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/
 ## Project Structure
 
 ```
-anchor-watch-dotnet/
+example-anchor-watch-dotnet/
 ├── Program.cs           # Main plugin implementation
 ├── AnchorWatch.csproj   # .NET project file
 ├── package.json         # Signal K plugin manifest
@@ -354,7 +354,7 @@ public class PutResponse
 
 ## Configuration
 
-Configure the plugin through the Admin UI or by editing `~/.signalk/plugin-config-data/anchor-watch-dotnet.json`:
+Configure the plugin through the Admin UI or by editing `~/.signalk/plugin-config-data/example-anchor-watch-dotnet.json`:
 
 ```json
 {
@@ -486,7 +486,7 @@ Set `enableDebug: true` in plugin configuration to see detailed logs:
 Then check logs:
 
 ```bash
-journalctl -u signalk -f | grep "anchor-watch-dotnet"
+journalctl -u signalk -f | grep "example-anchor-watch-dotnet"
 ```
 
 ### Hot Reload
@@ -495,7 +495,7 @@ After making changes:
 
 1. Rebuild: `dotnet publish -c Release`
 2. Copy WASM: `cp bin/Release/net10.0/wasi-wasm/AnchorWatch.wasm plugin.wasm`
-3. Copy to Signal K: `cp plugin.wasm ~/.signalk/node_modules/@signalk/anchor-watch-dotnet/`
+3. Copy to Signal K: `cp plugin.wasm ~/.signalk/node_modules/@signalk/example-anchor-watch-dotnet/`
 4. Restart plugin in Admin UI (no server restart needed!)
 
 ## Troubleshooting

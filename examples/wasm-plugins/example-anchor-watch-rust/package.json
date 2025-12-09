@@ -1,5 +1,5 @@
 {
-  "name": "@signalk/anchor-watch-rust",
+  "name": "@signalk/example-anchor-watch-rust",
   "version": "0.2.0",
   "description": "Anchor Watch WASM plugin for Signal K - Rust implementation with PUT handlers",
   "main": "plugin.wasm",

@@ -1,4 +1,4 @@
-# Anchor Watch - Rust WASM Plugin
+# Example Anchor Watch - Rust WASM Plugin
 
 A Signal K WASM plugin written in Rust demonstrating:
 
@@ -58,10 +58,10 @@ cp target/wasm32-wasip1/release/anchor_watch_rust.wasm plugin.wasm
 
 ```bash
 # Create plugin directory
-mkdir -p ~/.signalk/node_modules/@signalk/anchor-watch-rust
+mkdir -p ~/.signalk/node_modules/@signalk/example-anchor-watch-rust
 
 # Copy files
-cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/anchor-watch-rust/
+cp plugin.wasm package.json ~/.signalk/node_modules/@signalk/example-anchor-watch-rust/
 ```
 
 ### Option 2: npm pack (Distribution)
@@ -112,7 +112,7 @@ Set the anchor position:
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/position \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"value": {"latitude": 52.1234, "longitude": 4.5678}, "source": "@signalk/anchor-watch-rust"}'
+  -d '{"value": {"latitude": 52.1234, "longitude": 4.5678}, "source": "@signalk/example-anchor-watch-rust"}'
 ```
 
 ### navigation.anchor.maxRadius
@@ -123,7 +123,7 @@ Set the maximum swing radius (meters):
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/maxRadius \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"value": 75, "source": "@signalk/anchor-watch-rust"}'
+  -d '{"value": 75, "source": "@signalk/example-anchor-watch-rust"}'
 ```
 
 ### navigation.anchor.state
@@ -134,21 +134,21 @@ Query anchor watch state (informational - state is controlled by enabling/disabl
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/navigation/anchor/state \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"value": "on", "source": "@signalk/anchor-watch-rust"}'
+  -d '{"value": "on", "source": "@signalk/example-anchor-watch-rust"}'
 ```
 
 **Note**: The anchor watch state is actually controlled by enabling/disabling the plugin itself. The PUT handler returns a success response but the actual state change requires toggling the plugin.
 
 ## HTTP Endpoints (REST API)
 
-The plugin exposes custom HTTP endpoints for status queries and anchor control. These are mounted at `/plugins/anchor-watch-rust/`.
+The plugin exposes custom HTTP endpoints for status queries and anchor control. These are mounted at `/plugins/_signalk_example-anchor-watch-rust/`.
 
 ### GET /api/status
 
 Returns current anchor watch status:
 
 ```bash
-curl http://localhost:3000/plugins/anchor-watch-rust/api/status
+curl http://localhost:3000/plugins/_signalk_example-anchor-watch-rust/api/status
 ```
 
 **Response:**
@@ -168,7 +168,7 @@ curl http://localhost:3000/plugins/anchor-watch-rust/api/status
 Returns current anchor position:
 
 ```bash
-curl http://localhost:3000/plugins/anchor-watch-rust/api/position
+curl http://localhost:3000/plugins/_signalk_example-anchor-watch-rust/api/position
 ```
 
 **Response:**
@@ -186,7 +186,7 @@ curl http://localhost:3000/plugins/anchor-watch-rust/api/position
 Drop anchor at a specified position:
 
 ```bash
-curl -X POST http://localhost:3000/plugins/anchor-watch-rust/api/drop \
+curl -X POST http://localhost:3000/plugins/_signalk_example-anchor-watch-rust/api/drop \
   -H "Content-Type: application/json" \
   -d '{"latitude": 52.1234, "longitude": 4.5678, "maxRadius": 75}'
 ```
@@ -221,14 +221,14 @@ curl -X POST http://localhost:3000/signalk/v1/auth/login \
   -c cookies.txt
 
 # Use cookie for API requests
-curl -b cookies.txt http://localhost:3000/plugins/anchor-watch-rust/api/status
+curl -b cookies.txt http://localhost:3000/plugins/_signalk_example-anchor-watch-rust/api/status
 ```
 
 ## Source Parameter
 
 When multiple plugins/providers write to the same Signal K path, PUT requests require a `source` parameter to identify which handler should process the request.
 
-For this plugin, use: `"source": "@signalk/anchor-watch-rust"`
+For this plugin, use: `"source": "@signalk/example-anchor-watch-rust"`
 
 The source name matches the npm package name declared in `package.json`.
 
@@ -245,7 +245,7 @@ The plugin emits delta updates to these paths:
 ## Project Structure
 
 ```
-anchor-watch-rust/
+example-anchor-watch-rust/
 ├── Cargo.toml           # Rust package manifest
 ├── package.json         # npm package for Signal K
 ├── plugin.wasm          # Built WASM binary (after build)
@@ -394,7 +394,7 @@ wasm-opt -Oz plugin.wasm -o plugin.optimized.wasm
 
 ### PUT requests return "multiple sources" error
 
-- Add `"source": "@signalk/anchor-watch-rust"` to the request body
+- Add `"source": "@signalk/example-anchor-watch-rust"` to the request body
 - The source must match the package name in `package.json`
 
 ### Memory errors

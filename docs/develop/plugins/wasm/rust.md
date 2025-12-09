@@ -20,8 +20,8 @@ Rust is excellent for WASM plugins due to its zero-cost abstractions, memory saf
 Create a new Rust library project:
 
 ```bash
-cargo new --lib anchor-watch-rust
-cd anchor-watch-rust
+cargo new --lib example-anchor-watch-rust
+cd example-anchor-watch-rust
 ```
 
 ## Step 2: Configure Cargo.toml
@@ -351,4 +351,4 @@ Your plugin MAY export:
 
 ## Additional Resources
 
-See the anchor-watch-rust example in `examples/wasm-plugins/anchor-watch-rust/` for a complete working plugin with PUT handlers.
+See the example-anchor-watch-rust plugin in `examples/wasm-plugins/example-anchor-watch-rust/` for a complete working plugin with PUT handlers.
