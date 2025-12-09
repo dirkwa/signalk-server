@@ -643,7 +643,7 @@ module.exports = function (
       interfaces[name] = enabled
 
       // Hot-plug support for WASM interface
-       
+
       if (name === 'wasm' && wasEnabled !== enabled) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const wasmInterface = (app as any).interfaces?.wasm
