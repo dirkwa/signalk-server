@@ -252,6 +252,89 @@ fn start_radar_locator() -> i32 {
 - All sockets are automatically closed when plugin stops
 - Use `sk_udp_pending()` to check if data is available before calling `sk_udp_recv()`
 
+## Raw Sockets API (TCP)
+
+The `rawSockets` capability also enables TCP socket access for plugins that need persistent connections to devices:
+
+- Marine radars with TCP control (Furuno, Garmin)
+- Devices requiring handshake/login protocols
+- Any marine electronics using TCP
+
+TCP sockets support both **line-buffered mode** (for text protocols with `\r\n` terminators) and **raw mode** (for binary protocols).
+
+**FFI Functions Available:**
+
+| Function                    | Signature                                      | Description                                                  |
+| --------------------------- | ---------------------------------------------- | ------------------------------------------------------------ |
+| `sk_tcp_create`             | `() -> i32`                                    | Create TCP socket. Returns socket_id or -1                   |
+| `sk_tcp_connect`            | `(socket_id, addr_ptr, addr_len, port) -> i32` | Initiate connection (non-blocking). Returns 0 or -1          |
+| `sk_tcp_connected`          | `(socket_id) -> i32`                           | Check connection status. Returns 1 if connected, 0 otherwise |
+| `sk_tcp_set_line_buffering` | `(socket_id, enabled) -> i32`                  | Set buffering mode (1=line, 0=raw). Default: line            |
+| `sk_tcp_send`               | `(socket_id, data_ptr, data_len) -> i32`       | Send data. Returns bytes sent or -1                          |
+| `sk_tcp_recv_line`          | `(socket_id, buf_ptr, buf_max_len) -> i32`     | Receive complete line (line mode). Returns len or 0          |
+| `sk_tcp_recv_raw`           | `(socket_id, buf_ptr, buf_max_len) -> i32`     | Receive raw data (raw mode). Returns len or 0                |
+| `sk_tcp_pending`            | `(socket_id) -> i32`                           | Get buffered item count                                      |
+| `sk_tcp_close`              | `(socket_id) -> void`                          | Close socket                                                 |
+
+**Rust Example:**
+
+```rust
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn sk_tcp_create() -> i32;
+    fn sk_tcp_connect(socket_id: i32, addr_ptr: *const u8, addr_len: usize, port: u16) -> i32;
+    fn sk_tcp_connected(socket_id: i32) -> i32;
+    fn sk_tcp_set_line_buffering(socket_id: i32, enabled: i32) -> i32;
+    fn sk_tcp_send(socket_id: i32, data_ptr: *const u8, data_len: usize) -> i32;
+    fn sk_tcp_recv_line(socket_id: i32, buf_ptr: *mut u8, buf_max_len: usize) -> i32;
+    fn sk_tcp_recv_raw(socket_id: i32, buf_ptr: *mut u8, buf_max_len: usize) -> i32;
+    fn sk_tcp_pending(socket_id: i32) -> i32;
+    fn sk_tcp_close(socket_id: i32);
+}
+
+// Example: Furuno radar control connection
+fn connect_furuno_radar(ip: &str, port: u16) -> i32 {
+    // Create TCP socket
+    let socket_id = unsafe { sk_tcp_create() };
+    if socket_id < 0 {
+        return -1;
+    }
+
+    // Initiate connection (non-blocking)
+    if unsafe { sk_tcp_connect(socket_id, ip.as_ptr(), ip.len(), port) } < 0 {
+        return -1;
+    }
+
+    socket_id
+}
+
+fn poll_connection(socket_id: i32) {
+    // Check if connected
+    if unsafe { sk_tcp_connected(socket_id) } != 1 {
+        return; // Still connecting
+    }
+
+    // Send command with \r\n terminator
+    let cmd = "$S69,2,0,0,60,300,0\r\n";
+    unsafe { sk_tcp_send(socket_id, cmd.as_ptr(), cmd.len()) };
+
+    // Receive response line
+    let mut buf = [0u8; 256];
+    let len = unsafe { sk_tcp_recv_line(socket_id, buf.as_mut_ptr(), buf.len()) };
+    if len > 0 {
+        // Process response
+    }
+}
+```
+
+**Important Notes:**
+
+- Connection is non-blocking - poll `sk_tcp_connected()` until connected
+- Line-buffered mode (default) splits incoming data on `\r\n` or `\n`
+- Raw mode returns data as it arrives (for binary protocols)
+- Use `sk_tcp_pending()` to check if data is available
+- All sockets are automatically closed when plugin stops
+
 ## PUT Handlers API
 
 WASM plugins can register PUT handlers to respond to PUT requests from clients, enabling vessel control and configuration management.

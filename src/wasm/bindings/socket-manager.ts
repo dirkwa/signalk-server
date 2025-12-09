@@ -2,13 +2,14 @@
 /**
  * WASM Socket Manager
  *
- * Manages UDP sockets for WASM plugins that need raw network access
+ * Manages UDP and TCP sockets for WASM plugins that need raw network access
  * (e.g., radar plugins, NMEA receivers, etc.)
  *
- * Uses Node.js dgram module, bridged to WASM via FFI
+ * Uses Node.js dgram and net modules, bridged to WASM via FFI
  */
 
 import * as dgram from 'dgram'
+import * as net from 'net'
 import Debug from 'debug'
 
 const debug = Debug('signalk:wasm:sockets')
@@ -499,5 +500,331 @@ class SocketManager {
 // Export singleton instance
 export const socketManager = new SocketManager()
 
+// =============================================================================
+// TCP Socket Manager
+// =============================================================================
+
+/**
+ * Managed TCP socket with line-buffered receive
+ */
+interface ManagedTcpSocket {
+  socket: net.Socket
+  pluginId: string
+  connected: boolean
+  connecting: boolean
+  receiveBuffer: string[] // Line-buffered for protocol parsing
+  rawBuffer: Buffer[] // Raw data buffer for binary protocols
+  partialLine: string // Incomplete line data
+  maxBufferSize: number
+  error: string | null
+  useLineBuffering: boolean // If false, use raw buffering
+}
+
+/**
+ * TCP Socket Manager - manages TCP connections for WASM plugins
+ *
+ * Key differences from UDP:
+ * - Connection-oriented (connect before send)
+ * - Line-buffered receive (splits on \r\n or \n)
+ * - Persistent connections with reconnection support
+ */
+class TcpSocketManager {
+  private sockets: Map<number, ManagedTcpSocket> = new Map()
+  private nextSocketId: number = 1
+
+  /**
+   * Create a new TCP socket
+   * @param pluginId - Plugin that owns the socket
+   * @returns Socket ID, or -1 on error
+   */
+  createSocket(pluginId: string): number {
+    try {
+      const socketId = this.nextSocketId++
+      const socket = new net.Socket()
+
+      const managed: ManagedTcpSocket = {
+        socket,
+        pluginId,
+        connected: false,
+        connecting: false,
+        receiveBuffer: [],
+        rawBuffer: [],
+        partialLine: '',
+        maxBufferSize: 1000,
+        error: null,
+        useLineBuffering: true // Default to line buffering
+      }
+
+      // Set up data handler
+      socket.on('data', (data: Buffer) => {
+        if (managed.useLineBuffering) {
+          // Line-buffered mode for text protocols
+          managed.partialLine += data.toString()
+
+          // Split on line endings (\r\n or \n)
+          const lines = managed.partialLine.split(/\r?\n/)
+
+          // Last element is either empty (if data ended with newline) or partial
+          managed.partialLine = lines.pop() || ''
+
+          // Add complete lines to buffer
+          for (const line of lines) {
+            if (line.length > 0) {
+              if (managed.receiveBuffer.length >= managed.maxBufferSize) {
+                managed.receiveBuffer.shift() // Drop oldest
+              }
+              managed.receiveBuffer.push(line)
+            }
+          }
+        } else {
+          // Raw mode for binary protocols
+          if (managed.rawBuffer.length >= managed.maxBufferSize) {
+            managed.rawBuffer.shift() // Drop oldest
+          }
+          managed.rawBuffer.push(Buffer.from(data))
+        }
+      })
+
+      socket.on('connect', () => {
+        managed.connected = true
+        managed.connecting = false
+        managed.error = null
+        debug(`[${pluginId}] TCP socket ${socketId} connected`)
+      })
+
+      socket.on('error', (err) => {
+        managed.error = err.message
+        managed.connected = false
+        managed.connecting = false
+        debug(`[${pluginId}] TCP socket ${socketId} error: ${err.message}`)
+      })
+
+      socket.on('close', () => {
+        managed.connected = false
+        managed.connecting = false
+        debug(`[${pluginId}] TCP socket ${socketId} closed`)
+      })
+
+      socket.on('end', () => {
+        managed.connected = false
+        debug(`[${pluginId}] TCP socket ${socketId} ended by remote`)
+      })
+
+      this.sockets.set(socketId, managed)
+      debug(`[${pluginId}] Created TCP socket ${socketId}`)
+      return socketId
+    } catch (error) {
+      debug(`Failed to create TCP socket: ${error}`)
+      return -1
+    }
+  }
+
+  /**
+   * Connect to a remote host
+   * @param socketId - Socket to connect
+   * @param address - Remote host address
+   * @param port - Remote port
+   * @returns 0 if connection initiated, -1 on error
+   */
+  connect(socketId: number, address: string, port: number): number {
+    const managed = this.sockets.get(socketId)
+    if (!managed) {
+      debug(`TCP socket ${socketId} not found`)
+      return -1
+    }
+
+    if (managed.connected || managed.connecting) {
+      debug(
+        `[${managed.pluginId}] TCP socket ${socketId} already connected/connecting`
+      )
+      return -1
+    }
+
+    try {
+      managed.connecting = true
+      managed.error = null
+      managed.socket.connect(port, address)
+      debug(
+        `[${managed.pluginId}] TCP socket ${socketId} connecting to ${address}:${port}`
+      )
+      return 0
+    } catch (error) {
+      managed.connecting = false
+      managed.error = String(error)
+      debug(`[${managed.pluginId}] TCP connect error: ${error}`)
+      return -1
+    }
+  }
+
+  /**
+   * Check if socket is connected
+   * @param socketId - Socket to check
+   * @returns 1 if connected, 0 if not, -1 if socket not found
+   */
+  isConnected(socketId: number): number {
+    const managed = this.sockets.get(socketId)
+    if (!managed) {
+      return -1
+    }
+    return managed.connected ? 1 : 0
+  }
+
+  /**
+   * Send data over TCP
+   * @param socketId - Socket to use
+   * @param data - Data to send
+   * @returns Bytes sent, or -1 on error
+   */
+  send(socketId: number, data: Buffer): Promise<number> {
+    return new Promise((resolve) => {
+      const managed = this.sockets.get(socketId)
+      if (!managed) {
+        debug(`TCP socket ${socketId} not found`)
+        resolve(-1)
+        return
+      }
+
+      if (!managed.connected) {
+        debug(`[${managed.pluginId}] TCP socket ${socketId} not connected`)
+        resolve(-1)
+        return
+      }
+
+      managed.socket.write(data, (err) => {
+        if (err) {
+          debug(`[${managed.pluginId}] TCP send error: ${err}`)
+          resolve(-1)
+        } else {
+          resolve(data.length)
+        }
+      })
+    })
+  }
+
+  /**
+   * Receive a complete line (non-blocking)
+   * @param socketId - Socket to receive from
+   * @returns Complete line without line ending, or null if no complete line available
+   */
+  receiveLine(socketId: number): string | null {
+    const managed = this.sockets.get(socketId)
+    if (!managed) {
+      debug(`TCP socket ${socketId} not found`)
+      return null
+    }
+
+    return managed.receiveBuffer.shift() || null
+  }
+
+  /**
+   * Receive raw data (non-blocking)
+   * @param socketId - Socket to receive from
+   * @returns Raw data buffer, or null if no data available
+   */
+  receiveRaw(socketId: number): Buffer | null {
+    const managed = this.sockets.get(socketId)
+    if (!managed) {
+      debug(`TCP socket ${socketId} not found`)
+      return null
+    }
+
+    return managed.rawBuffer.shift() || null
+  }
+
+  /**
+   * Set buffering mode
+   * @param socketId - Socket to configure
+   * @param lineBuffering - true for line-buffered (text), false for raw (binary)
+   * @returns 0 on success, -1 on error
+   */
+  setLineBuffering(socketId: number, lineBuffering: boolean): number {
+    const managed = this.sockets.get(socketId)
+    if (!managed) {
+      return -1
+    }
+    managed.useLineBuffering = lineBuffering
+    debug(
+      `[${managed.pluginId}] TCP socket ${socketId} buffering mode: ${lineBuffering ? 'line' : 'raw'}`
+    )
+    return 0
+  }
+
+  /**
+   * Get number of buffered items (lines or raw chunks)
+   */
+  getBufferedCount(socketId: number): number {
+    const managed = this.sockets.get(socketId)
+    if (!managed) return 0
+    return managed.useLineBuffering
+      ? managed.receiveBuffer.length
+      : managed.rawBuffer.length
+  }
+
+  /**
+   * Get last error message
+   */
+  getError(socketId: number): string | null {
+    const managed = this.sockets.get(socketId)
+    return managed ? managed.error : null
+  }
+
+  /**
+   * Close a TCP socket
+   * @param socketId - Socket to close
+   */
+  close(socketId: number): void {
+    const managed = this.sockets.get(socketId)
+    if (!managed) {
+      debug(`TCP socket ${socketId} not found`)
+      return
+    }
+
+    try {
+      managed.socket.destroy()
+      this.sockets.delete(socketId)
+      debug(`[${managed.pluginId}] TCP socket ${socketId} closed`)
+    } catch (error) {
+      debug(`[${managed.pluginId}] TCP close error: ${error}`)
+    }
+  }
+
+  /**
+   * Close all TCP sockets for a plugin
+   */
+  closeAllForPlugin(pluginId: string): void {
+    const toClose: number[] = []
+    for (const [id, managed] of this.sockets) {
+      if (managed.pluginId === pluginId) {
+        toClose.push(id)
+      }
+    }
+    for (const id of toClose) {
+      this.close(id)
+    }
+    debug(`[${pluginId}] Closed ${toClose.length} TCP sockets`)
+  }
+
+  /**
+   * Get TCP socket statistics
+   */
+  getStats(): {
+    totalSockets: number
+    socketsPerPlugin: Record<string, number>
+  } {
+    const socketsPerPlugin: Record<string, number> = {}
+    for (const managed of this.sockets.values()) {
+      socketsPerPlugin[managed.pluginId] =
+        (socketsPerPlugin[managed.pluginId] || 0) + 1
+    }
+    return {
+      totalSockets: this.sockets.size,
+      socketsPerPlugin
+    }
+  }
+}
+
+// Export TCP socket manager singleton
+export const tcpSocketManager = new TcpSocketManager()
+
 // Export types
-export type { BufferedDatagram, ManagedSocket }
+export type { BufferedDatagram, ManagedSocket, ManagedTcpSocket }

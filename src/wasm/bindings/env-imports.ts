@@ -18,7 +18,7 @@ import {
   createBinaryStreamBinding,
   createBinaryDataReader
 } from './binary-stream'
-import { socketManager } from './socket-manager'
+import { socketManager, tcpSocketManager } from './socket-manager'
 
 const debug = Debug('signalk:wasm:bindings')
 
@@ -703,6 +703,188 @@ export function createEnvImports(
     sk_udp_close: (socketId: number): void => {
       if (!capabilities.rawSockets) return
       socketManager.close(socketId)
+    },
+
+    // ==========================================================================
+    // TCP Socket API (for protocols requiring persistent connections)
+    // Requires rawSockets capability
+    // ==========================================================================
+
+    /**
+     * Create a TCP socket
+     * @returns Socket ID (>0), or -1 on error
+     */
+    sk_tcp_create: (): number => {
+      if (!capabilities.rawSockets) {
+        debug(`[${pluginId}] rawSockets capability not granted`)
+        return -1
+      }
+      return tcpSocketManager.createSocket(pluginId)
+    },
+
+    /**
+     * Connect TCP socket to remote host
+     * @param socketId - Socket ID from sk_tcp_create
+     * @param addrPtr - Pointer to host address string
+     * @param addrLen - Length of address string
+     * @param port - Remote port number
+     * @returns 0 if connection initiated, -1 on error
+     */
+    sk_tcp_connect: (
+      socketId: number,
+      addrPtr: number,
+      addrLen: number,
+      port: number
+    ): number => {
+      if (!capabilities.rawSockets) return -1
+      try {
+        const address = readUtf8String(addrPtr, addrLen)
+        debug(`[${pluginId}] TCP connecting to ${address}:${port}`)
+        return tcpSocketManager.connect(socketId, address, port)
+      } catch (error) {
+        debug(`[${pluginId}] TCP connect error: ${error}`)
+        return -1
+      }
+    },
+
+    /**
+     * Check if TCP socket is connected
+     * @param socketId - Socket ID
+     * @returns 1 if connected, 0 if not, -1 if socket not found
+     */
+    sk_tcp_connected: (socketId: number): number => {
+      if (!capabilities.rawSockets) return -1
+      return tcpSocketManager.isConnected(socketId)
+    },
+
+    /**
+     * Set TCP socket buffering mode
+     * @param socketId - Socket ID
+     * @param lineBuffering - 1 for line-buffered (text), 0 for raw (binary)
+     * @returns 0 on success, -1 on error
+     */
+    sk_tcp_set_line_buffering: (
+      socketId: number,
+      lineBuffering: number
+    ): number => {
+      if (!capabilities.rawSockets) return -1
+      return tcpSocketManager.setLineBuffering(socketId, lineBuffering !== 0)
+    },
+
+    /**
+     * Send data via TCP
+     * @param socketId - Socket ID
+     * @param dataPtr - Data pointer
+     * @param dataLen - Data length
+     * @returns Bytes sent, or -1 on error
+     */
+    sk_tcp_send: (
+      socketId: number,
+      dataPtr: number,
+      dataLen: number
+    ): number => {
+      if (!capabilities.rawSockets) return -1
+      try {
+        if (!memoryRef.current) return -1
+        const data = Buffer.from(
+          new Uint8Array(memoryRef.current.buffer, dataPtr, dataLen)
+        )
+
+        // Send is async, but we return immediately
+        tcpSocketManager.send(socketId, data).catch((err) => {
+          debug(`[${pluginId}] Async TCP send error: ${err}`)
+        })
+        return dataLen
+      } catch (error) {
+        debug(`[${pluginId}] TCP send error: ${error}`)
+        return -1
+      }
+    },
+
+    /**
+     * Receive a complete line from TCP socket (non-blocking)
+     * Only works in line-buffered mode
+     * @param socketId - Socket ID
+     * @param bufPtr - Buffer to write line into (without line ending)
+     * @param bufMaxLen - Maximum buffer size
+     * @returns Bytes received, 0 if no complete line, -1 on error
+     */
+    sk_tcp_recv_line: (
+      socketId: number,
+      bufPtr: number,
+      bufMaxLen: number
+    ): number => {
+      if (!capabilities.rawSockets) return -1
+      try {
+        const line = tcpSocketManager.receiveLine(socketId)
+        if (!line) {
+          return 0 // No complete line available
+        }
+
+        if (!memoryRef.current) return -1
+        const memory = memoryRef.current
+        const memView = new Uint8Array(memory.buffer)
+
+        // Convert line to bytes and copy to buffer
+        const lineBytes = Buffer.from(line, 'utf8')
+        const bytesToCopy = Math.min(lineBytes.length, bufMaxLen)
+        memView.set(lineBytes.slice(0, bytesToCopy), bufPtr)
+
+        return bytesToCopy
+      } catch (error) {
+        debug(`[${pluginId}] TCP recv line error: ${error}`)
+        return -1
+      }
+    },
+
+    /**
+     * Receive raw data from TCP socket (non-blocking)
+     * Only works in raw mode
+     * @param socketId - Socket ID
+     * @param bufPtr - Buffer to write data into
+     * @param bufMaxLen - Maximum buffer size
+     * @returns Bytes received, 0 if no data, -1 on error
+     */
+    sk_tcp_recv_raw: (
+      socketId: number,
+      bufPtr: number,
+      bufMaxLen: number
+    ): number => {
+      if (!capabilities.rawSockets) return -1
+      try {
+        const data = tcpSocketManager.receiveRaw(socketId)
+        if (!data) {
+          return 0 // No data available
+        }
+
+        if (!memoryRef.current) return -1
+        const memory = memoryRef.current
+        const memView = new Uint8Array(memory.buffer)
+
+        const bytesToCopy = Math.min(data.length, bufMaxLen)
+        memView.set(data.slice(0, bytesToCopy), bufPtr)
+
+        return bytesToCopy
+      } catch (error) {
+        debug(`[${pluginId}] TCP recv raw error: ${error}`)
+        return -1
+      }
+    },
+
+    /**
+     * Get number of buffered items waiting to be received
+     */
+    sk_tcp_pending: (socketId: number): number => {
+      if (!capabilities.rawSockets) return -1
+      return tcpSocketManager.getBufferedCount(socketId)
+    },
+
+    /**
+     * Close a TCP socket
+     */
+    sk_tcp_close: (socketId: number): void => {
+      if (!capabilities.rawSockets) return
+      tcpSocketManager.close(socketId)
     }
   }
 
