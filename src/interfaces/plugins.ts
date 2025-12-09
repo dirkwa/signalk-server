@@ -549,67 +549,59 @@ module.exports = (theApp: any) => {
   ) {
     debug('Registering plugin ' + pluginName)
     try {
-      // Check if this is a WASM plugin
-      const packageJsonPath = path.join(location, pluginName, 'package.json')
-      if (fs.existsSync(packageJsonPath)) {
-        const packageJson = require(packageJsonPath)
+      // Check if this is a WASM plugin (wasmManifest is now part of NpmPackageData)
+      if (metadata.wasmManifest) {
+        // This is a WASM plugin - check if WASM interface is enabled
+        const wasmEnabled = app.config.settings.interfaces?.wasm !== false
+        if (!wasmEnabled) {
+          debug(
+            `WASM plugin ${pluginName} discovered but WASM interface disabled - registering minimal entry`
+          )
+          // Create minimal plugin entry so it appears in Plugin Config with "No WASM" badge
+          const pluginId = pluginName
+            .replace(/^@[^/]+\//, '')
+            .replace(/-/g, '_')
+          // Use signalk.displayName (standard SignalK convention) or fall back to package name
+          const pluginDisplayName = metadata.signalk?.displayName || pluginName
 
-        if (packageJson.wasmManifest) {
-          // This is a WASM plugin - check if WASM interface is enabled
-          const wasmEnabled = app.config.settings.interfaces?.wasm !== false
-          if (!wasmEnabled) {
-            debug(
-              `WASM plugin ${pluginName} discovered but WASM interface disabled - registering minimal entry`
-            )
-            // Create minimal plugin entry so it appears in Plugin Config with "No WASM" badge
-            const pluginId =
-              packageJson.wasmManifest?.pluginId ||
-              pluginName.replace(/^@[^/]+\//, '').replace(/-/g, '_')
-            // Use signalk.displayName (standard SignalK convention) or fall back to package name
-            const pluginDisplayName =
-              packageJson.signalk?.displayName ||
-              packageJson.wasmManifest?.name ||
-              pluginName
-
-            const minimalPlugin: any = {
-              id: pluginId,
-              name: pluginDisplayName,
-              type: 'wasm',
-              packageName: pluginName,
-              version: metadata.version || packageJson.version,
-              description: packageJson.description || '',
-              keywords: packageJson.keywords || [],
-              packageLocation: location,
-              enabled: false,
-              state: 'disabled',
-              statusMessage: () => 'WASM interface disabled',
-              schema: () => ({}),
-              uiSchema: () => ({}),
-              start: () => {},
-              stop: () => Promise.resolve(),
-              enableLogging: false,
-              enableDebug: false
-            }
-
-            app.plugins.push(minimalPlugin)
-            app.pluginsMap[pluginId] = minimalPlugin
-            debug(
-              `Registered minimal WASM plugin entry: ${pluginId} (WASM disabled)`
-            )
-            return
+          const minimalPlugin: any = {
+            id: pluginId,
+            name: pluginDisplayName,
+            type: 'wasm',
+            packageName: pluginName,
+            version: metadata.version,
+            description: metadata.description || '',
+            keywords: metadata.keywords || [],
+            packageLocation: location,
+            enabled: false,
+            state: 'disabled',
+            statusMessage: () => 'WASM interface disabled',
+            schema: () => ({}),
+            uiSchema: () => ({}),
+            start: () => {},
+            stop: () => Promise.resolve(),
+            enableLogging: false,
+            enableDebug: false
           }
-          // Route to WASM loader
-          debug(`Detected WASM plugin: ${pluginName}`)
-          const { registerWasmPlugin } = require('../wasm')
-          await registerWasmPlugin(
-            app,
-            pluginName,
-            metadata,
-            location,
-            theApp.config.configPath
+
+          app.plugins.push(minimalPlugin)
+          app.pluginsMap[pluginId] = minimalPlugin
+          debug(
+            `Registered minimal WASM plugin entry: ${pluginId} (WASM disabled)`
           )
           return
         }
+        // Route to WASM loader
+        debug(`Detected WASM plugin: ${pluginName}`)
+        const { registerWasmPlugin } = require('../wasm')
+        await registerWasmPlugin(
+          app,
+          pluginName,
+          metadata,
+          location,
+          theApp.config.configPath
+        )
+        return
       }
 
       // Standard Node.js plugin
