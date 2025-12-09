@@ -9,7 +9,7 @@ AssemblyScript is the recommended language for developers familiar with TypeScri
 ## Step 1: Install SDK
 
 ```bash
-npm install signalk-assemblyscript-plugin-sdk
+npm install @signalk/assemblyscript-plugin-sdk
 npm install --save-dev assemblyscript
 ```
 
@@ -27,7 +27,7 @@ import {
   emit,
   setStatus,
   getCurrentTimestamp
-} from 'signalk-assemblyscript-plugin-sdk/assembly'
+} from '@signalk/assemblyscript-plugin-sdk/assembly'
 
 class MyPlugin extends Plugin {
   id(): string {

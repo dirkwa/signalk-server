@@ -12,6 +12,8 @@ module.exports = defineConfig([
     '**/dist',
     // WASM plugin examples - AssemblyScript has different semantics
     'examples/wasm-plugins/**/assembly/**',
+    // AssemblyScript SDK - decorators and types not compatible with ESLint
+    'packages/assemblyscript-plugin-sdk/assembly/**',
     // Auto-generated WASM bindings (created by AssemblyScript compiler)
     'examples/wasm-plugins/**/build/**',
     'examples/wasm-plugins/**/plugin.js',

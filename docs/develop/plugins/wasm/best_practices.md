@@ -363,7 +363,7 @@ Add `resourceProvider: true` to your package.json:
 #### AssemblyScript
 
 ```typescript
-import { registerResourceProvider } from 'signalk-assemblyscript-plugin-sdk/assembly/resources'
+import { registerResourceProvider } from '@signalk/assemblyscript-plugin-sdk/assembly/resources'
 
 // In plugin start():
 if (!registerResourceProvider('weather-forecasts')) {

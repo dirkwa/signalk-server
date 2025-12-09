@@ -63,8 +63,8 @@ AssemblyScript plugins can make HTTP requests using the `as-fetch` library integ
 import {
   httpGet,
   hasNetworkCapability
-} from 'signalk-assemblyscript-plugin-sdk/assembly/network'
-import { debug, setError } from 'signalk-assemblyscript-plugin-sdk/assembly'
+} from '@signalk/assemblyscript-plugin-sdk/assembly/network'
+import { debug, setError } from '@signalk/assemblyscript-plugin-sdk/assembly'
 
 class MyPlugin extends Plugin {
   start(config: string): i32 {
@@ -148,7 +148,7 @@ For plugins using network capability:
     "network": true
   },
   "dependencies": {
-    "signalk-assemblyscript-plugin-sdk": "^0.1.0",
+    "@signalk/assemblyscript-plugin-sdk": "^0.2.0",
     "as-fetch": "^2.1.4"
   }
 }

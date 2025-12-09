@@ -13,12 +13,12 @@ import {
   setStatus,
   setError,
   debug
-} from 'signalk-assemblyscript-plugin-sdk/assembly'
+} from '@signalk/assemblyscript-plugin-sdk/assembly'
 
 import {
   registerResourceProvider,
   ResourceGetRequest
-} from 'signalk-assemblyscript-plugin-sdk/assembly/resources'
+} from '@signalk/assemblyscript-plugin-sdk/assembly/resources'
 
 // ===== Data Types =====
 

@@ -22,11 +22,11 @@ import {
   debug,
   createSimpleDelta,
   getCurrentTimestamp
-} from 'signalk-assemblyscript-plugin-sdk/assembly'
+} from '@signalk/assemblyscript-plugin-sdk/assembly'
 
 import {
   hasNetworkCapability
-} from 'signalk-assemblyscript-plugin-sdk/assembly/network'
+} from '@signalk/assemblyscript-plugin-sdk/assembly/network'
 
 import { fetchSync } from 'as-fetch/sync'
 

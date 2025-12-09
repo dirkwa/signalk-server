@@ -206,7 +206,7 @@ weather-plugin/
   },
   "dependencies": {
     "as-fetch": "^2.1.4",
-    "signalk-assemblyscript-plugin-sdk": "^0.1.3"
+    "@signalk/assemblyscript-plugin-sdk": "^0.2.0"
   }
 }
 ```

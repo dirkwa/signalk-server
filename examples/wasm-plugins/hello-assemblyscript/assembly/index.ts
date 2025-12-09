@@ -17,7 +17,7 @@ import {
   setError,
   debug,
   getCurrentTimestamp
-} from 'signalk-assemblyscript-plugin-sdk/assembly'
+} from '@signalk/assemblyscript-plugin-sdk/assembly'
 
 /**
  * Plugin configuration interface

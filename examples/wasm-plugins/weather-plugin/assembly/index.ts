@@ -15,14 +15,14 @@ import {
   debug,
   createSimpleDelta,
   getCurrentTimestamp
-} from 'signalk-assemblyscript-plugin-sdk/assembly'
+} from '@signalk/assemblyscript-plugin-sdk/assembly'
 
-import { hasNetworkCapability } from 'signalk-assemblyscript-plugin-sdk/assembly/network'
+import { hasNetworkCapability } from '@signalk/assemblyscript-plugin-sdk/assembly/network'
 
 import {
   registerResourceProvider,
   ResourceGetRequest
-} from 'signalk-assemblyscript-plugin-sdk/assembly/resources'
+} from '@signalk/assemblyscript-plugin-sdk/assembly/resources'
 
 import { fetchSync } from 'as-fetch/sync'
 import { Response } from 'as-fetch/assembly'
