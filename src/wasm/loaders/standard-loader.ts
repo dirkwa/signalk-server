@@ -10,7 +10,6 @@
 import * as fs from 'fs'
 import Debug from 'debug'
 import loader from '@assemblyscript/loader'
-import { FetchHandler } from 'as-fetch/bindings.raw.esm.js'
 import { WasmPluginInstance, WasmCapabilities } from '../types'
 import { createEnvImports } from '../bindings/env-imports'
 import { updateResourceProviderInstance } from '../bindings/resource-provider'
@@ -143,6 +142,8 @@ export async function loadStandardPlugin(
       return nodeFetch(url, init)
     }
 
+    // Dynamic import for ESM-only as-fetch package
+    const { FetchHandler } = await import('as-fetch/bindings.raw.esm.js')
     fetchHandler = new FetchHandler(fetchWrapper)
     fetchImports = fetchHandler.imports
   }
