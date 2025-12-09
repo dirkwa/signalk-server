@@ -1,5 +1,5 @@
 {
-  "name": "@signalk/weather-provider-plugin-example",
+  "name": "@signalk/example-weather-provider",
   "version": "0.1.0",
   "description": "Example SignalK WASM plugin demonstrating Weather Provider API integration",
   "keywords": [

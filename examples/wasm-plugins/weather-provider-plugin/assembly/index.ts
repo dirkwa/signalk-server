@@ -269,9 +269,7 @@ function fetchForecast(lat: f64, lon: f64, forecastType: string): WeatherData[] 
 // ===== Plugin Class =====
 
 class WeatherProviderPlugin extends Plugin {
-  id(): string {
-    return 'weather-provider-example'
-  }
+  // Note: Plugin ID is derived from package.json name
 
   name(): string {
     return 'Weather Provider Plugin (Example)'
@@ -382,9 +380,7 @@ class WeatherProviderPlugin extends Plugin {
 
 const plugin = new WeatherProviderPlugin()
 
-export function plugin_id(): string {
-  return plugin.id()
-}
+// Note: plugin_id() is no longer required - ID is derived from package.json name
 
 export function plugin_name(): string {
   return plugin.name()

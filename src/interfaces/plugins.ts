@@ -63,6 +63,7 @@ const queryRequest = require('../requestResponse').queryRequest
 import { getMetadata } from '@signalk/signalk-schema'
 import { HistoryApi } from '@signalk/server-api/history'
 import { HistoryApiHttpRegistry } from '../api/history'
+import { derivePluginId } from '../pluginid'
 
 // #521 Returns path to load plugin-config assets.
 const getPluginConfigPublic = getModulePublic('@signalk/plugin-config')
@@ -558,9 +559,8 @@ module.exports = (theApp: any) => {
             `WASM plugin ${pluginName} discovered but WASM interface disabled - registering minimal entry`
           )
           // Create minimal plugin entry so it appears in Plugin Config with "No WASM" badge
-          const pluginId = pluginName
-            .replace(/^@[^/]+\//, '')
-            .replace(/-/g, '_')
+          // Derive plugin ID from npm package name (@ → _, / → _)
+          const pluginId = derivePluginId(pluginName)
           // Use signalk.displayName (standard SignalK convention) or fall back to package name
           const pluginDisplayName = metadata.signalk?.displayName || pluginName
 

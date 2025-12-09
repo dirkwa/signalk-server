@@ -31,6 +31,7 @@ import {
   migrateRadarProviderPluginId,
   updateRadarProviderInstance
 } from '../bindings/radar-provider'
+import { derivePluginId } from '../../pluginid'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -147,12 +148,11 @@ export async function registerWasmPlugin(
       rawSockets: packageJson.wasmCapabilities?.rawSockets || false
     }
 
-    // Load WASM module temporarily just to get the plugin ID
-    // We need the real plugin ID to find the correct config file
+    // Load WASM module temporarily to extract schema and display name
     const tempVfsRoot = path.join(
       configPath,
       'plugin-config-data',
-      '.temp-' + packageName.replace(/\//g, '-')
+      '.temp-' + derivePluginId(packageName)
     )
     if (!fs.existsSync(tempVfsRoot)) {
       fs.mkdirSync(tempVfsRoot, { recursive: true })
@@ -167,9 +167,11 @@ export async function registerWasmPlugin(
       app
     )
 
-    // Extract plugin ID from WASM exports
-    const pluginId = tempInstance.exports.id()
-    const pluginName = tempInstance.exports.name()
+    // Derive plugin ID from npm package name (not from WASM exports)
+    // This ensures uniqueness via npm registry and prevents ID conflicts
+    const pluginId = derivePluginId(packageName)
+    // Plugin display name from WASM exports, fallback to package name
+    const pluginName = tempInstance.exports.name?.() || packageName
     const schemaJson = tempInstance.exports.schema()
     const schema = schemaJson ? JSON.parse(schemaJson) : {}
 

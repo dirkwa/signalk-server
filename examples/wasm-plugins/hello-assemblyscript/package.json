@@ -1,5 +1,5 @@
 {
-  "name": "@signalk/hello-assemblyscript",
+  "name": "@signalk/example-hello-assemblyscript",
   "version": "0.1.0",
   "description": "Hello World WASM plugin written in AssemblyScript",
   "keywords": [

@@ -288,9 +288,7 @@ function initializeSampleData(): void {
 // ===== Plugin Class =====
 
 class RoutesWaypointsPlugin extends Plugin {
-  id(): string {
-    return 'routes-waypoints-example'
-  }
+  // Note: Plugin ID is derived from package.json name
 
   name(): string {
     return 'Routes & Waypoints Provider (Example)'
@@ -352,9 +350,7 @@ class RoutesWaypointsPlugin extends Plugin {
 
 const plugin = new RoutesWaypointsPlugin()
 
-export function plugin_id(): string {
-  return plugin.id()
-}
+// Note: plugin_id() is no longer required - ID is derived from package.json name
 
 export function plugin_name(): string {
   return plugin.name()

@@ -44,14 +44,8 @@ class HelloPlugin extends Plugin {
   }
 
   /**
-   * Plugin ID - must be unique
-   */
-  id(): string {
-    return 'hello-assemblyscript'
-  }
-
-  /**
    * Plugin name shown in admin UI
+   * Note: Plugin ID is derived from package.json name
    */
   name(): string {
     return 'Hello AssemblyScript Plugin'
@@ -197,9 +191,7 @@ class HelloPlugin extends Plugin {
 const plugin = new HelloPlugin()
 
 // Plugin lifecycle exports
-export function plugin_id(): string {
-  return plugin.id()
-}
+// Note: plugin_id() is no longer required - ID is derived from package.json name
 
 export function plugin_name(): string {
   return plugin.name()
@@ -257,8 +249,8 @@ export function handle_get_info(requestPtr: usize, requestLen: usize): string {
   const requestJson = String.UTF8.decode(requestBytes.buffer)
 
   // Build response data
+  // Note: pluginId is derived from package.json name
   const bodyJson = `{
-    "pluginId": "${plugin.id()}",
     "pluginName": "${plugin.name()}",
     "language": "AssemblyScript",
     "version": "0.1.0",

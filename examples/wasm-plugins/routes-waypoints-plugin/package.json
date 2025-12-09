@@ -1,5 +1,5 @@
 {
-  "name": "@signalk/routes-waypoints-plugin-example",
+  "name": "@signalk/example-routes-waypoints",
   "version": "0.1.0",
   "description": "Example WASM plugin demonstrating Routes and Waypoints Resource Providers",
   "keywords": [

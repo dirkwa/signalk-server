@@ -30,10 +30,6 @@ import {
 } from '@signalk/assemblyscript-plugin-sdk/assembly'
 
 class MyPlugin extends Plugin {
-  id(): string {
-    return 'my-plugin'
-  }
-
   name(): string {
     return 'My AssemblyScript Plugin'
   }
@@ -54,7 +50,7 @@ class MyPlugin extends Plugin {
     setStatus('Started')
 
     // Emit a test delta
-    const source = new Source(this.id(), 'plugin')
+    const source = new Source('my-plugin', 'plugin')
     const timestamp = getCurrentTimestamp()
     const pathValue = new PathValue('test.value', '"hello"')
     const update = new Update(source, timestamp, [pathValue])
@@ -72,9 +68,6 @@ class MyPlugin extends Plugin {
 
 // Export for Signal K
 const plugin = new MyPlugin()
-export function plugin_id(): string {
-  return plugin.id()
-}
 export function plugin_name(): string {
   return plugin.name()
 }
@@ -93,6 +86,13 @@ export function plugin_stop(): i32 {
   return plugin.stop()
 }
 ```
+
+**Note on Plugin IDs:** The plugin ID is automatically derived from your `package.json` name. For example:
+
+- `@signalk/example-weather-plugin` → `_signalk_example-weather-plugin`
+- `my-simple-plugin` → `my-simple-plugin`
+
+This ensures unique plugin IDs (npm guarantees package name uniqueness) and eliminates discrepancies between package name and plugin ID.
 
 ## Step 3: Configure Build
 

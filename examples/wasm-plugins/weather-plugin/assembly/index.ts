@@ -170,9 +170,7 @@ class WeatherPlugin extends Plugin {
   private config: WeatherConfig = new WeatherConfig()
   private lastUpdate: i64 = 0
 
-  id(): string {
-    return 'weather-example'
-  }
+  // Note: Plugin ID is derived from package.json name
 
   name(): string {
     return 'Weather Data Plugin (Example)'
@@ -478,9 +476,7 @@ class WeatherPlugin extends Plugin {
 const plugin = new WeatherPlugin()
 
 // Plugin lifecycle exports
-export function plugin_id(): string {
-  return plugin.id()
-}
+// Note: plugin_id() is no longer required - ID is derived from package.json name
 
 export function plugin_name(): string {
   return plugin.name()

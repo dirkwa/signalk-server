@@ -5,21 +5,18 @@
 /**
  * Abstract base class for Signal K WASM plugins
  *
- * Plugins must implement all abstract methods:
- * - id(): Unique plugin identifier
+ * Plugins must implement these abstract methods:
  * - name(): Human-readable plugin name
  * - schema(): JSON schema for configuration UI
  * - start(): Initialize plugin with configuration
  * - stop(): Clean shutdown
+ *
+ * Note: Plugin ID is automatically derived from your package.json name.
+ * For example: "@signalk/example-weather-plugin" → "_signalk_example-weather-plugin"
  */
 export abstract class Plugin {
   /**
-   * Return unique plugin identifier (kebab-case recommended)
-   */
-  abstract id(): string
-
-  /**
-   * Return human-readable plugin name
+   * Return human-readable plugin name for display in Admin UI
    */
   abstract name(): string
 

@@ -9,6 +9,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import Debug from 'debug'
+import { derivePluginId } from '../pluginid'
 
 const debug = Debug('signalk:wasm:storage')
 
@@ -47,15 +48,16 @@ export function getPluginStoragePaths(
   const configFile = path.join(configDataPath, `${pluginId}.json`)
 
   // Use sanitized package name for VFS directory (for isolation)
-  // @signalk/hello-assemblyscript -> @signalk-hello-assemblyscript
-  const sanitizedPackageName = packageName.replace(/\//g, '-')
+  // Use same pattern as plugin ID: @ → _, / → _
+  // @signalk/hello-assemblyscript -> _signalk_hello-assemblyscript
+  const sanitizedPackageName = derivePluginId(packageName)
   const pluginDataRoot = path.join(configDataPath, sanitizedPackageName)
   const vfsRoot = path.join(pluginDataRoot, 'vfs')
 
   return {
     pluginDataRoot,
-    configFile, // e.g., ~/.signalk/plugin-config-data/hello-assemblyscript.json (matches regular plugins)
-    vfsRoot, // e.g., ~/.signalk/plugin-config-data/@signalk-hello-assemblyscript/vfs/ (isolated by package)
+    configFile, // e.g., ~/.signalk/plugin-config-data/_signalk_example-hello-assemblyscript.json
+    vfsRoot, // e.g., ~/.signalk/plugin-config-data/_signalk_example-hello-assemblyscript/vfs/
     vfsData: path.join(vfsRoot, 'data'),
     vfsConfig: path.join(vfsRoot, 'config'),
     vfsTmp: path.join(vfsRoot, 'tmp')
