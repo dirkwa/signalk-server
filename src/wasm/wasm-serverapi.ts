@@ -167,8 +167,8 @@ export function createServerAPIBridge(
       }
     },
 
-    // Data Model API
-    'data-model': {
+    // Full Model API (Signal K full data model access)
+    'full-model': {
       /**
        * Get data from vessel.self path
        */
@@ -290,7 +290,7 @@ export function createWasmImports(
         memory: WebAssembly.Memory
       ): number => {
         const path = readStringFromMemory(memory, pathPtr, pathLen)
-        const value = bridge['data-model'].getSelfPath(path)
+        const value = bridge['full-model'].getSelfPath(path)
         if (value === null) {
           return 0 // Not found
         }
@@ -305,7 +305,7 @@ export function createWasmImports(
         memory: WebAssembly.Memory
       ): number => {
         const path = readStringFromMemory(memory, pathPtr, pathLen)
-        const value = bridge['data-model'].getPath(path)
+        const value = bridge['full-model'].getPath(path)
         if (value === null) {
           return 0 // Not found
         }

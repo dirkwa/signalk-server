@@ -12,7 +12,7 @@ world plugin {
   import delta-handler;
   import plugin-config;
   import plugin-status;
-  import data-model;
+  import full-model;
 }
 
 // Plugin lifecycle and metadata interface
@@ -86,8 +86,8 @@ interface plugin-status {
   error: func(message: string);
 }
 
-// Signal K data model access
-interface data-model {
+// Signal K full model access
+interface full-model {
   // Read data from vessel.self path
   // Returns JSON-encoded value or none if path doesn't exist
   get-self-path: func(path: string) -> option<string>;
