@@ -5,7 +5,7 @@
  * Shared types and interfaces for WASM plugin system
  */
 
-import { Router } from 'express'
+import { IRouter } from 'express'
 import {
   WasmPluginInstance,
   WasmCapabilities,
@@ -41,7 +41,7 @@ export interface WasmPlugin {
   configPath: string // Signal K config path for VFS/storage
   metadata: WasmPluginMetadata
   instance?: WasmPluginInstance
-  router?: Router // Express router for plugin routes
+  router?: IRouter // Express router for plugin routes
   status: 'stopped' | 'starting' | 'running' | 'error' | 'crashed'
   statusMessage?: string
   errorMessage?: string
