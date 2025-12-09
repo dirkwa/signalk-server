@@ -2,16 +2,22 @@
 
 ## Overview
 
-This document describes the hotplug mechanism implemented for SignalK server plugins. Hotplug allows plugins to be enabled, disabled, and have their webapps appear/disappear from the UI without requiring a full server restart.
+This document describes the hotplug mechanism implemented for SignalK server plugins. Hotplug allows plugins to be enabled, disabled, installed, and uninstalled without requiring a full server restart.
 
 ## Scope
 
-The implementation covers:
+Plugin hotplug handles the **complete plugin lifecycle** for both plugin types:
 
 - **Node.js plugins** (classic `signalk-node-server-plugin`)
 - **WASM plugins** (`signalk-wasm-plugin`)
-- **Plugin webapps** (`signalk-webapp`, `signalk-embeddable-webapp`)
-- **AppStore installations** (plugins installed via the AppStore)
+
+This includes:
+
+- **Enable/disable** - Toggle plugins on/off via Admin UI
+- **Install/uninstall** - AppStore plugin installations
+- **Webapp filtering** - Show/hide plugin webapps based on enabled state
+- **Route blocking** - Block HTTP requests to disabled plugin endpoints
+- **Config persistence** - Save plugin configuration to disk
 
 ---
 
@@ -804,8 +810,7 @@ The Admin UI checks `plugin.type === 'wasm'` and `!this.state.wasmEnabled` to di
 | `src/wasm/loader/plugin-registry.ts`                                | Wired up lifecycle function references                                                                                                                                                                                                                        |
 | `src/wasm/loader/index.ts`                                          | Added exports for lifecycle functions                                                                                                                                                                                                                         |
 | `src/wasm/index.ts`                                                 | Added exports for `filterDisabledWasmWebapps`, `discoverAndRegisterWasmPlugins`                                                                                                                                                                               |
-| `test/webapp-hotplug.ts`                                            | **NEW** - Unit tests for webapp hotplug filtering logic (12 tests, mock-based)                                                                                                                                                                                |
-| `test/wasm-plugins.ts`                                              | WASM/Node.js coexistence tests (16 tests, skipped - require fixtures)                                                                                                                                                                                         |
+| `test/plugin-hotplug.ts`                                            | Unit tests for plugin hotplug filtering logic (12 tests, mock-based)                                                                                                                                                                                          |
 
 ---
 
@@ -871,11 +876,11 @@ Plugin icons and images (`.png`, `.jpg`, `.svg`, etc.) are **always accessible**
 
 ### Automated Tests
 
-#### Webapp Hotplug Filtering Tests (`test/webapp-hotplug.ts`)
+#### Plugin Hotplug Filtering Tests (`test/plugin-hotplug.ts`)
 
-Unit tests for the webapp filtering logic using mock data. These tests don't require any plugins to be installed.
+Unit tests for the plugin hotplug filtering logic using mock data. Tests both Node.js and WASM plugin filtering without requiring any plugins to be installed.
 
-**Run:** `npx mocha --require ts-node/register test/webapp-hotplug.ts`
+**Run:** `npx mocha --require ts-node/register test/plugin-hotplug.ts`
 
 | Test                                                             | Description                                         |
 | ---------------------------------------------------------------- | --------------------------------------------------- |
@@ -892,28 +897,12 @@ Unit tests for the webapp filtering logic using mock data. These tests don't req
 | `detects Node.js plugin enabled state from getPluginOptions`     | Verifies Node.js enabled state detection            |
 | `detects WASM plugin enabled state from plugin.enabled property` | Verifies WASM enabled state detection               |
 
-#### WASM Plugin Tests (`test/wasm-plugins.ts`)
-
-Integration tests for WASM and Node.js plugin coexistence. **Currently skipped** - requires test fixtures:
-
-- `testplugin` - Node.js test plugin (copy from `plugin-test-config/node_modules`)
-- `anchor-watch-rust` - WASM plugin binary (not available)
-
-**Run:** `npx mocha --require ts-node/register test/wasm-plugins.ts`
-
-| Test Suite                     | Tests                                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------- |
-| `Node.js Plugin Compatibility` | Plugin loads, starts, appears in pluginsMap, emits deltas, HTTP endpoint accessible |
-| `WASM Plugin Functionality`    | Plugin loads, starts, appears in pluginsMap, status via /skServer/plugins           |
-| `Plugin Coexistence`           | Both types in plugins list, both started, plugin map contains both, no interference |
-| `Plugin Lifecycle`             | WASM stop, Node.js stop independently, server stops cleanly with both               |
-
 ### Test Results Summary
 
 ```
 npm run test-only
 
-  Webapp Hotplug Filtering
+  Plugin Hotplug Filtering
     filterEnabledWebapps
       ✔ returns all webapps when no plugins exist
       ✔ keeps standalone webapps that have no associated plugin
@@ -929,11 +918,7 @@ npm run test-only
       ✔ detects Node.js plugin enabled state from getPluginOptions
       ✔ detects WASM plugin enabled state from plugin.enabled property
 
-  WASM Plugin Tests
-    - (16 tests skipped - require fixtures)
-
   12 passing
-  16 pending
 ```
 
 ---

@@ -1,16 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * Tests for webapp hotplug filtering functionality
+ * Tests for plugin hotplug filtering functionality
+ *
+ * Plugin hotplug handles the lifecycle of both Node.js and WASM plugins,
+ * including appstore installs, enabling/disabling, and webapp filtering.
  *
  * These tests verify that disabled plugin webapps are correctly filtered
- * from the webapps list in all scenarios (startup, API request, websocket push).
- *
- * Tests use mock data and don't require any plugins to be installed.
+ * from the webapps list. Tests use mock data and don't require any plugins
+ * to be installed.
  */
 
 import { expect } from 'chai'
 
-describe('Webapp Hotplug Filtering', function () {
+describe('Plugin Hotplug Filtering', function () {
   /**
    * Helper to create a mock app object with plugins and webapps
    */
