@@ -109,7 +109,9 @@ describe('Webapp Hotplug Filtering', function () {
 
     it('keeps standalone webapps that have no associated plugin', function () {
       const app = createMockApp({
-        plugins: [{ id: 'plugin-a', packageName: 'plugin-a-pkg', enabled: false }],
+        plugins: [
+          { id: 'plugin-a', packageName: 'plugin-a-pkg', enabled: false }
+        ],
         webapps: [
           { name: 'standalone-webapp' },
           { name: 'plugin-a-pkg' } // This one should be filtered

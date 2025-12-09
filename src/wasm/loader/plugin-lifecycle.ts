@@ -685,8 +685,13 @@ export async function discoverAndRegisterWasmPlugins(app: any): Promise<void> {
   app.wasmSubscriptionManager = initializeSubscriptionManager()
 
   // 2. Discover all plugins with signalk-node-server-plugin keyword
-  const allModules = modulesWithKeyword(app.config, 'signalk-node-server-plugin')
-  debug(`Found ${allModules.length} plugins with signalk-node-server-plugin keyword`)
+  const allModules = modulesWithKeyword(
+    app.config,
+    'signalk-node-server-plugin'
+  )
+  debug(
+    `Found ${allModules.length} plugins with signalk-node-server-plugin keyword`
+  )
 
   // 3. Filter for WASM plugins only (those with wasmManifest in package.json)
   const wasmModules = allModules.filter((moduleData: any) => {

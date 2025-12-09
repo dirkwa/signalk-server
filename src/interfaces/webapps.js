@@ -70,12 +70,18 @@ function mountWebModules(app, keyword) {
       }
 
       // Check if this is a WASM plugin webapp and WASM runtime is disabled
-      const isWasmPlugin = moduleData.metadata.keywords?.includes('signalk-wasm-plugin')
+      const isWasmPlugin = moduleData.metadata.keywords?.includes(
+        'signalk-wasm-plugin'
+      )
       if (isWasmPlugin) {
         // Check interfaces.wasm setting - note: settings are in app.config.settings
         const wasmEnabled = app.config?.settings?.interfaces?.wasm !== false
         if (!wasmEnabled) {
-          res.status(503).send(`Webapp ${moduleData.module} is disabled (WASM runtime disabled)`)
+          res
+            .status(503)
+            .send(
+              `Webapp ${moduleData.module} is disabled (WASM runtime disabled)`
+            )
           return
         }
       }
@@ -91,7 +97,7 @@ function mountWebModules(app, keyword) {
 
       // If not found, search by packageName (for WASM plugins with different IDs)
       if (!plugin && app.plugins) {
-        plugin = app.plugins.find(p => p.packageName === moduleData.module)
+        plugin = app.plugins.find((p) => p.packageName === moduleData.module)
       }
 
       if (plugin) {
@@ -103,7 +109,8 @@ function mountWebModules(app, keyword) {
             return
           }
         } else {
-          const pluginOptions = app.getPluginOptions && app.getPluginOptions(plugin.id)
+          const pluginOptions =
+            app.getPluginOptions && app.getPluginOptions(plugin.id)
           if (pluginOptions && pluginOptions.enabled === false) {
             res.status(503).send(`Webapp ${moduleData.module} is disabled`)
             return

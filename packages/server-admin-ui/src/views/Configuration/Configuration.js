@@ -168,17 +168,19 @@ export default class PluginConfigurationList extends Component {
       }),
       fetch(`${window.serverRoutesPrefix}/settings`, {
         credentials: 'same-origin'
-      }).then((response) => {
-        if (response.status == 200) {
-          return response.json()
-        } else {
+      })
+        .then((response) => {
+          if (response.status == 200) {
+            return response.json()
+          } else {
+            // Settings fetch failed, assume WASM is enabled
+            return { interfaces: { wasm: true } }
+          }
+        })
+        .catch(() => {
           // Settings fetch failed, assume WASM is enabled
           return { interfaces: { wasm: true } }
-        }
-      }).catch(() => {
-        // Settings fetch failed, assume WASM is enabled
-        return { interfaces: { wasm: true } }
-      })
+        })
     ])
       .then(([plugins, settings]) => {
         // Check if WASM interface is enabled (default true if not specified)
@@ -323,10 +325,7 @@ export default class PluginConfigurationList extends Component {
                     if (wasmDisabledForPlugin) {
                       badgeClass = 'badge-danger'
                       badgeText = 'No WASM'
-                    } else if (
-                      plugin.data.enabled &&
-                      !configurationRequired
-                    ) {
+                    } else if (plugin.data.enabled && !configurationRequired) {
                       badgeClass = 'badge-success'
                       badgeText = 'Enabled'
                     }

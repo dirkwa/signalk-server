@@ -30,7 +30,7 @@ export interface Delta {
   }>
 }
 
-class WasmSubscriptionManager {
+export class WasmSubscriptionManager {
   // Active subscriptions by plugin ID
   private subscriptions: Map<string, DeltaSubscription[]> = new Map()
 

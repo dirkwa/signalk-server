@@ -23,7 +23,7 @@ WASM is now a proper Signal K interface that can be enabled/disabled via the adm
 ```json
 {
   "interfaces": {
-    "wasm": true,  // or false to disable
+    "wasm": true, // or false to disable
     "tcp": true,
     "ws": true
   }

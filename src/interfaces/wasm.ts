@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * WASM Interface
  *
@@ -8,6 +7,8 @@
  */
 
 import Debug from 'debug'
+import { initializeWasm, shutdownAllWasmPlugins } from '../wasm'
+
 const debug = Debug('signalk:interfaces:wasm')
 
 module.exports = (app: any) => {
@@ -22,12 +23,9 @@ module.exports = (app: any) => {
   api.start = () => {
     debug('Starting WASM interface')
     try {
-      const {
-        initializeWasmRuntime,
-        initializeSubscriptionManager
-      } = require('../wasm')
-      app.wasmRuntime = initializeWasmRuntime()
-      app.wasmSubscriptionManager = initializeSubscriptionManager()
+      const { wasmRuntime, wasmSubscriptionManager } = initializeWasm()
+      app.wasmRuntime = wasmRuntime
+      app.wasmSubscriptionManager = wasmSubscriptionManager
       debug('WASM runtime initialized successfully')
       return { enabled: true }
     } catch (error) {
@@ -39,7 +37,6 @@ module.exports = (app: any) => {
   api.stop = () => {
     debug('Stopping WASM interface')
     try {
-      const { shutdownAllWasmPlugins } = require('../wasm')
       shutdownAllWasmPlugins(app)
     } catch (error) {
       debug('WASM shutdown error:', error)

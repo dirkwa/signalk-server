@@ -61,7 +61,9 @@ export async function updateWasmPluginConfig(
   // Restart plugin if running AND still enabled
   // Don't restart if the plugin is being disabled
   if (plugin.status === 'running' && plugin.enabled) {
-    debug(`updateWasmPluginConfig: Plugin is running and enabled, restarting...`)
+    debug(
+      `updateWasmPluginConfig: Plugin is running and enabled, restarting...`
+    )
     await stopWasmPlugin(pluginId)
     debug(`updateWasmPluginConfig: Plugin stopped`)
     await startWasmPlugin(app, pluginId)

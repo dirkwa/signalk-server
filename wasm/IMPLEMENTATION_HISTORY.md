@@ -911,8 +911,8 @@ npm run build
 
 ### Phase 3A (Complete ✅)
 
-| Capability | Status | Description                                  |
-| ---------- | ------ | -------------------------------------------- |
+| Capability | Status | Description                                          |
+| ---------- | ------ | ---------------------------------------------------- |
 | Go/TinyGo  | ⏳     | Go WASM plugins (documented, not extensively tested) |
 
 ### Phase 4 (Future)

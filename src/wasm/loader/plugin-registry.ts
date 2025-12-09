@@ -50,7 +50,10 @@ let _updateWasmPluginConfig: (
 ) => Promise<void>
 let _unloadWasmPlugin: (app: any, pluginId: string) => Promise<void>
 let _stopWasmPlugin: (pluginId: string) => Promise<void>
-let _stopAndRemoveWasmPluginWebapp: (app: any, pluginId: string) => Promise<void>
+let _stopAndRemoveWasmPluginWebapp: (
+  app: any,
+  pluginId: string
+) => Promise<void>
 
 /**
  * Initialize lifecycle function references (called from index.ts to resolve circular dependencies)

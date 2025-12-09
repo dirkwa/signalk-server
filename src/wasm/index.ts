@@ -5,6 +5,26 @@
  * Exports all public APIs for WASM plugin management.
  */
 
+import { WasmRuntime, initializeWasmRuntime } from './wasm-runtime'
+import {
+  WasmSubscriptionManager,
+  initializeSubscriptionManager
+} from './wasm-subscriptions'
+
+/**
+ * Initialize the WASM subsystem
+ * Returns both runtime and subscription manager for assignment to app
+ */
+export function initializeWasm(): {
+  wasmRuntime: WasmRuntime
+  wasmSubscriptionManager: WasmSubscriptionManager
+} {
+  return {
+    wasmRuntime: initializeWasmRuntime(),
+    wasmSubscriptionManager: initializeSubscriptionManager()
+  }
+}
+
 // Runtime
 export {
   WasmRuntime,
