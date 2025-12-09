@@ -314,7 +314,7 @@ export async function handleChartUpload(
         error: 'No file uploaded',
         hint: 'Upload a .mbtiles file using multipart/form-data with field name "chart"',
         example:
-          'curl -F "chart=@myfile.mbtiles" http://localhost:3000/plugins/charts-provider-go/api/charts/upload'
+          'curl -F "chart=@myfile.mbtiles" http://localhost:3000/plugins/{plugin-id}/api/charts/upload'
       })
       return
     }

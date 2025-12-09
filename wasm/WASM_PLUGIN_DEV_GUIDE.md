@@ -1438,7 +1438,7 @@ TinyGo is a subset of Go. Notable limitations:
 
 See https://tinygo.org/docs/reference/lang-support/ for details.
 
-📁 **See [charts-provider-go example](../examples/wasm-plugins/charts-provider-go/) for a complete resource provider plugin**
+📁 **See [routes-waypoints-plugin example](../examples/wasm-plugins/routes-waypoints-plugin/) for a complete resource provider plugin**
 
 ---
 

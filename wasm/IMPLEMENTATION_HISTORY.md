@@ -399,10 +399,6 @@ if (response && response.status === 200) {
 - `@assemblyscript/loader` (^0.27.x) - AssemblyScript WASM loader
 - `as-fetch` (^2.1.4) - HTTP client with Asyncify support
 
-**Optional Dependencies:**
-
-- `better-sqlite3` (^11.0.0) - SQLite support for MBTiles chart serving
-
 **Node.js Requirement**: `>=18` (for native fetch API)
 
 ### 2. Asyncify Support for Network Requests ✅
@@ -769,42 +765,6 @@ if (hasNetworkCapability()) {
 cargo build --release --target wasm32-wasip1
 ```
 
-#### Charts Provider Go (MBTiles Resource Provider) ✅
-
-**Location**: [examples/wasm-plugins/charts-provider-go](../examples/wasm-plugins/charts-provider-go)
-**Version**: 0.1.0
-**Status**: Deployed and tested
-
-**Demonstrates:**
-
-- ✅ Go/TinyGo WASM plugin development (`wasip1` target)
-- ✅ Resource provider registration (`charts`)
-- ✅ Hybrid architecture (WASM + Node.js for SQLite)
-- ✅ MBTiles file handling and tile serving
-- ✅ HTML webapp for chart upload/management
-- ✅ Delta notifications for chart CRUD operations
-
-**Architecture:**
-
-- Go WASM: Resource provider registration, metadata, delta emission
-- Node.js: SQLite tile reading via `better-sqlite3`, file upload handling
-
-**Files:**
-
-- `main.go` - Go/TinyGo implementation
-- `go.mod` - Go module configuration
-- `package.json` - npm package with `resourceProvider` capability
-- `public/` - HTML webapp for chart management
-- `README.md` - Comprehensive documentation
-
-**Binary Size**: ~50 KB (optimized with `-gc=leaking -no-debug`)
-
-**Build Command:**
-
-```bash
-tinygo build -o plugin.wasm -target=wasip1 -gc=leaking -no-debug main.go
-```
-
 #### Routes & Waypoints Plugin (Standard Resource Types Example) ✅
 
 **Location**: [examples/wasm-plugins/routes-waypoints-plugin](../examples/wasm-plugins/routes-waypoints-plugin)
@@ -953,7 +913,7 @@ npm run build
 
 | Capability | Status | Description                                  |
 | ---------- | ------ | -------------------------------------------- |
-| Go/TinyGo  | ✅     | Go WASM plugins (charts-provider-go example) |
+| Go/TinyGo  | ⏳     | Go WASM plugins (documented, not extensively tested) |
 
 ### Phase 4 (Future)
 

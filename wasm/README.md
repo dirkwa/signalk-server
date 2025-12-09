@@ -193,7 +193,6 @@ await runtime.reloadPlugin('my-wasm-plugin')
 - ✅ Weather Providers - Integration with Weather API
 - ✅ Radar Providers - Integration with Radar API at `/signalk/v2/api/vessels/self/radars`
 - ✅ Delta Subscriptions - WASM plugins receive real-time deltas via `delta_handler`
-- ✅ MBTiles chart serving (better-sqlite3)
 
 **Phase 4 (Language Support) - ✅ PARTIAL**
 
