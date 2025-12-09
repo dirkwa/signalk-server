@@ -643,18 +643,24 @@ module.exports = function (
       interfaces[name] = enabled
 
       // Hot-plug support for WASM interface
+       
       if (name === 'wasm' && wasEnabled !== enabled) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const wasmInterface = (app as any).interfaces?.wasm
         if (enabled && !wasmInterface) {
           // Start WASM interface and re-discover WASM plugins
           debug('Hot-starting WASM interface and discovering plugins')
           try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const wasmModule = require('./interfaces/wasm')
             const _interface = wasmModule(app)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ;(app as any).interfaces = (app as any).interfaces || {}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ;(app as any).interfaces.wasm = _interface
             // Don't call interface.start() - discoverAndRegisterWasmPlugins handles runtime init
             // Discover and register all WASM plugins
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { discoverAndRegisterWasmPlugins } = require('./wasm')
             discoverAndRegisterWasmPlugins(app)
               .then(() => {
@@ -673,6 +679,7 @@ module.exports = function (
             if (wasmInterface.stop) {
               wasmInterface.stop()
             }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             delete (app as any).interfaces.wasm
           } catch (error) {
             debug('Failed to hot-stop WASM interface:', error)
