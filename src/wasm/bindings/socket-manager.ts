@@ -602,6 +602,7 @@ class TcpSocketManager {
       socket.on('close', () => {
         managed.connected = false
         managed.connecting = false
+        this.sockets.delete(socketId)
         debug(`[${pluginId}] TCP socket ${socketId} closed`)
       })
 
