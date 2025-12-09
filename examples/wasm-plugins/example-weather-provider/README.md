@@ -34,7 +34,7 @@ This is different from the **Resource Provider** pattern (used by `weather-plugi
 ## Building
 
 ```bash
-cd examples/wasm-plugins/weather-provider-plugin
+cd examples/wasm-plugins/example-weather-provider
 npm install
 npm run build
 ```
@@ -45,7 +45,7 @@ npm run build
 2. Copy or symlink to your Signal K server's node_modules:
    ```bash
    cd ~/.signalk/node_modules
-   ln -s /path/to/weather-provider-plugin @signalk/weather-provider-plugin-example
+   ln -s /path/to/example-weather-provider @signalk/example-weather-provider
    ```
 3. Restart Signal K server
 4. Configure with your OpenWeatherMap API key
@@ -186,6 +186,6 @@ export function weather_get_warnings(requestJson: string): string
 
 ## See Also
 
-- [weather-plugin](../weather-plugin/) - Resource Provider example
-- [WASM Plugin Dev Guide](../../../wasm/WASM_PLUGIN_DEV_GUIDE.md)
+- [example-weather-plugin](../example-weather-plugin/) - Resource Provider example
+- [WASM Developer Guide](../../../docs/develop/plugins/wasm/README.md)
 - [Signal K Weather API](https://signalk.org/specification/1.7.0/doc/weather.html)

@@ -235,4 +235,4 @@ See https://tinygo.org/docs/reference/lang-support/ for details.
 
 ## Additional Resources
 
-See the routes-waypoints-plugin example in `examples/wasm-plugins/routes-waypoints-plugin/` for a complete resource provider plugin.
+See the example-routes-waypoints plugin in `examples/wasm-plugins/example-routes-waypoints/` for a complete resource provider plugin.

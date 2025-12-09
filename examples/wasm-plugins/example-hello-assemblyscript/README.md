@@ -1,4 +1,4 @@
-# Hello AssemblyScript - Signal K WASM Plugin Example
+# Example Hello AssemblyScript - Signal K WASM Plugin
 
 A minimal example of a Signal K WASM plugin written in AssemblyScript.
 
@@ -35,9 +35,9 @@ This will create `plugin.wasm` in the current directory.
 
 ```bash
 # Copy to Signal K plugins directory
-mkdir -p ~/.signalk/node_modules/@signalk/hello-assemblyscript
-cp plugin.wasm ~/.signalk/node_modules/@signalk/hello-assemblyscript/
-cp package.json ~/.signalk/node_modules/@signalk/hello-assemblyscript/
+mkdir -p ~/.signalk/node_modules/@signalk/example-hello-assemblyscript
+cp plugin.wasm ~/.signalk/node_modules/@signalk/example-hello-assemblyscript/
+cp package.json ~/.signalk/node_modules/@signalk/example-hello-assemblyscript/
 ```
 
 ## Enabling
@@ -119,7 +119,7 @@ The plugin accepts the following configuration:
 ### Project Structure
 
 ```
-hello-assemblyscript/
+example-hello-assemblyscript/
 ├── assembly/
 │   └── index.ts          # Plugin implementation
 ├── package.json          # NPM package definition

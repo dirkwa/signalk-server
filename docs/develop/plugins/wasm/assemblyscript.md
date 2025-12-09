@@ -228,4 +228,4 @@ After installing your plugin, verify it appears in the Admin UI:
 ## Additional Resources
 
 - See the AssemblyScript SDK for full API reference
-- See the hello-assemblyscript example in `examples/wasm-plugins/hello-assemblyscript/` for complete working code
+- See the example-hello-assemblyscript example in `examples/wasm-plugins/example-hello-assemblyscript/` for complete working code

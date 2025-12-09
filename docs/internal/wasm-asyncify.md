@@ -284,7 +284,7 @@ export function plugin_start(config: Config): i32 {
 
 ### Example: Weather Plugin
 
-See `examples/wasm-plugins/weather-plugin/assembly/index.ts` for a complete example:
+See `examples/wasm-plugins/example-weather-plugin/assembly/index.ts` for a complete example:
 
 ```typescript
 private fetchWeatherData(): void {

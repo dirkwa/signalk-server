@@ -72,7 +72,7 @@ Example response:
 ### 1. Build the Plugin
 
 ```bash
-cd examples/wasm-plugins/weather-plugin
+cd examples/wasm-plugins/example-weather-plugin
 npm install
 npm run build
 ```
@@ -145,7 +145,7 @@ The SignalK WASM runtime handles all state transitions automatically!
 ## Code Structure
 
 ```
-weather-plugin/
+example-weather-plugin/
 ├── assembly/
 │   └── index.ts              # Main plugin implementation
 ├── build/
@@ -666,7 +666,6 @@ The plugin **cannot** make HTTP requests unless:
 ### Documentation
 
 - [SignalK WASM Plugin Dev Guide](../../../WASM_PLUGIN_DEV_GUIDE.md) - Complete guide to WASM plugin development
-- [Asyncify Implementation Details](../../../.claude/ASYNCIFY_IMPLEMENTATION.md) - Deep dive into Asyncify support
 - [AssemblyScript Documentation](https://www.assemblyscript.org/) - Language reference
 - [as-fetch Library](https://github.com/rockmor/as-fetch) - HTTP client for AssemblyScript
 - [OpenWeatherMap API](https://openweathermap.org/api) - Weather API documentation

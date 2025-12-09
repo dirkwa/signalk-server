@@ -49,7 +49,7 @@ The plugin comes with sample Helsinki-area navigation data:
 ## Building
 
 ```bash
-cd examples/wasm-plugins/routes-waypoints-plugin
+cd examples/wasm-plugins/example-routes-waypoints
 npm install
 npm run build
 ```
@@ -60,7 +60,7 @@ npm run build
 2. Copy or symlink to your Signal K server's node_modules:
    ```bash
    cd ~/.signalk/node_modules
-   ln -s /path/to/routes-waypoints-plugin @signalk/routes-waypoints-plugin-example
+   ln -s /path/to/example-routes-waypoints @signalk/example-routes-waypoints
    ```
 3. Restart Signal K server
 4. Enable the plugin in the Admin UI
@@ -213,7 +213,7 @@ All handlers receive a JSON request with `resourceType` indicating which type is
 
 ## See Also
 
-- [weather-plugin](../weather-plugin/) - Resource Provider with custom type
-- [weather-provider-plugin](../weather-provider-plugin/) - Weather Provider API example
-- [WASM Plugin Dev Guide](../../../wasm/WASM_PLUGIN_DEV_GUIDE.md)
+- [example-weather-plugin](../example-weather-plugin/) - Resource Provider with custom type
+- [example-weather-provider](../example-weather-provider/) - Weather Provider API example
+- [WASM Developer Guide](../../../docs/develop/plugins/wasm/README.md)
 - [Signal K Resources API](https://signalk.org/specification/1.7.0/doc/resources.html)
