@@ -2,60 +2,22 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 import { expect } from 'chai'
 import fs from 'fs'
-import net from 'net'
 import path from 'path'
 import { rimraf } from 'rimraf'
 import { SERVERSTATEDIRNAME } from '../src/serverstate/store'
+import { freeport } from './ts-servertestutilities'
 // Import from dist to use the same module instance as the Server
 // This is critical because wasmPlugins is a singleton Map
 import { shutdownAllWasmPlugins } from '../dist/wasm'
 
-// Test configuration directory for WASM regression tests
+// Test configuration directory for WASM tests
 const wasmTestConfigDirectory = () =>
   path.join(__dirname, 'wasm-regression-config')
-
-// Get a free port for the test server
-function freeport(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer()
-    let port = 0
-
-    server.on('listening', () => {
-      const address = server.address()
-
-      if (address == null) {
-        return reject(new Error('Server was not listening'))
-      }
-
-      if (typeof address === 'string') {
-        return reject(new Error('Server was Unix Socket'))
-      }
-
-      port = address.port
-      server.close()
-    })
-
-    server.once('close', () => resolve(port))
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1')
-  })
-}
-
-// Create directory if it doesn't exist
-function mkDirSync(dirPath: string) {
-  try {
-    fs.mkdirSync(dirPath, { recursive: true })
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
-      throw err
-    }
-  }
-}
 
 // Write plugin config file
 function writePluginConfig(pluginId: string, config: object) {
   const configDir = path.join(wasmTestConfigDirectory(), 'plugin-config-data')
-  mkDirSync(configDir)
+  fs.mkdirSync(configDir, { recursive: true })
   fs.writeFileSync(
     path.join(configDir, `${pluginId}.json`),
     JSON.stringify(config)
@@ -63,13 +25,12 @@ function writePluginConfig(pluginId: string, config: object) {
 }
 
 // Clean up config directory before tests
-const emptyConfigDirectory = async () => {
-  await Promise.all(
+const emptyConfigDirectory = () =>
+  Promise.all(
     [SERVERSTATEDIRNAME, 'resources', 'plugin-config-data']
       .map((subDir) => path.join(wasmTestConfigDirectory(), subDir))
       .map((dir) => rimraf(dir))
   )
-}
 
 // Setup plugin configs
 function setupPluginConfigs() {
@@ -106,7 +67,7 @@ async function waitForPlugin(
   return false
 }
 
-// Start server with WASM regression test config
+// Start server with WASM test config
 async function startWasmTestServer(port: number) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Server = require('../dist')
@@ -149,7 +110,7 @@ async function startWasmTestServer(port: number) {
 // To run these tests, you need to:
 // 1. Copy testplugin from plugin-test-config/node_modules to wasm-regression-config/node_modules
 // 2. Provide a valid anchor-watch-rust WASM plugin binary
-describe.skip('WASM Plugin Regression Tests', function () {
+describe.skip('WASM Plugin Tests', function () {
   // WASM loading can be slow
   this.timeout(60000)
 
