@@ -187,6 +187,28 @@ export interface RadarProviderMethods {
   ) => Promise<boolean>
 
   /**
+   * Set radar sea clutter.
+   * @param radarId The radar ID
+   * @param sea Sea clutter settings
+   * @returns true on success
+   */
+  setSea?: (
+    radarId: string,
+    sea: { auto: boolean; value?: number }
+  ) => Promise<boolean>
+
+  /**
+   * Set radar rain clutter.
+   * @param radarId The radar ID
+   * @param rain Rain clutter settings
+   * @returns true on success
+   */
+  setRain?: (
+    radarId: string,
+    rain: { auto: boolean; value?: number }
+  ) => Promise<boolean>
+
+  /**
    * Set multiple radar controls at once.
    * @param radarId The radar ID
    * @param controls Partial controls to update

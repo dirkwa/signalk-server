@@ -480,6 +480,112 @@ export class RadarApi {
       }
     )
 
+    // PUT /radars/:id/sea - Set radar sea clutter
+    this.app.put(
+      `${RADAR_API_PATH}/:id/sea`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        if (!this.updateAllowed(req)) {
+          res.status(403).json(Responses.unauthorised)
+          return
+        }
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json(Responses.notFound)
+            return
+          }
+          if (!provider.setSea) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support setSea'
+            })
+            return
+          }
+          const sea: { auto: boolean; value?: number } =
+            req.body.value ?? req.body
+          if (typeof sea.auto !== 'boolean') {
+            res.status(400).json({
+              statusCode: 400,
+              state: 'FAILED',
+              message: 'Invalid sea value. Must have "auto" boolean property'
+            })
+            return
+          }
+          const success = await provider.setSea(req.params.id, sea)
+          if (success) {
+            res.status(200).json(Responses.ok)
+          } else {
+            res.status(400).json({
+              statusCode: 400,
+              state: 'FAILED',
+              message: 'Failed to set radar sea clutter'
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // PUT /radars/:id/rain - Set radar rain clutter
+    this.app.put(
+      `${RADAR_API_PATH}/:id/rain`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        if (!this.updateAllowed(req)) {
+          res.status(403).json(Responses.unauthorised)
+          return
+        }
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json(Responses.notFound)
+            return
+          }
+          if (!provider.setRain) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support setRain'
+            })
+            return
+          }
+          const rain: { auto: boolean; value?: number } =
+            req.body.value ?? req.body
+          if (typeof rain.auto !== 'boolean') {
+            res.status(400).json({
+              statusCode: 400,
+              state: 'FAILED',
+              message: 'Invalid rain value. Must have "auto" boolean property'
+            })
+            return
+          }
+          const success = await provider.setRain(req.params.id, rain)
+          if (success) {
+            res.status(200).json(Responses.ok)
+          } else {
+            res.status(400).json({
+              statusCode: 400,
+              state: 'FAILED',
+              message: 'Failed to set radar rain clutter'
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
     // Note: WebSocket stream endpoint (/radars/:id/stream) would require
     // additional WebSocket handling infrastructure. For now, providers
     // should expose their own streamUrl for direct client connection.

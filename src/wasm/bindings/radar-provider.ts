@@ -30,6 +30,14 @@ export async function callWasmRadarHandler(
     const asLoader = pluginInstance.asLoader
     const rawExports = pluginInstance.instance?.exports as any
 
+    // Debug: list available exports when handler is not found
+    if (rawExports) {
+      const exportNames = Object.keys(rawExports).filter(k => k.startsWith('radar_'))
+      debug(`[${pluginInstance.pluginId}] Looking for ${handlerName}, available radar_ exports: ${exportNames.join(', ')}`)
+    } else {
+      debug(`[${pluginInstance.pluginId}] No rawExports available`)
+    }
+
     if (asLoader && typeof asLoader.exports[handlerName] === 'function') {
       // AssemblyScript: allocate string in WASM memory, pass pointer, get string pointer back
       // Need to handle Asyncify for handlers that call fetchSync
@@ -407,6 +415,76 @@ export function createRadarProviderBinding(
               } catch (e) {
                 debug(
                   `[${pluginId}] Failed to parse radar_set_gain response: ${e}`
+                )
+                return false
+              }
+            }
+            return false
+          },
+
+          /**
+           * Set radar sea clutter
+           * @param radarId The radar ID
+           * @param sea Sea clutter settings
+           */
+          setSea: async (
+            radarId: string,
+            sea: { auto: boolean; value?: number }
+          ): Promise<boolean> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return false
+            }
+
+            const requestJson = JSON.stringify({ radarId, sea })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_set_sea',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                return JSON.parse(result) === true
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_set_sea response: ${e}`
+                )
+                return false
+              }
+            }
+            return false
+          },
+
+          /**
+           * Set radar rain clutter
+           * @param radarId The radar ID
+           * @param rain Rain clutter settings
+           */
+          setRain: async (
+            radarId: string,
+            rain: { auto: boolean; value?: number }
+          ): Promise<boolean> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return false
+            }
+
+            const requestJson = JSON.stringify({ radarId, rain })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_set_rain',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                return JSON.parse(result) === true
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_set_rain response: ${e}`
                 )
                 return false
               }
