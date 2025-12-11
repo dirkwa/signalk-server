@@ -203,6 +203,13 @@ export async function loadStandardPlugin(
     wasi.start(instance)
   } else if (isRustLibraryPlugin) {
     debug(`Initialized Rust library plugin: ${pluginId}`)
+    // Initialize WASI runtime without calling _start (for library plugins)
+    // This sets up fd_write and other syscalls properly
+    if (typeof wasi.initialize === 'function') {
+      debug(`Calling wasi.initialize() for Rust library plugin`)
+      wasi.initialize(instance)
+    }
+    // Also call _initialize if present (Rust static constructors)
     if (rawExports._initialize) {
       debug(`Calling _initialize for Rust library plugin`)
       rawExports._initialize()

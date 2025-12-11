@@ -165,6 +165,13 @@ export class RadarApi {
   private initApiEndpoints() {
     debug(`** Initialise ${RADAR_API_PATH} endpoints. **`)
 
+    // Disable caching for all radar API endpoints
+    // Radar data can change at any time (model identification, status, controls)
+    this.app.use(`${RADAR_API_PATH}`, (_req: Request, res: Response, next) => {
+      res.setHeader('Cache-Control', 'no-cache')
+      next()
+    })
+
     // GET /radars - List all radars
     this.app.get(`${RADAR_API_PATH}`, async (req: Request, res: Response) => {
       debug(`** ${req.method} ${req.path}`)
@@ -451,7 +458,7 @@ export class RadarApi {
             return
           }
           const gain: { auto: boolean; value?: number } =
-            req.body.value ?? req.body
+            typeof req.body.value === 'object' ? req.body.value : req.body
           if (typeof gain.auto !== 'boolean') {
             res.status(400).json({
               statusCode: 400,
@@ -504,7 +511,7 @@ export class RadarApi {
             return
           }
           const sea: { auto: boolean; value?: number } =
-            req.body.value ?? req.body
+            typeof req.body.value === 'object' ? req.body.value : req.body
           if (typeof sea.auto !== 'boolean') {
             res.status(400).json({
               statusCode: 400,
@@ -557,7 +564,7 @@ export class RadarApi {
             return
           }
           const rain: { auto: boolean; value?: number } =
-            req.body.value ?? req.body
+            typeof req.body.value === 'object' ? req.body.value : req.body
           if (typeof rain.auto !== 'boolean') {
             res.status(400).json({
               statusCode: 400,
@@ -574,6 +581,228 @@ export class RadarApi {
               statusCode: 400,
               state: 'FAILED',
               message: 'Failed to set radar rain clutter'
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // ============================================
+    // v5 API Endpoints
+    // ============================================
+
+    // GET /radars/:id/capabilities - Get radar capability manifest (cacheable)
+    this.app.get(
+      `${RADAR_API_PATH}/:id/capabilities`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.getCapabilities) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support getCapabilities'
+            })
+            return
+          }
+          const capabilities = await provider.getCapabilities(req.params.id)
+          if (capabilities) {
+            res.status(200).json(capabilities)
+          } else {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // GET /radars/:id/state - Get current radar state (v5 format)
+    this.app.get(
+      `${RADAR_API_PATH}/:id/state`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.getState) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support getState'
+            })
+            return
+          }
+          const state = await provider.getState(req.params.id)
+          if (state) {
+            res.status(200).json(state)
+          } else {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // GET /radars/:id/controls - List all controls with current values
+    this.app.get(
+      `${RADAR_API_PATH}/:id/controls`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.getState) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support getState'
+            })
+            return
+          }
+          const state = await provider.getState(req.params.id)
+          if (state && state.controls) {
+            res.status(200).json(state.controls)
+          } else {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // GET /radars/:id/controls/:controlId - Get single control value
+    this.app.get(
+      `${RADAR_API_PATH}/:id/controls/:controlId`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.getControl) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support getControl'
+            })
+            return
+          }
+          const value = await provider.getControl(
+            req.params.id,
+            req.params.controlId
+          )
+          if (value !== null && value !== undefined) {
+            res.status(200).json({ value })
+          } else {
+            res.status(404).json({
+              error: 'Control not found',
+              controlId: req.params.controlId
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // PUT /radars/:id/controls/:controlId - Set single control value
+    this.app.put(
+      `${RADAR_API_PATH}/:id/controls/:controlId`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        if (!this.updateAllowed(req)) {
+          res.status(403).json(Responses.unauthorised)
+          return
+        }
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.setControl) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support setControl'
+            })
+            return
+          }
+          const value = req.body.value !== undefined ? req.body.value : req.body
+          const result = await provider.setControl(
+            req.params.id,
+            req.params.controlId,
+            value
+          )
+          if (result.success) {
+            res.status(200).json({ success: true })
+          } else {
+            res.status(400).json({
+              success: false,
+              error: result.error || 'Failed to set control',
+              controlId: req.params.controlId
             })
           }
         } catch (err: any) {

@@ -19,6 +19,8 @@ import {
   createBinaryDataReader
 } from './binary-stream'
 import { socketManager, tcpSocketManager } from './socket-manager'
+import * as fs from 'fs'
+import * as path from 'path'
 
 const debug = Debug('signalk:wasm:bindings')
 
@@ -32,6 +34,8 @@ export interface EnvImportsOptions {
   memoryRef: { current: WebAssembly.Memory | null }
   rawExports: { current: any }
   asLoaderInstance: { current: any }
+  configPath?: string
+  packageName?: string
 }
 
 /**
@@ -62,7 +66,9 @@ export function createEnvImports(
     app,
     memoryRef,
     rawExports,
-    asLoaderInstance
+    asLoaderInstance,
+    configPath,
+    packageName: _packageName
   } = options
 
   const readUtf8String = createUtf8Reader(memoryRef)
@@ -208,6 +214,118 @@ export function createEnvImports(
         }
       } catch (error) {
         debug(`Plugin handle message error: ${error}`)
+      }
+    },
+
+    // ==========================================================================
+    // Plugin Configuration API (Application Data Storage)
+    // ==========================================================================
+
+    /**
+     * Read plugin configuration from Application Data Storage
+     * Uses: ~/.signalk/applicationData/global/{pluginId}/1.0.0.json
+     *
+     * @param bufPtr - Buffer to write config JSON into
+     * @param bufMaxLen - Maximum buffer size
+     * @returns Number of bytes written, or 0 if no config / error
+     */
+    sk_read_config: (bufPtr: number, bufMaxLen: number): number => {
+      try {
+        const cfgPath = configPath || app?.config?.configPath
+        if (!cfgPath) {
+          debug(`[${pluginId}] sk_read_config: configPath not available`)
+          return 0
+        }
+
+        // Application Data Storage path: applicationData/global/{pluginId}/1.0.0.json
+        const appDataDir = path.join(
+          cfgPath,
+          'applicationData',
+          'global',
+          pluginId
+        )
+        const appDataFile = path.join(appDataDir, '1.0.0.json')
+
+        let configJson = '{}'
+        if (fs.existsSync(appDataFile)) {
+          try {
+            configJson = fs.readFileSync(appDataFile, 'utf8')
+          } catch (e) {
+            debug(`[${pluginId}] Could not read applicationData: ${e}`)
+          }
+        }
+
+        debug(
+          `[${pluginId}] Reading config from ${appDataFile}: ${configJson.substring(0, 100)}...`
+        )
+
+        const encoder = new TextEncoder()
+        const configBytes = encoder.encode(configJson)
+
+        if (configBytes.length > bufMaxLen) {
+          debug(
+            `[${pluginId}] Config buffer too small: need ${configBytes.length}, have ${bufMaxLen}`
+          )
+          return 0
+        }
+
+        if (!memoryRef.current) return 0
+        const memView = new Uint8Array(memoryRef.current.buffer)
+        memView.set(configBytes, bufPtr)
+
+        return configBytes.length
+      } catch (error) {
+        debug(`[${pluginId}] sk_read_config error: ${error}`)
+        return 0
+      }
+    },
+
+    /**
+     * Save plugin configuration to Application Data Storage
+     * Uses: ~/.signalk/applicationData/global/{pluginId}/1.0.0.json
+     *
+     * @param configPtr - Pointer to config JSON string
+     * @param configLen - Length of config JSON
+     * @returns 0 on success, negative on error
+     */
+    sk_save_config: (configPtr: number, configLen: number): number => {
+      try {
+        const cfgPath = configPath || app?.config?.configPath
+        if (!cfgPath) {
+          debug(`[${pluginId}] sk_save_config: configPath not available`)
+          return -1
+        }
+
+        const configJson = readUtf8String(configPtr, configLen)
+        debug(`[${pluginId}] Saving config: ${configJson.substring(0, 100)}...`)
+
+        // Validate JSON
+        JSON.parse(configJson)
+
+        // Application Data Storage path: applicationData/global/{pluginId}/1.0.0.json
+        const appDataBase = path.join(cfgPath, 'applicationData')
+        const globalDir = path.join(appDataBase, 'global')
+        const appDataDir = path.join(globalDir, pluginId)
+        const appDataFile = path.join(appDataDir, '1.0.0.json')
+
+        // Create directories if needed
+        if (!fs.existsSync(appDataBase)) {
+          fs.mkdirSync(appDataBase, { recursive: true })
+        }
+        if (!fs.existsSync(globalDir)) {
+          fs.mkdirSync(globalDir, { recursive: true })
+        }
+        if (!fs.existsSync(appDataDir)) {
+          fs.mkdirSync(appDataDir, { recursive: true })
+        }
+
+        fs.writeFileSync(appDataFile, configJson, 'utf8')
+        debug(`[${pluginId}] Config saved to ${appDataFile}`)
+
+        return 0
+      } catch (error) {
+        debug(`[${pluginId}] sk_save_config error: ${error}`)
+        return -1
       }
     },
 

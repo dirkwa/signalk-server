@@ -28,12 +28,19 @@ export async function callWasmRadarHandler(
 ): Promise<string | null> {
   try {
     const asLoader = pluginInstance.asLoader
+    // Use the wrapped exports which have proper WASI initialization
+    // Fall back to raw instance exports if wrapped exports don't have the handler
+    const _wrappedExports = pluginInstance.exports as any
     const rawExports = pluginInstance.instance?.exports as any
 
     // Debug: list available exports when handler is not found
     if (rawExports) {
-      const exportNames = Object.keys(rawExports).filter(k => k.startsWith('radar_'))
-      debug(`[${pluginInstance.pluginId}] Looking for ${handlerName}, available radar_ exports: ${exportNames.join(', ')}`)
+      const exportNames = Object.keys(rawExports).filter((k) =>
+        k.startsWith('radar_')
+      )
+      debug(
+        `[${pluginInstance.pluginId}] Looking for ${handlerName}, available radar_ exports: ${exportNames.join(', ')}`
+      )
     } else {
       debug(`[${pluginInstance.pluginId}] No rawExports available`)
     }
@@ -525,6 +532,163 @@ export function createRadarProviderBinding(
               }
             }
             return false
+          },
+
+          // ============================================
+          // v5 API Methods
+          // ============================================
+
+          /**
+           * Get capability manifest for a radar (v5)
+           * @param radarId The radar ID
+           */
+          getCapabilities: async (radarId: string): Promise<any | null> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return null
+            }
+
+            const requestJson = JSON.stringify({ radarId })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_get_capabilities',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                const parsed = JSON.parse(result)
+                if (parsed.error) {
+                  debug(
+                    `[${pluginId}] radar_get_capabilities error: ${parsed.error}`
+                  )
+                  return null
+                }
+                return parsed
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_get_capabilities response: ${e}`
+                )
+                return null
+              }
+            }
+            return null
+          },
+
+          /**
+           * Get current state in v5 format
+           * @param radarId The radar ID
+           */
+          getState: async (radarId: string): Promise<any | null> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return null
+            }
+
+            const requestJson = JSON.stringify({ radarId })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_get_state',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                const parsed = JSON.parse(result)
+                if (parsed.error) {
+                  debug(`[${pluginId}] radar_get_state error: ${parsed.error}`)
+                  return null
+                }
+                return parsed
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_get_state response: ${e}`
+                )
+                return null
+              }
+            }
+            return null
+          },
+
+          /**
+           * Get a single control value (v5)
+           * @param radarId The radar ID
+           * @param controlId The control ID
+           */
+          getControl: async (
+            radarId: string,
+            controlId: string
+          ): Promise<any | null> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return null
+            }
+
+            const requestJson = JSON.stringify({ radarId, controlId })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_get_control',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                const parsed = JSON.parse(result)
+                if (parsed.error) {
+                  debug(
+                    `[${pluginId}] radar_get_control error: ${parsed.error}`
+                  )
+                  return null
+                }
+                return parsed
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_get_control response: ${e}`
+                )
+                return null
+              }
+            }
+            return null
+          },
+
+          /**
+           * Set a single control value (v5)
+           * @param radarId The radar ID
+           * @param controlId The control ID
+           * @param value The value to set
+           */
+          setControl: async (
+            radarId: string,
+            controlId: string,
+            value: any
+          ): Promise<{ success: boolean; error?: string }> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return { success: false, error: 'Provider not ready' }
+            }
+
+            const requestJson = JSON.stringify({ radarId, controlId, value })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_set_control',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                return JSON.parse(result)
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_set_control response: ${e}`
+                )
+                return { success: false, error: 'Invalid response' }
+              }
+            }
+            return { success: false, error: 'No response' }
           }
         }
       }

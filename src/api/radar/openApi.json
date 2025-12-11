@@ -273,10 +273,6 @@
             "description": "Current range in meters"
           },
           "controls": { "$ref": "#/components/schemas/RadarControls" },
-          "legend": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/LegendEntry" }
-          },
           "streamUrl": {
             "type": "string",
             "description": "WebSocket URL for spoke stream. If absent, use /radars/{id}/stream"
@@ -311,16 +307,6 @@
           "value": { "type": "number" }
         },
         "required": ["auto", "value"]
-      },
-      "LegendEntry": {
-        "type": "object",
-        "properties": {
-          "color": { "type": "string" },
-          "label": { "type": "string" },
-          "minValue": { "type": "number" },
-          "maxValue": { "type": "number" }
-        },
-        "required": ["color", "label"]
       }
     }
   }

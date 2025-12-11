@@ -43,6 +43,200 @@ export interface LegendEntry {
 }
 
 // ============================================================================
+// v5 API Types
+// ============================================================================
+
+/**
+ * Hardware characteristics of a radar.
+ *
+ * @category Radar API
+ */
+export interface RadarCharacteristics {
+  /** Maximum detection range in meters */
+  maxRange: number
+  /** Minimum detection range in meters */
+  minRange: number
+  /** Supported discrete range values in meters */
+  supportedRanges: number[]
+  /** Number of spokes per full rotation */
+  spokesPerRevolution: number
+  /** Maximum spoke length in samples */
+  maxSpokeLength: number
+  /** Whether the radar supports Doppler/motion detection */
+  hasDoppler: boolean
+  /** Whether the radar supports dual-range mode */
+  hasDualRange: boolean
+  /** Maximum range for dual-range mode (if supported) */
+  maxDualRange?: number
+  /** Number of no-transmit zones supported */
+  noTransmitZoneCount: number
+}
+
+/**
+ * Control definition describing a radar control.
+ *
+ * @category Radar API
+ */
+export interface ControlDefinitionV5 {
+  /** Semantic control ID (e.g., "gain", "beamSharpening") */
+  id: string
+  /** Human-readable name */
+  name: string
+  /** Description for tooltips */
+  description: string
+  /** Category: base controls all radars have, extended are model-specific */
+  category: 'base' | 'extended'
+  /** Control value type */
+  type: 'boolean' | 'number' | 'enum' | 'compound'
+
+  /** For type: "number" - value range constraints */
+  range?: {
+    min: number
+    max: number
+    step?: number
+    unit?: string
+  }
+
+  /** For type: "enum" - allowed values */
+  values?: Array<{
+    value: string | number
+    label: string
+    description?: string
+  }>
+
+  /** For type: "compound" - property definitions */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  properties?: Record<string, any>
+
+  /** Supported modes (auto/manual) */
+  modes?: ('auto' | 'manual')[]
+  /** Default mode */
+  defaultMode?: 'auto' | 'manual'
+
+  /** Whether this control is read-only */
+  readOnly?: boolean
+  /** Default value */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  default?: any
+}
+
+/**
+ * Control constraint describing dependencies between controls.
+ *
+ * @category Radar API
+ */
+export interface ControlConstraint {
+  /** Control ID this constraint applies to */
+  controlId: string
+
+  /** Condition that triggers the constraint */
+  condition: {
+    type: 'disabled_when' | 'read_only_when' | 'restricted_when'
+    dependsOn: string
+    operator: '==' | '!=' | '>' | '<' | '>=' | '<='
+    value: string | number | boolean
+  }
+
+  /** Effect when condition is true */
+  effect: {
+    disabled?: boolean
+    readOnly?: boolean
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    allowedValues?: any[]
+    reason?: string
+  }
+}
+
+/**
+ * Capability manifest describing what a radar can do.
+ * This is cacheable - capabilities rarely change at runtime.
+ *
+ * @category Radar API
+ *
+ * @example
+ * ```json
+ * {
+ *   "id": "1",
+ *   "make": "Furuno",
+ *   "model": "DRS4D-NXT",
+ *   "characteristics": {
+ *     "maxRange": 88896,
+ *     "minRange": 116,
+ *     "supportedRanges": [116, 231, 463, ...],
+ *     "hasDoppler": true
+ *   },
+ *   "controls": [
+ *     {"id": "power", "type": "enum", ...},
+ *     {"id": "gain", "type": "compound", ...}
+ *   ]
+ * }
+ * ```
+ */
+export interface CapabilityManifest {
+  /** Radar ID */
+  id: string
+  /** Manufacturer name */
+  make: string
+  /** Model name */
+  model: string
+
+  /** Model family (optional) */
+  modelFamily?: string
+  /** Serial number (optional) */
+  serialNumber?: string
+  /** Firmware version (optional) */
+  firmwareVersion?: string
+
+  /** Hardware characteristics */
+  characteristics: RadarCharacteristics
+
+  /** Available controls with their schemas */
+  controls: ControlDefinitionV5[]
+
+  /** Control dependencies/constraints */
+  constraints?: ControlConstraint[]
+}
+
+/**
+ * Current radar state in v5 format.
+ * Contains status and all current control values.
+ *
+ * @category Radar API
+ *
+ * @example
+ * ```json
+ * {
+ *   "id": "1",
+ *   "timestamp": "2025-01-15T10:30:00Z",
+ *   "status": "transmit",
+ *   "controls": {
+ *     "power": "transmit",
+ *     "range": 5556,
+ *     "gain": {"mode": "auto", "value": 65}
+ *   }
+ * }
+ * ```
+ */
+export interface RadarStateV5 {
+  /** Radar ID */
+  id: string
+  /** ISO 8601 timestamp of when state was captured */
+  timestamp: string
+  /** Current operational status */
+  status: RadarStatus
+
+  /** Current control values keyed by control ID */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  controls: Record<string, any>
+
+  /** Controls that are currently disabled and why */
+  disabledControls?: Array<{
+    controlId: string
+    reason: string
+  }>
+}
+
+// ============================================================================
 // Radar Info (Response Object)
 // ============================================================================
 
@@ -226,6 +420,49 @@ export interface RadarProviderMethods {
    * @param ws WebSocket connection to send spoke data to
    */
   handleStreamConnection?: (radarId: string, ws: WebSocket) => void
+
+  // ============================================
+  // v5 API Methods
+  // ============================================
+
+  /**
+   * Get capability manifest for a radar (v5).
+   * Returns detailed capabilities including supported controls, ranges, features.
+   * @param radarId The radar ID
+   * @returns CapabilityManifest or null if not found
+   */
+  getCapabilities?: (radarId: string) => Promise<CapabilityManifest | null>
+
+  /**
+   * Get current radar state in v5 format.
+   * Returns status and all current control values.
+   * @param radarId The radar ID
+   * @returns RadarState or null if not found
+   */
+  getState?: (radarId: string) => Promise<RadarStateV5 | null>
+
+  /**
+   * Get a single control value (v5).
+   * @param radarId The radar ID
+   * @param controlId The semantic control ID (e.g., "gain", "beamSharpening")
+   * @returns Control value or null if not found
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getControl?: (radarId: string, controlId: string) => Promise<any | null>
+
+  /**
+   * Set a single control value (v5).
+   * @param radarId The radar ID
+   * @param controlId The semantic control ID (e.g., "gain", "beamSharpening")
+   * @param value The value to set
+   * @returns Result with success flag and optional error
+   */
+  setControl?: (
+    radarId: string,
+    controlId: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    value: any
+  ) => Promise<{ success: boolean; error?: string }>
 }
 
 // ============================================================================
