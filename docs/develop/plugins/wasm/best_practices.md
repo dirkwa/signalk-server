@@ -183,7 +183,8 @@ Check if your plugin:
 - ✅ Uses data model APIs
 - ✅ Registers REST endpoints
 - ❌ Uses serial ports (planned but not there yet)
-- ✅ Makes network requests
+- ✅ Makes HTTP requests (via as-fetch in AssemblyScript)
+- ✅ Uses UDP/TCP sockets (rawSockets capability)
 
 ### 2. Port Logic to Rust
 
@@ -227,8 +228,8 @@ fn first_run_migration() {
 
 The following example plugins are available in the repository:
 
-- [example-hello-assemblyscript](../../../../examples/wasm-plugins/example-hello-assemblyscript/) - Minimal AssemblyScript plugin that emits a delta on start
-- [example-anchor-watch-rust](../../../../examples/wasm-plugins/example-anchor-watch-rust/) - Anchor watch plugin in Rust
-- [example-routes-waypoints](../../../../examples/wasm-plugins/example-routes-waypoints/) - Resource provider for routes and waypoints
-- [example-weather-provider](../../../../examples/wasm-plugins/example-weather-provider/) - Weather API provider implementation
-- [example-weather-plugin](../../../../examples/wasm-plugins/example-weather-plugin/) - Weather data plugin
+- [example-hello-assemblyscript](../../../../examples/wasm-plugins/example-hello-assemblyscript/README.md) - Minimal AssemblyScript plugin that emits a delta on start
+- [example-anchor-watch-rust](../../../../examples/wasm-plugins/example-anchor-watch-rust/README.md) - Anchor watch plugin in Rust
+- [example-routes-waypoints](../../../../examples/wasm-plugins/example-routes-waypoints/README.md) - Resource provider for routes and waypoints
+- [example-weather-provider](../../../../examples/wasm-plugins/example-weather-provider/README.md) - Weather API provider implementation
+- [example-weather-plugin](../../../../examples/wasm-plugins/example-weather-plugin/README.md) - Weather data plugin

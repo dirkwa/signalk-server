@@ -227,5 +227,5 @@ After installing your plugin, verify it appears in the Admin UI:
 
 ## Additional Resources
 
-- See the [AssemblyScript SDK](../../../../packages/assemblyscript-plugin-sdk/assembly/) for full API reference
-- See the [example-hello-assemblyscript](../../../../examples/wasm-plugins/example-hello-assemblyscript/) example for complete working code
+- See the [AssemblyScript SDK](../../../../packages/assemblyscript-plugin-sdk/README.md) for full API reference
+- See the [example-hello-assemblyscript](../../../../examples/wasm-plugins/example-hello-assemblyscript/README.md) example for complete working code
