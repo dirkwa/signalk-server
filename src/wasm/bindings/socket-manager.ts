@@ -526,7 +526,6 @@ interface ManagedTcpSocket {
  * Key differences from UDP:
  * - Connection-oriented (connect before send)
  * - Line-buffered receive (splits on \r\n or \n)
- * - Persistent connections with reconnection support
  */
 class TcpSocketManager {
   private sockets: Map<number, ManagedTcpSocket> = new Map()
