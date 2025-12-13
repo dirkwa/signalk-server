@@ -689,6 +689,197 @@ export function createRadarProviderBinding(
               }
             }
             return { success: false, error: 'No response' }
+          },
+
+          // ============================================
+          // v6 ARPA Target Methods
+          // ============================================
+
+          /**
+           * Get all tracked ARPA targets (v6)
+           * @param radarId The radar ID
+           */
+          getTargets: async (radarId: string): Promise<any | null> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return null
+            }
+
+            const requestJson = JSON.stringify({ radarId })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_get_targets',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                const parsed = JSON.parse(result)
+                if (parsed.error) {
+                  debug(
+                    `[${pluginId}] radar_get_targets error: ${parsed.error}`
+                  )
+                  return null
+                }
+                return parsed
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_get_targets response: ${e}`
+                )
+                return null
+              }
+            }
+            return null
+          },
+
+          /**
+           * Manually acquire a target at the specified position (v6)
+           * @param radarId The radar ID
+           * @param bearing Bearing in degrees
+           * @param distance Distance in meters
+           */
+          acquireTarget: async (
+            radarId: string,
+            bearing: number,
+            distance: number
+          ): Promise<{
+            success: boolean
+            targetId?: number
+            error?: string
+          }> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return { success: false, error: 'Provider not ready' }
+            }
+
+            const requestJson = JSON.stringify({ radarId, bearing, distance })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_acquire_target',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                return JSON.parse(result)
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_acquire_target response: ${e}`
+                )
+                return { success: false, error: 'Invalid response' }
+              }
+            }
+            return { success: false, error: 'No response' }
+          },
+
+          /**
+           * Cancel tracking of a target (v6)
+           * @param radarId The radar ID
+           * @param targetId The target ID to cancel
+           */
+          cancelTarget: async (
+            radarId: string,
+            targetId: number
+          ): Promise<boolean> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return false
+            }
+
+            const requestJson = JSON.stringify({ radarId, targetId })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_cancel_target',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                return JSON.parse(result) === true
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_cancel_target response: ${e}`
+                )
+                return false
+              }
+            }
+            return false
+          },
+
+          /**
+           * Get ARPA settings (v6)
+           * @param radarId The radar ID
+           */
+          getArpaSettings: async (radarId: string): Promise<any | null> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return null
+            }
+
+            const requestJson = JSON.stringify({ radarId })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_get_arpa_settings',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                const parsed = JSON.parse(result)
+                if (parsed.error) {
+                  debug(
+                    `[${pluginId}] radar_get_arpa_settings error: ${parsed.error}`
+                  )
+                  return null
+                }
+                return parsed
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_get_arpa_settings response: ${e}`
+                )
+                return null
+              }
+            }
+            return null
+          },
+
+          /**
+           * Update ARPA settings (v6)
+           * @param radarId The radar ID
+           * @param settings Partial settings to update
+           */
+          setArpaSettings: async (
+            radarId: string,
+            settings: any
+          ): Promise<{ success: boolean; error?: string }> => {
+            const provider = wasmRadarProviders.get(pluginId)
+            if (!provider || !provider.pluginInstance) {
+              debug(`[${pluginId}] Radar provider instance not ready`)
+              return { success: false, error: 'Provider not ready' }
+            }
+
+            const requestJson = JSON.stringify({ radarId, settings })
+            const result = await callWasmRadarHandler(
+              provider.pluginInstance,
+              'radar_set_arpa_settings',
+              requestJson
+            )
+
+            if (result) {
+              try {
+                return JSON.parse(result)
+              } catch (e) {
+                debug(
+                  `[${pluginId}] Failed to parse radar_set_arpa_settings response: ${e}`
+                )
+                return { success: false, error: 'Invalid response' }
+              }
+            }
+            return { success: false, error: 'No response' }
           }
         }
       }

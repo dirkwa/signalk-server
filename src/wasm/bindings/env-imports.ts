@@ -217,6 +217,83 @@ export function createEnvImports(
       }
     },
 
+    /**
+     * Publish a SignalK notification (v6)
+     *
+     * @param pathPtr - Pointer to notification path string (e.g., "notifications.navigation.closestApproach.radar:1:target:5")
+     * @param pathLen - Length of path string
+     * @param valuePtr - Pointer to notification value JSON
+     * @param valueLen - Length of value JSON
+     * @returns 0 on success, -1 on error
+     */
+    sk_publish_notification: (
+      pathPtr: number,
+      pathLen: number,
+      valuePtr: number,
+      valueLen: number
+    ): number => {
+      try {
+        const path = readUtf8String(pathPtr, pathLen)
+        const valueJson = readUtf8String(valuePtr, valueLen)
+
+        debug(`[${pluginId}] Publishing notification: ${path}`)
+
+        if (!app || !app.handleMessage) {
+          debug(`[${pluginId}] app.handleMessage not available`)
+          return -1
+        }
+
+        // Parse and validate the notification value
+        let notificationValue: any
+        try {
+          notificationValue = JSON.parse(valueJson)
+        } catch (e) {
+          debug(`[${pluginId}] Invalid notification JSON: ${e}`)
+          return -1
+        }
+
+        // Validate required notification fields per SignalK spec
+        // Notifications must have: state, method, message
+        if (!notificationValue.state) {
+          debug(`[${pluginId}] Notification missing required 'state' field`)
+          return -1
+        }
+
+        const validStates = ['normal', 'alert', 'warn', 'alarm', 'emergency']
+        if (!validStates.includes(notificationValue.state)) {
+          debug(
+            `[${pluginId}] Invalid notification state: ${notificationValue.state}`
+          )
+          return -1
+        }
+
+        // Build the delta message for the notification
+        const delta = {
+          updates: [
+            {
+              values: [
+                {
+                  path: path,
+                  value: notificationValue
+                }
+              ]
+            }
+          ]
+        }
+
+        // Notifications should be processed normally (version 1)
+        app.handleMessage(pluginId, delta)
+        debug(
+          `[${pluginId}] Notification published: ${path} state=${notificationValue.state}`
+        )
+
+        return 0 // Success
+      } catch (error) {
+        debug(`[${pluginId}] sk_publish_notification error: ${error}`)
+        return -1
+      }
+    },
+
     // ==========================================================================
     // Plugin Configuration API (Application Data Storage)
     // ==========================================================================

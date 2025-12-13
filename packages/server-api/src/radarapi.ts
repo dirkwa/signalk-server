@@ -47,6 +47,16 @@ export interface LegendEntry {
 // ============================================================================
 
 /**
+ * Optional features a radar provider may support.
+ *
+ * These indicate what API features are implemented by the provider,
+ * NOT hardware capabilities (those are in characteristics).
+ *
+ * @category Radar API
+ */
+export type SupportedFeature = 'arpa' | 'guardZones' | 'trails' | 'dualRange'
+
+/**
  * Hardware characteristics of a radar.
  *
  * @category Radar API
@@ -195,6 +205,21 @@ export interface CapabilityManifest {
 
   /** Control dependencies/constraints */
   constraints?: ControlConstraint[]
+
+  /**
+   * Optional features this provider implements.
+   *
+   * Indicates which optional API features are available:
+   * - 'arpa': ARPA target tracking (GET /targets, POST /targets, etc.)
+   * - 'guardZones': Guard zone alerting (GET /guardZones, etc.)
+   * - 'trails': Target trails/history (GET /trails)
+   * - 'dualRange': Dual-range simultaneous display
+   *
+   * Note: This declares API capabilities, not hardware. A radar may have
+   * hardware Doppler support (characteristics.hasDoppler) but the provider
+   * might not implement the trails API endpoint.
+   */
+  supportedFeatures?: SupportedFeature[]
 }
 
 /**
@@ -234,6 +259,173 @@ export interface RadarStateV5 {
     controlId: string
     reason: string
   }>
+}
+
+// ============================================================================
+// v6 ARPA Target Types
+// ============================================================================
+
+/**
+ * ARPA target status.
+ *
+ * @category Radar API
+ */
+export type ArpaTargetStatus = 'tracking' | 'lost' | 'acquiring'
+
+/**
+ * ARPA target acquisition method.
+ *
+ * @category Radar API
+ */
+export type ArpaAcquisitionMethod = 'manual' | 'auto'
+
+/**
+ * ARPA target position data.
+ *
+ * @category Radar API
+ */
+export interface ArpaTargetPosition {
+  /** Bearing from own ship in degrees (0-360, true north) */
+  bearing: number
+  /** Distance from own ship in meters */
+  distance: number
+  /** Latitude (if GPS available) */
+  latitude?: number
+  /** Longitude (if GPS available) */
+  longitude?: number
+}
+
+/**
+ * ARPA target motion data.
+ *
+ * @category Radar API
+ */
+export interface ArpaTargetMotion {
+  /** Course over ground in degrees (0-360, true north) */
+  course: number
+  /** Speed over ground in meters per second */
+  speed: number
+}
+
+/**
+ * ARPA target danger assessment.
+ *
+ * @category Radar API
+ */
+export interface ArpaTargetDanger {
+  /** Closest Point of Approach in meters */
+  cpa: number
+  /** Time to CPA in seconds (negative if target is receding) */
+  tcpa: number
+}
+
+/**
+ * ARPA tracked target.
+ *
+ * @category Radar API
+ *
+ * @example
+ * ```json
+ * {
+ *   "id": 1,
+ *   "status": "tracking",
+ *   "position": {
+ *     "bearing": 45.2,
+ *     "distance": 1852,
+ *     "latitude": 52.1234,
+ *     "longitude": 4.5678
+ *   },
+ *   "motion": {
+ *     "course": 180.5,
+ *     "speed": 5.14
+ *   },
+ *   "danger": {
+ *     "cpa": 150,
+ *     "tcpa": 300
+ *   },
+ *   "acquisition": "manual",
+ *   "firstSeen": "2025-01-15T10:28:00Z",
+ *   "lastSeen": "2025-01-15T10:30:00Z"
+ * }
+ * ```
+ */
+export interface ArpaTarget {
+  /** Unique target identifier (1-99 typically) */
+  id: number
+  /** Current tracking status */
+  status: ArpaTargetStatus
+  /** Target position relative to own ship */
+  position: ArpaTargetPosition
+  /** Target motion (course and speed) */
+  motion: ArpaTargetMotion
+  /** Danger assessment (CPA/TCPA) */
+  danger: ArpaTargetDanger
+  /** How this target was acquired */
+  acquisition: ArpaAcquisitionMethod
+  /** ISO 8601 timestamp when target was first acquired */
+  firstSeen: string
+  /** ISO 8601 timestamp of most recent radar return */
+  lastSeen: string
+}
+
+/**
+ * Response from GET /radars/{id}/targets.
+ *
+ * @category Radar API
+ *
+ * @example
+ * ```json
+ * {
+ *   "radarId": "radar-0",
+ *   "timestamp": "2025-01-15T10:30:00Z",
+ *   "targets": [
+ *     { "id": 1, "status": "tracking", ... },
+ *     { "id": 2, "status": "lost", ... }
+ *   ]
+ * }
+ * ```
+ */
+export interface TargetListResponse {
+  /** Radar ID */
+  radarId: string
+  /** ISO 8601 timestamp */
+  timestamp: string
+  /** List of tracked targets */
+  targets: ArpaTarget[]
+}
+
+/**
+ * WebSocket message for target streaming.
+ *
+ * @category Radar API
+ */
+export interface TargetStreamMessage {
+  /** Message type */
+  type: 'target_update' | 'target_lost' | 'target_acquired'
+  /** ISO 8601 timestamp */
+  timestamp: string
+  /** Updated/lost/acquired target */
+  target: ArpaTarget
+}
+
+/**
+ * ARPA settings for a radar.
+ *
+ * @category Radar API
+ */
+export interface ArpaSettings {
+  /** Whether ARPA is enabled */
+  enabled: boolean
+  /** Maximum number of targets to track (typically 10-100) */
+  maxTargets: number
+  /** CPA threshold for danger alert in meters */
+  cpaThreshold: number
+  /** TCPA threshold for danger alert in seconds */
+  tcpaThreshold: number
+  /** Seconds before marking a target as lost */
+  lostTargetTimeout: number
+  /** Auto-acquisition sensitivity (0=off, 1-3=low/med/high) */
+  autoAcquisition: number
 }
 
 // ============================================================================
@@ -462,6 +654,64 @@ export interface RadarProviderMethods {
     controlId: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any
+  ) => Promise<{ success: boolean; error?: string }>
+
+  // ============================================
+  // v6 ARPA Target Methods
+  // ============================================
+
+  /**
+   * Get all tracked ARPA targets (v6).
+   * @param radarId The radar ID
+   * @returns Target list response or null if not supported
+   */
+  getTargets?: (radarId: string) => Promise<TargetListResponse | null>
+
+  /**
+   * Manually acquire a target at the specified position (v6).
+   * @param radarId The radar ID
+   * @param bearing Bearing in degrees (0-360, true north)
+   * @param distance Distance in meters
+   * @returns Result with success flag and optional target ID
+   */
+  acquireTarget?: (
+    radarId: string,
+    bearing: number,
+    distance: number
+  ) => Promise<{ success: boolean; targetId?: number; error?: string }>
+
+  /**
+   * Cancel tracking of a target (v6).
+   * @param radarId The radar ID
+   * @param targetId The target ID to cancel
+   * @returns true on success
+   */
+  cancelTarget?: (radarId: string, targetId: number) => Promise<boolean>
+
+  /**
+   * Handle WebSocket target stream connection (v6).
+   * Streams target updates in real-time.
+   * @param radarId The radar ID
+   * @param ws WebSocket connection to send target updates to
+   */
+  handleTargetStreamConnection?: (radarId: string, ws: WebSocket) => void
+
+  /**
+   * Get ARPA settings (v6).
+   * @param radarId The radar ID
+   * @returns ARPA settings or null if not supported
+   */
+  getArpaSettings?: (radarId: string) => Promise<ArpaSettings | null>
+
+  /**
+   * Update ARPA settings (v6).
+   * @param radarId The radar ID
+   * @param settings Partial settings to update
+   * @returns Result with success flag and optional error
+   */
+  setArpaSettings?: (
+    radarId: string,
+    settings: Partial<ArpaSettings>
   ) => Promise<{ success: boolean; error?: string }>
 }
 

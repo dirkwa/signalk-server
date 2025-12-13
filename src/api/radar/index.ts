@@ -15,7 +15,8 @@ import {
   RadarInfo,
   RadarStatus,
   RadarControls,
-  isRadarProvider
+  isRadarProvider,
+  ArpaSettings
 } from '@signalk/server-api'
 
 const RADAR_API_PATH = `/signalk/v2/api/vessels/self/radars`
@@ -818,5 +819,275 @@ export class RadarApi {
     // Note: WebSocket stream endpoint (/radars/:id/stream) would require
     // additional WebSocket handling infrastructure. For now, providers
     // should expose their own streamUrl for direct client connection.
+
+    // ============================================
+    // v6 ARPA Target Endpoints
+    // ============================================
+
+    // GET /radars/:id/targets - Get all tracked ARPA targets
+    this.app.get(
+      `${RADAR_API_PATH}/:id/targets`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.getTargets) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support ARPA targets'
+            })
+            return
+          }
+          const targets = await provider.getTargets(req.params.id)
+          if (targets) {
+            res.status(200).json(targets)
+          } else {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // POST /radars/:id/targets - Manually acquire a target
+    this.app.post(
+      `${RADAR_API_PATH}/:id/targets`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        if (!this.updateAllowed(req)) {
+          res.status(403).json(Responses.unauthorised)
+          return
+        }
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.acquireTarget) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support target acquisition'
+            })
+            return
+          }
+          const { bearing, distance } = req.body
+          if (typeof bearing !== 'number' || typeof distance !== 'number') {
+            res.status(400).json({
+              statusCode: 400,
+              state: 'FAILED',
+              message:
+                'Invalid request. Must provide bearing (degrees) and distance (meters)'
+            })
+            return
+          }
+          if (bearing < 0 || bearing >= 360) {
+            res.status(400).json({
+              statusCode: 400,
+              state: 'FAILED',
+              message: 'Bearing must be between 0 and 360 degrees'
+            })
+            return
+          }
+          if (distance <= 0) {
+            res.status(400).json({
+              statusCode: 400,
+              state: 'FAILED',
+              message: 'Distance must be a positive number (meters)'
+            })
+            return
+          }
+          const result = await provider.acquireTarget(
+            req.params.id,
+            bearing,
+            distance
+          )
+          if (result.success) {
+            res.status(201).json({
+              success: true,
+              targetId: result.targetId
+            })
+          } else {
+            res.status(400).json({
+              success: false,
+              error: result.error || 'Failed to acquire target'
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // DELETE /radars/:id/targets/:targetId - Cancel tracking of a target
+    this.app.delete(
+      `${RADAR_API_PATH}/:id/targets/:targetId`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        if (!this.updateAllowed(req)) {
+          res.status(403).json(Responses.unauthorised)
+          return
+        }
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.cancelTarget) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support target cancellation'
+            })
+            return
+          }
+          const targetId = parseInt(req.params.targetId, 10)
+          if (isNaN(targetId)) {
+            res.status(400).json({
+              statusCode: 400,
+              state: 'FAILED',
+              message: 'Invalid target ID. Must be a number'
+            })
+            return
+          }
+          const success = await provider.cancelTarget(req.params.id, targetId)
+          if (success) {
+            res.status(200).json({ success: true })
+          } else {
+            res.status(404).json({
+              success: false,
+              error: 'Target not found or already cancelled'
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // GET /radars/:id/arpa/settings - Get ARPA settings
+    this.app.get(
+      `${RADAR_API_PATH}/:id/arpa/settings`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.getArpaSettings) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support ARPA settings'
+            })
+            return
+          }
+          const settings = await provider.getArpaSettings(req.params.id)
+          if (settings) {
+            res.status(200).json(settings)
+          } else {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // PUT /radars/:id/arpa/settings - Update ARPA settings
+    this.app.put(
+      `${RADAR_API_PATH}/:id/arpa/settings`,
+      async (req: Request, res: Response) => {
+        debug(`** ${req.method} ${req.path}`)
+        if (!this.updateAllowed(req)) {
+          res.status(403).json(Responses.unauthorised)
+          return
+        }
+        try {
+          const provider = await this.findProviderForRadar(req.params.id)
+          if (!provider) {
+            res.status(404).json({
+              error: 'Radar not found',
+              id: req.params.id
+            })
+            return
+          }
+          if (!provider.setArpaSettings) {
+            res.status(501).json({
+              statusCode: 501,
+              state: 'FAILED',
+              message: 'Provider does not support ARPA settings'
+            })
+            return
+          }
+          const settings: Partial<ArpaSettings> =
+            req.body.value !== undefined ? req.body.value : req.body
+          const result = await provider.setArpaSettings(req.params.id, settings)
+          if (result.success) {
+            res.status(200).json({ success: true })
+          } else {
+            res.status(400).json({
+              success: false,
+              error: result.error || 'Failed to update ARPA settings'
+            })
+          }
+        } catch (err: any) {
+          res.status(500).json({
+            statusCode: 500,
+            state: 'FAILED',
+            message: err.message
+          })
+        }
+      }
+    )
+
+    // Note: WebSocket target stream endpoint (/radars/:id/targets/stream)
+    // would require additional WebSocket handling infrastructure.
+    // For real-time target updates, clients should subscribe to the
+    // main radar stream which includes target data.
   }
 }
