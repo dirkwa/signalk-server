@@ -32,7 +32,6 @@ import { backwardsCompat } from './plugin-routes'
 import { updateResourceProviderInstance } from '../bindings/resource-provider'
 import { updateWeatherProviderInstance } from '../bindings/weather-provider'
 import { updateRadarProviderInstance } from '../bindings/radar-provider'
-import { initializeChartsFromDisk } from '../bindings/mbtiles-handler'
 import { socketManager } from '../bindings/socket-manager'
 import { modulesWithKeyword } from '../../modules'
 
@@ -216,23 +215,6 @@ export async function startWasmPlugin(
     updateResourceProviderInstance(pluginId, plugin.instance)
     updateWeatherProviderInstance(pluginId, plugin.instance)
     updateRadarProviderInstance(pluginId, plugin.instance)
-
-    // For charts-provider plugins, initialize charts from disk into WASM memory
-    // This restores charts that were uploaded in previous sessions
-    if (pluginId.includes('charts-provider') && plugin.configPath) {
-      try {
-        const chartCount = await initializeChartsFromDisk(
-          plugin,
-          plugin.configPath
-        )
-        if (chartCount > 0) {
-          debug(`Initialized ${chartCount} charts from disk for ${pluginId}`)
-        }
-      } catch (initErr) {
-        debug(`Warning: Failed to initialize charts from disk: ${initErr}`)
-        // Don't fail plugin startup if chart init fails
-      }
-    }
 
     setPluginStatus(plugin, 'running')
     plugin.statusMessage = 'Running'

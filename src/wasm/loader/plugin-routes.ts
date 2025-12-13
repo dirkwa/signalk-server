@@ -22,13 +22,6 @@ import {
   writePluginConfig
 } from '../wasm-storage'
 import { SERVERROUTESPREFIX } from '../../constants'
-import {
-  shouldInterceptMBTiles,
-  handleMBTileRequest,
-  handleChartUpload,
-  handleChartDelete,
-  handleChartList
-} from '../bindings/mbtiles-handler'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -702,41 +695,6 @@ export function setupWasmPluginRoutes(
       ...config
     })
   })
-
-  // Add MBTiles-specific routes for charts-provider plugins
-  // These must be handled by Node.js, not WASM, because they need SQLite/file I/O
-  if (plugin.id.includes('charts-provider')) {
-    debug(`Setting up MBTiles hybrid routes for ${plugin.id}`)
-
-    // Tile serving: GET /tiles/{chartId}/{z}/{x}/{y}
-    router.get(
-      '/tiles/:chartId/:z/:x/:y',
-      async (req: Request, res: Response) => {
-        await handleMBTileRequest(req, res, plugin, configPath)
-      }
-    )
-
-    // File upload: POST /api/charts/upload
-    router.post('/api/charts/upload', async (req: Request, res: Response) => {
-      await handleChartUpload(req, res, plugin, configPath)
-    })
-
-    // Chart list: GET /api/charts/list - returns only charts from this plugin's VFS
-    router.get('/api/charts/list', async (req: Request, res: Response) => {
-      await handleChartList(req, res, plugin, configPath)
-    })
-
-    // File deletion (removes the .mbtiles file): DELETE /api/charts/file/:id
-    router.delete(
-      '/api/charts/file/:id',
-      async (req: Request, res: Response) => {
-        const chartId = req.params.id
-        await handleChartDelete(req, res, plugin, configPath, chartId)
-      }
-    )
-
-    debug(`MBTiles hybrid routes registered for ${plugin.id}`)
-  }
 
   // Middleware to block requests when WASM plugin is disabled (except config endpoints)
   const pluginEnabledMiddleware = (
