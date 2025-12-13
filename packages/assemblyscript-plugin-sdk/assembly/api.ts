@@ -12,9 +12,12 @@ import { Delta } from './signalk'
 /**
  * @internal
  * Emit delta to Signal K server
+ * @param deltaPtr - Pointer to delta JSON string
+ * @param deltaLen - Length of delta JSON string
+ * @param version - Signal K version: 0 = v1 (default), 1 = v2
  */
 @external("env", "sk_handle_message")
-declare function sk_handle_message_ffi(deltaPtr: usize, deltaLen: usize): void
+declare function sk_handle_message_ffi(deltaPtr: usize, deltaLen: usize, version: i32): void
 
 /**
  * @internal
@@ -78,21 +81,37 @@ declare function sk_save_config_ffi(configPtr: usize, configLen: usize): i32
 // ===== Public API Functions =====
 
 /**
+ * Signal K version for delta emission
+ */
+export const SK_VERSION_V1: i32 = 0
+export const SK_VERSION_V2: i32 = 1
+
+/**
  * Emit a delta message to the Signal K server
  *
  * @param delta The delta message to emit
+ * @param skVersion Signal K version: SK_VERSION_V1 (default) or SK_VERSION_V2
+ *
+ * Use SK_VERSION_V1 (default) for regular navigation data.
+ * Use SK_VERSION_V2 for Course API paths and other v2-specific data to prevent
+ * v2 data from being mixed into the v1 full data model.
  *
  * @example
  * ```typescript
+ * // Emit v1 delta (default - for regular navigation data)
  * const delta = createSimpleDelta('my-plugin', 'environment.temperature', '25.5')
  * emit(delta)
+ *
+ * // Emit v2 delta (for Course API and v2-specific paths)
+ * const courseDelta = createSimpleDelta('my-plugin', 'navigation.course.nextPoint', positionJson)
+ * emit(courseDelta, SK_VERSION_V2)
  * ```
  */
-export function emit(delta: Delta): void {
+export function emit(delta: Delta, skVersion: i32 = SK_VERSION_V1): void {
   const json = delta.toJSON()
   const buffer = String.UTF8.encode(json)
   const ptr = changetype<usize>(buffer)
-  sk_handle_message_ffi(ptr, buffer.byteLength)
+  sk_handle_message_ffi(ptr, buffer.byteLength, skVersion)
 }
 
 /**

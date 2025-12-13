@@ -7,6 +7,7 @@
  */
 
 import Debug from 'debug'
+import { SKVersion } from '@signalk/server-api'
 import { WasmCapabilities } from '../types'
 import { createResourceProviderBinding } from './resource-provider'
 import { createWeatherProviderBinding } from './weather-provider'
@@ -171,39 +172,32 @@ export function createEnvImports(
       }
     },
 
-    sk_handle_message: (ptr: number, len: number) => {
+    /**
+     * Emit a delta message to the Signal K server
+     *
+     * @param ptr - Pointer to delta JSON string in WASM memory
+     * @param len - Length of delta JSON string
+     * @param version - Signal K version: 0 = v1 (default), 1 = v2
+     *
+     * Plugins should use v1 for regular navigation data (the default).
+     * Use v2 for Course API paths and other v2-specific data to prevent
+     * v2 data from being mixed into the v1 full data model.
+     *
+     * This mirrors the TypeScript plugin API where handleMessage accepts
+     * an optional skVersion parameter.
+     */
+    sk_handle_message: (ptr: number, len: number, version: number = 0) => {
       try {
         const deltaJson = readUtf8String(ptr, len)
-        debug(`[${pluginId}] Emitting delta: ${deltaJson.substring(0, 200)}...`)
+        debug(
+          `[${pluginId}] Emitting delta (v${version === 1 ? '2' : '1'}): ${deltaJson.substring(0, 200)}...`
+        )
         if (app && app.handleMessage) {
           try {
             const delta = JSON.parse(deltaJson)
-
-            // Check if this is a resource delta - if so, use version 2
-            // Resources should not be in the full model cache
-            // See: docs/develop/plugins/resource_provider_plugins.md
-            let isResourceDelta = false
-            if (delta.updates) {
-              for (const update of delta.updates) {
-                if (update.values) {
-                  for (const value of update.values) {
-                    if (value.path && value.path.startsWith('resources.')) {
-                      isResourceDelta = true
-                      break
-                    }
-                  }
-                }
-                if (isResourceDelta) break
-              }
-            }
-
-            if (isResourceDelta) {
-              app.handleMessage(pluginId, delta, 2) // v2 for resources
-              debug(`[${pluginId}] Resource delta processed (v2)`)
-            } else {
-              app.handleMessage(pluginId, delta)
-              debug(`[${pluginId}] Delta processed by server`)
-            }
+            const skVersion = version === 1 ? SKVersion.v2 : SKVersion.v1
+            app.handleMessage(pluginId, delta, skVersion)
+            debug(`[${pluginId}] Delta processed by server (${skVersion})`)
           } catch (parseError) {
             debug(`[${pluginId}] Failed to parse/process delta: ${parseError}`)
           }

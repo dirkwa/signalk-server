@@ -10,6 +10,7 @@
 /// <reference lib="webworker" />
 
 import Debug from 'debug'
+import { SKVersion } from '@signalk/server-api'
 import { getWasmPlugin } from './loader'
 import {
   getPluginStoragePaths,
@@ -47,19 +48,31 @@ export function createServerAPIBridge(
     'delta-handler': {
       /**
        * Handle delta message from plugin
+       *
+       * @param pluginIdParam - Plugin identifier
+       * @param deltaJson - Delta message as JSON string
+       * @param version - Signal K version: 0 = v1 (default), 1 = v2
+       *
+       * Plugins should use v1 for regular navigation data.
+       * Use v2 for Course API paths and other v2-specific data.
        */
-      handleMessage: (pluginIdParam: string, deltaJson: string) => {
+      handleMessage: (
+        pluginIdParam: string,
+        deltaJson: string,
+        version: number = 0
+      ) => {
         if (!capabilities.dataWrite) {
           throw new Error(`Plugin ${pluginId} lacks dataWrite capability`)
         }
 
         try {
           const delta = JSON.parse(deltaJson)
-          debug(`Plugin ${pluginId} emitting delta:`, delta)
+          const skVersion = version === 1 ? SKVersion.v2 : SKVersion.v1
+          debug(`Plugin ${pluginId} emitting delta (${skVersion}):`, delta)
 
-          // Forward to server's handleMessage
+          // Forward to server's handleMessage with version
           if (app.handleMessage) {
-            app.handleMessage(pluginId, delta)
+            app.handleMessage(pluginId, delta, skVersion)
           } else {
             debug('Warning: app.handleMessage not available')
           }

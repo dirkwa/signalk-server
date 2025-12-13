@@ -1,8 +1,61 @@
 ---
-title: Receiving Deltas
+title: Deltas
 ---
 
-# Receiving Signal K Deltas
+# Working with Signal K Deltas
+
+WASM plugins can both **emit** and **receive** Signal K deltas. This page covers both directions.
+
+## Emitting Deltas
+
+Use the `emit()` function to send delta messages to the Signal K server:
+
+```typescript
+import {
+  emit,
+  createSimpleDelta,
+  SK_VERSION_V1,
+  SK_VERSION_V2
+} from '@signalk/assemblyscript-plugin-sdk/assembly'
+
+// Emit a v1 delta (default - for regular navigation data)
+const tempDelta = createSimpleDelta(
+  'my-plugin',
+  'environment.outside.temperature',
+  '288.15'
+)
+emit(tempDelta)
+
+// Emit a v2 delta (for Course API and v2-specific paths)
+const courseDelta = createSimpleDelta(
+  'my-plugin',
+  'navigation.course.nextPoint',
+  positionJson
+)
+emit(courseDelta, SK_VERSION_V2)
+```
+
+### Signal K v1 vs v2 Deltas
+
+The `emit()` function accepts an optional second parameter to specify the Signal K version:
+
+| Version      | Constant        | Use Case                                                                                   |
+| ------------ | --------------- | ------------------------------------------------------------------------------------------ |
+| v1 (default) | `SK_VERSION_V1` | Regular navigation data: `navigation.*`, `environment.*`, `electrical.*`, etc.             |
+| v2           | `SK_VERSION_V2` | Course API paths and v2-specific data that should not be mixed into the v1 full data model |
+
+**Why does this matter?**
+
+- **v1 deltas** are processed through `app.signalk.addDelta()` and update the full Signal K data model
+- **v2 deltas** are emitted as events for v2 API subscribers without contaminating v1 paths
+
+Most plugins should use v1 (the default). Only use v2 when emitting Course API data or other v2-specific paths.
+
+This mirrors the TypeScript plugin API where `handleMessage()` accepts an optional `skVersion` parameter.
+
+---
+
+## Receiving Deltas
 
 WASM plugins can subscribe to receive Signal K deltas, enabling them to react to navigation data changes, course updates, sensor readings, and other vessel data in real-time.
 
