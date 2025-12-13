@@ -45,11 +45,6 @@ export function createComponentSignalkApi(pluginId: string, app?: any) {
         }
       }
     },
-    skRegisterPutHandler: (context: string, path: string) => {
-      debug(`[${pluginId}] Registering PUT handler: ${context} ${path}`)
-      // PUT handler registration would need additional implementation
-      return 0
-    },
 
     // kebab-case versions (for WIT interface style)
     'sk-debug': (message: string) => {
@@ -77,10 +72,6 @@ export function createComponentSignalkApi(pluginId: string, app?: any) {
           debug(`Failed to parse delta JSON: ${error}`)
         }
       }
-    },
-    'sk-register-put-handler': (context: string, path: string) => {
-      debug(`[${pluginId}] Registering PUT handler: ${context} ${path}`)
-      return 0
     }
   }
 }

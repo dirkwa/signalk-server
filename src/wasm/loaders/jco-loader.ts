@@ -61,10 +61,7 @@ export async function loadJcoPlugin(
             setStatus: signalkApi.skSetStatus || signalkApi['sk-set-status'],
             setError: signalkApi.skSetError || signalkApi['sk-set-error'],
             handleMessage:
-              signalkApi.skHandleMessage || signalkApi['sk-handle-message'],
-            registerPutHandler:
-              signalkApi.skRegisterPutHandler ||
-              signalkApi['sk-register-put-handler']
+              signalkApi.skHandleMessage || signalkApi['sk-handle-message']
           })
           debug(`Signal K API callbacks injected successfully`)
         }
