@@ -289,12 +289,14 @@ export function createEnvImports(
     },
 
     // ==========================================================================
-    // Plugin Configuration API (Application Data Storage)
+    // Plugin Configuration API
     // ==========================================================================
 
     /**
-     * Read plugin configuration from Application Data Storage
-     * Uses: ~/.signalk/applicationData/global/{pluginId}/1.0.0.json
+     * Read plugin configuration from plugin-config-data
+     * Uses: ~/.signalk/plugin-config-data/{pluginId}.json
+     *
+     * This matches the storage location used by JS plugins.
      *
      * @param bufPtr - Buffer to write config JSON into
      * @param bufMaxLen - Maximum buffer size
@@ -308,26 +310,27 @@ export function createEnvImports(
           return 0
         }
 
-        // Application Data Storage path: applicationData/global/{pluginId}/1.0.0.json
-        const appDataDir = path.join(
+        // Plugin config path: plugin-config-data/{pluginId}.json (same as JS plugins)
+        const configFile = path.join(
           cfgPath,
-          'applicationData',
-          'global',
-          pluginId
+          'plugin-config-data',
+          `${pluginId}.json`
         )
-        const appDataFile = path.join(appDataDir, '1.0.0.json')
 
         let configJson = '{}'
-        if (fs.existsSync(appDataFile)) {
+        if (fs.existsSync(configFile)) {
           try {
-            configJson = fs.readFileSync(appDataFile, 'utf8')
+            const rawConfig = fs.readFileSync(configFile, 'utf8')
+            const parsed = JSON.parse(rawConfig)
+            // Return just the configuration object (not enabled/enableLogging flags)
+            configJson = JSON.stringify(parsed.configuration || {})
           } catch (e) {
-            debug(`[${pluginId}] Could not read applicationData: ${e}`)
+            debug(`[${pluginId}] Could not read config: ${e}`)
           }
         }
 
         debug(
-          `[${pluginId}] Reading config from ${appDataFile}: ${configJson.substring(0, 100)}...`
+          `[${pluginId}] Reading config from ${configFile}: ${configJson.substring(0, 100)}...`
         )
 
         const encoder = new TextEncoder()
@@ -352,8 +355,10 @@ export function createEnvImports(
     },
 
     /**
-     * Save plugin configuration to Application Data Storage
-     * Uses: ~/.signalk/applicationData/global/{pluginId}/1.0.0.json
+     * Save plugin configuration to plugin-config-data
+     * Uses: ~/.signalk/plugin-config-data/{pluginId}.json
+     *
+     * This matches the storage location used by JS plugins.
      *
      * @param configPtr - Pointer to config JSON string
      * @param configLen - Length of config JSON
@@ -371,27 +376,36 @@ export function createEnvImports(
         debug(`[${pluginId}] Saving config: ${configJson.substring(0, 100)}...`)
 
         // Validate JSON
-        JSON.parse(configJson)
+        const configuration = JSON.parse(configJson)
 
-        // Application Data Storage path: applicationData/global/{pluginId}/1.0.0.json
-        const appDataBase = path.join(cfgPath, 'applicationData')
-        const globalDir = path.join(appDataBase, 'global')
-        const appDataDir = path.join(globalDir, pluginId)
-        const appDataFile = path.join(appDataDir, '1.0.0.json')
+        // Plugin config path: plugin-config-data/{pluginId}.json (same as JS plugins)
+        const configDataDir = path.join(cfgPath, 'plugin-config-data')
+        const configFile = path.join(configDataDir, `${pluginId}.json`)
 
-        // Create directories if needed
-        if (!fs.existsSync(appDataBase)) {
-          fs.mkdirSync(appDataBase, { recursive: true })
-        }
-        if (!fs.existsSync(globalDir)) {
-          fs.mkdirSync(globalDir, { recursive: true })
-        }
-        if (!fs.existsSync(appDataDir)) {
-          fs.mkdirSync(appDataDir, { recursive: true })
+        // Create directory if needed
+        if (!fs.existsSync(configDataDir)) {
+          fs.mkdirSync(configDataDir, { recursive: true })
         }
 
-        fs.writeFileSync(appDataFile, configJson, 'utf8')
-        debug(`[${pluginId}] Config saved to ${appDataFile}`)
+        // Read existing config to preserve enabled/enableLogging flags
+        let existingConfig: any = { enabled: true }
+        if (fs.existsSync(configFile)) {
+          try {
+            existingConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'))
+          } catch (e) {
+            debug(`[${pluginId}] Could not read existing config: ${e}`)
+          }
+        }
+
+        // Update configuration while preserving other fields
+        existingConfig.configuration = configuration
+
+        fs.writeFileSync(
+          configFile,
+          JSON.stringify(existingConfig, null, 2),
+          'utf8'
+        )
+        debug(`[${pluginId}] Config saved to ${configFile}`)
 
         return 0
       } catch (error) {
