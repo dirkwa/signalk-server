@@ -23,10 +23,10 @@ Signal K server exposes an interface for plugins to use in order to interact wit
 
 Signal K supports two types of plugins:
 
-- **Node.js Plugins** - Traditional JavaScript/TypeScript plugins (documented below)
+- **JavaScript Plugins** - Traditional JavaScript/TypeScript plugins (documented below)
 - **[WASM Plugins](./wasm/README.md)** - Plugins written in Rust, AssemblyScript, Go, or other WASM-compatible languages
 
-WASM plugins offer sandbox isolation, memory safety, and the ability to use languages other than JavaScript. See the [WASM Plugins documentation](./wasm/README.md) for details.
+[WASM](https://en.wikipedia.org/wiki/WebAssembly) is short for WebAssembly. WASM is a runtime for executing portable code in near native speeds and in isolation. WASM plugins offer sandbox isolation, memory safety, and the ability to use languages other than JavaScript. See the [WASM Plugins documentation](./wasm/README.md) for details.
 
 ## Node.js Plugin Capabilities
 

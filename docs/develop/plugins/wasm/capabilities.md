@@ -4,31 +4,6 @@ title: Plugin Capabilities
 
 # Plugin Capabilities
 
-## WASM Memory Limitations
-
-WASM plugins running in Node.js have **~64KB buffer limitations** for stdin/stdout operations. This is a fundamental limitation of the Node.js WASI implementation, not a Signal K restriction.
-
-**Impact:**
-
-- Small JSON responses (< 64KB): Work fine in pure WASM
-- Medium data (64KB - 1MB): May freeze or fail
-- Large data (> 1MB): Will fail or freeze the server
-
-### Hybrid Architecture Pattern
-
-For plugins that need to handle large data volumes (logs, file streaming, large JSON responses), use a **hybrid approach**:
-
-- **WASM Plugin**: Registers HTTP endpoints and provides configuration UI
-- **Node.js Handler**: Server intercepts specific endpoints and handles I/O directly in Node.js
-- **Result**: Can handle unlimited data without memory constraints
-
-Use this pattern when your plugin needs to:
-
-- Stream large log files (journalctl, syslog)
-- Return large JSON responses (> 64KB)
-- Process large file uploads
-- Handle streaming data
-
 ## Capability Types
 
 Declare required capabilities in `package.json`:
@@ -197,8 +172,6 @@ The `rawSockets` capability enables direct UDP socket access for plugins that ne
 | `sk_udp_recv`                   | `(socket_id, buf_ptr, buf_max_len, addr_out_ptr, port_out_ptr) -> i32` | Receive datagram (non-blocking)                         |
 | `sk_udp_pending`                | `(socket_id) -> i32`                                                   | Get number of buffered datagrams                        |
 | `sk_udp_close`                  | `(socket_id) -> void`                                                  | Close socket                                            |
-
-> **Note:** Use exact function names. Do NOT use `sk_udp_recv_from` - the correct name is `sk_udp_recv`.
 
 **Rust Example:**
 

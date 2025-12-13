@@ -152,9 +152,9 @@ npx asc assembly/index.ts --target release
 >
 > The **`wasmManifest`** field is the key identifier that tells Signal K this is a WASM plugin (not a Node.js plugin). It must point to your compiled `.wasm` file.
 >
-> The package **name can be anything** - scoped (`@myorg/my-plugin`) or unscoped (`my-wasm-plugin`). There is no requirement to use `@signalk/` scope. Choose a name that makes sense for your plugin and avoids conflicts on npm.
+> The package **name can be anything** - scoped (`@myorg/my-plugin`) or unscoped (`my-wasm-plugin`). Choose a name that makes sense for your plugin and avoids conflicts on npm.
 
-## Step 6: Install to Signal K
+## Step 6: Test Install
 
 **Option 1: Symlink (Recommended for Development)**
 
@@ -227,5 +227,5 @@ After installing your plugin, verify it appears in the Admin UI:
 
 ## Additional Resources
 
-- See the AssemblyScript SDK for full API reference
-- See the example-hello-assemblyscript example in `examples/wasm-plugins/example-hello-assemblyscript/` for complete working code
+- See the [AssemblyScript SDK](../../../../packages/assemblyscript-plugin-sdk/assembly/) for full API reference
+- See the [example-hello-assemblyscript](../../../../examples/wasm-plugins/example-hello-assemblyscript/) example for complete working code
