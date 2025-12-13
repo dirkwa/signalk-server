@@ -177,7 +177,6 @@ curl -X POST http://localhost:3000/plugins/my-plugin/api/update \
 ## Security Considerations
 
 - Endpoints are sandboxed - no direct file system access
-- Shell commands are whitelisted (only journalctl, tail allowed)
 - Memory is isolated - cannot access other plugins
 - Validate all input from requests
 - Implement authentication if handling sensitive data

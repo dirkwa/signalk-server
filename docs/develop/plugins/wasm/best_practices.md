@@ -122,7 +122,6 @@ For plugins that need to handle large data volumes (logs, file streaming, large 
 
 Use this pattern when your plugin needs to:
 
-- Stream large log files (journalctl, syslog)
 - Return large JSON responses (> 64KB)
 - Process large file uploads
 - Handle streaming data

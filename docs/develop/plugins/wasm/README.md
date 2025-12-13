@@ -66,7 +66,6 @@ Signal K Server supports multiple languages for WASM plugin development:
 - **Data Storage**: VFS-isolated file storage
 - **HTTP Endpoints**: Register custom REST API endpoints
 - **Static Files**: Serve web UI from `public/` directory
-- **Command Execution**: Whitelisted shell commands (logs only)
 - **Network Access**: HTTP requests via as-fetch (AssemblyScript)
 - **Resource Providers**: Serve SignalK resources
 - **Weather Providers**: Integrate with Signal K Weather API

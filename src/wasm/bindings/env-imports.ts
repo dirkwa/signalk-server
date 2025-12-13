@@ -414,58 +414,6 @@ export function createEnvImports(
       }
     },
 
-    // Privileged operation: Execute shell command (for log reading, journalctl, etc.)
-    sk_exec_command: (
-      cmdPtr: number,
-      cmdLen: number,
-      outPtr: number,
-      outMaxLen: number
-    ): number => {
-      try {
-        const command = readUtf8String(cmdPtr, cmdLen)
-        debug(`[${pluginId}] Executing command: ${command}`)
-
-        // Security: Only allow specific whitelisted commands for logs
-        const allowedCommands = [
-          /^journalctl\s+-u\s+signalk/, // journalctl for signalk service
-          /^cat\s+\/var\/log\//, // Read log files
-          /^tail\s+-n\s+\d+\s+\// // Tail log files
-        ]
-
-        const isAllowed = allowedCommands.some((pattern) =>
-          pattern.test(command)
-        )
-        if (!isAllowed) {
-          debug(`[${pluginId}] Command not allowed: ${command}`)
-          return 0 // Return 0 bytes written
-        }
-
-        // Execute command
-        const { execSync } = require('child_process')
-        const output = execSync(command, {
-          encoding: 'utf8',
-          maxBuffer: 10 * 1024 * 1024, // 10MB max
-          timeout: 30000 // 30 second timeout
-        })
-
-        // Write output to WASM memory
-        const outputBytes = Buffer.from(output, 'utf8')
-        const bytesToWrite = Math.min(outputBytes.length, outMaxLen)
-
-        if (rawExports.current?.memory) {
-          const memory = rawExports.current.memory as WebAssembly.Memory
-          const memView = new Uint8Array(memory.buffer)
-          memView.set(outputBytes.slice(0, bytesToWrite), outPtr)
-        }
-
-        return bytesToWrite
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        debug(`[${pluginId}] Command execution error: ${errorMsg}`)
-        return 0
-      }
-    },
-
     // Capability checking
     sk_has_capability: (capPtr: number, capLen: number): number => {
       try {
