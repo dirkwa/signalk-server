@@ -19,10 +19,10 @@ declare function sk_register_resource_provider_ffi(typePtr: usize, typeLen: usiz
  * Register this plugin as a resource provider for a given resource type.
  *
  * After calling this, the plugin must export the following handler functions:
- * - resource_list(queryJson: string): string - List resources matching query
- * - resource_get(requestJson: string): string - Get a single resource
- * - resource_set(requestJson: string): void - Create/update a resource
- * - resource_delete(requestJson: string): void - Delete a resource
+ * - resources_list_resources(queryJson: string): string - List resources matching query
+ * - resources_get_resource(requestJson: string): string - Get a single resource
+ * - resources_set_resource(requestJson: string): void - Create/update a resource
+ * - resources_delete_resource(requestJson: string): void - Delete a resource
  *
  * @param resourceType The type of resources to provide (e.g., "weather", "routes", "waypoints")
  * @returns true if registration succeeded, false otherwise
@@ -38,12 +38,12 @@ declare function sk_register_resource_provider_ffi(typePtr: usize, typeLen: usiz
  * }
  *
  * // Export handler functions:
- * export function resource_list(queryJson: string): string {
+ * export function resources_list_resources(queryJson: string): string {
  *   // Return JSON object of resources
  *   return '{"forecast-1": {"name": "Current Weather"}}'
  * }
  *
- * export function resource_get(requestJson: string): string {
+ * export function resources_get_resource(requestJson: string): string {
  *   // requestJson: {"id": "forecast-1", "property": null}
  *   return '{"name": "Current Weather", "temperature": 20.5}'
  * }
@@ -79,7 +79,7 @@ export function hasResourceProviderCapability(): bool {
 // ===== Helper Types for Resource Handlers =====
 
 /**
- * Request format for resource_get handler
+ * Request format for resources_get_resource handler
  */
 export class ResourceGetRequest {
   id: string = ''
@@ -129,7 +129,7 @@ export class ResourceGetRequest {
 }
 
 /**
- * Request format for resource_set handler
+ * Request format for resources_set_resource handler
  */
 export class ResourceSetRequest {
   id: string = ''
@@ -175,7 +175,7 @@ export class ResourceSetRequest {
 }
 
 /**
- * Request format for resource_delete handler
+ * Request format for resources_delete_resource handler
  */
 export class ResourceDeleteRequest {
   id: string = ''

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-12-14
+
+### Changed
+
+- **BREAKING**: Renamed resource provider exports to match TypeScript API naming convention:
+  - `resource_list` → `resources_list_resources`
+  - `resource_get` → `resources_get_resource`
+  - `resource_set` → `resources_set_resource`
+  - `resource_delete` → `resources_delete_resource`
+- Updated documentation and examples to use new naming
+
 ## [0.1.4] - 2025-12-05
 
 ### Added
@@ -19,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Resource Provider Support** - New `assembly/resources.ts` module for registering WASM plugins as Signal K resource providers
   - `registerResourceProvider(type: string): bool` - Register plugin as provider for a resource type
   - `ResourceGetRequest` class for parsing resource get requests
-  - Export `resource_list`, `resource_get`, `resource_set`, `resource_delete` handlers to serve resources
+  - Export `resources_list_resources`, `resources_get_resource`, `resources_set_resource`, `resources_delete_resource` handlers to serve resources
 
 ### Documentation
 
@@ -38,11 +49,11 @@ import {
 registerResourceProvider('weather')
 
 // Export handlers:
-export function resource_list(queryJson: string): string {
+export function resources_list_resources(queryJson: string): string {
   return '{"current": {...}}'
 }
 
-export function resource_get(requestJson: string): string {
+export function resources_get_resource(requestJson: string): string {
   const req = ResourceGetRequest.parse(requestJson)
   if (req.id === 'current') return data.toJSON()
   return '{"error":"Not found"}'

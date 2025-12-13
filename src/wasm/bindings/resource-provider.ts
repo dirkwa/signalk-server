@@ -188,7 +188,7 @@ export function createResourceProviderBinding(
           const queryJson = JSON.stringify({ ...query, resourceType })
           const result = callWasmResourceHandler(
             provider.pluginInstance,
-            'resource_list',
+            'resources_list_resources',
             queryJson
           )
           return result ? JSON.parse(result) : {}
@@ -204,7 +204,7 @@ export function createResourceProviderBinding(
           const requestJson = JSON.stringify({ id, property, resourceType })
           const result = callWasmResourceHandler(
             provider.pluginInstance,
-            'resource_get',
+            'resources_get_resource',
             requestJson
           )
           return result ? JSON.parse(result) : {}
@@ -223,7 +223,7 @@ export function createResourceProviderBinding(
           const requestJson = JSON.stringify({ id, value, resourceType })
           callWasmResourceHandler(
             provider.pluginInstance,
-            'resource_set',
+            'resources_set_resource',
             requestJson
           )
         },
@@ -238,7 +238,7 @@ export function createResourceProviderBinding(
           const requestJson = JSON.stringify({ id, resourceType })
           callWasmResourceHandler(
             provider.pluginInstance,
-            'resource_delete',
+            'resources_delete_resource',
             requestJson
           )
         }

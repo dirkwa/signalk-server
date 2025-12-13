@@ -188,16 +188,16 @@ The plugin exports these functions for resource operations:
 
 ```typescript
 // List resources (routes or waypoints based on resourceType in query)
-export function resource_list(queryJson: string): string
+export function resources_list_resources(queryJson: string): string
 
 // Get single resource
-export function resource_get(requestJson: string): string
+export function resources_get_resource(requestJson: string): string
 
 // Create/update resource
-export function resource_set(requestJson: string): string
+export function resources_set_resource(requestJson: string): string
 
 // Delete resource
-export function resource_delete(requestJson: string): string
+export function resources_delete_resource(requestJson: string): string
 ```
 
 ### Request Format

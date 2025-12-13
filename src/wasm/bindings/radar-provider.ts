@@ -206,7 +206,7 @@ export function cleanupRadarProviders(pluginId: string, app?: any): void {
  * WASM plugins call this to register as a radar provider.
  * The plugin must export handler functions:
  * - radar_get_radars() -> JSON array of radar IDs
- * - radar_get_info(requestJson) -> RadarInfo JSON
+ * - radar_get_radar_info(requestJson) -> RadarInfo JSON
  * - radar_set_power(requestJson) -> boolean success
  * - radar_set_range(requestJson) -> boolean success
  * - radar_set_gain(requestJson) -> boolean success
@@ -291,7 +291,7 @@ export function createRadarProviderBinding(
             const requestJson = JSON.stringify({ radarId })
             const result = await callWasmRadarHandler(
               provider.pluginInstance,
-              'radar_get_info',
+              'radar_get_radar_info',
               requestJson
             )
 
@@ -300,7 +300,7 @@ export function createRadarProviderBinding(
                 return JSON.parse(result)
               } catch (e) {
                 debug(
-                  `[${pluginId}] Failed to parse radar_get_info response: ${e}`
+                  `[${pluginId}] Failed to parse radar_get_radar_info response: ${e}`
                 )
                 return null
               }

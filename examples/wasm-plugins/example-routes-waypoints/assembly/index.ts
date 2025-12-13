@@ -384,8 +384,8 @@ export function plugin_stop(): i32 {
  * @param queryJson - JSON with query parameters and resourceType
  * @returns JSON object: { "id1": {...}, "id2": {...} }
  */
-export function resource_list(queryJson: string): string {
-  debug('resource_list called: ' + queryJson)
+export function resources_list_resources(queryJson: string): string {
+  debug('resources_list_resources called: ' + queryJson)
 
   // Extract resource type from query
   const resourceType = extractString(queryJson, 'resourceType')
@@ -421,8 +421,8 @@ export function resource_list(queryJson: string): string {
  * @param requestJson - JSON with { "id": "...", "resourceType": "..." }
  * @returns JSON object of the resource
  */
-export function resource_get(requestJson: string): string {
-  debug('resource_get called: ' + requestJson)
+export function resources_get_resource(requestJson: string): string {
+  debug('resources_get_resource called: ' + requestJson)
 
   const req = ResourceGetRequest.parse(requestJson)
   const resourceType = extractString(requestJson, 'resourceType')
@@ -454,8 +454,8 @@ export function resource_get(requestJson: string): string {
  * @param requestJson - JSON with { "id": "...", "resourceType": "...", "value": {...} }
  * @returns Empty string on success, error message on failure
  */
-export function resource_set(requestJson: string): string {
-  debug('resource_set called: ' + requestJson)
+export function resources_set_resource(requestJson: string): string {
+  debug('resources_set_resource called: ' + requestJson)
 
   const id = extractString(requestJson, 'id')
   const resourceType = extractString(requestJson, 'resourceType')
@@ -562,8 +562,8 @@ export function resource_set(requestJson: string): string {
  * @param requestJson - JSON with { "id": "...", "resourceType": "..." }
  * @returns Empty string on success, error message on failure
  */
-export function resource_delete(requestJson: string): string {
-  debug('resource_delete called: ' + requestJson)
+export function resources_delete_resource(requestJson: string): string {
+  debug('resources_delete_resource called: ' + requestJson)
 
   const id = extractString(requestJson, 'id')
   const resourceType = extractString(requestJson, 'resourceType')

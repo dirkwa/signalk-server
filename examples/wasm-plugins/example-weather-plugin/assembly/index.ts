@@ -513,8 +513,8 @@ export function plugin_stop(): i32 {
  * @param queryJson - JSON string with query parameters (e.g., filters)
  * @returns JSON object of resources: { "id": { ...resource... }, ... }
  */
-export function resource_list(queryJson: string): string {
-  debug('resource_list called with query: ' + queryJson)
+export function resources_list_resources(queryJson: string): string {
+  debug('resources_list_resources called with query: ' + queryJson)
 
   // Return available weather resources
   // We have one resource: "current" for current weather conditions
@@ -534,8 +534,8 @@ export function resource_list(queryJson: string): string {
  * @param requestJson - JSON with { "id": "resource-id", "property": optional }
  * @returns JSON object of the resource
  */
-export function resource_get(requestJson: string): string {
-  debug('resource_get called with request: ' + requestJson)
+export function resources_get_resource(requestJson: string): string {
+  debug('resources_get_resource called with request: ' + requestJson)
 
   // Parse the request to get the ID
   const req = ResourceGetRequest.parse(requestJson)

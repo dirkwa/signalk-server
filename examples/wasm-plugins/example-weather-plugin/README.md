@@ -322,13 +322,13 @@ Export these functions to handle resource requests:
 
 ```typescript
 // List all resources - GET /signalk/v2/api/resources/weather
-export function resource_list(queryJson: string): string {
+export function resources_list_resources(queryJson: string): string {
   // Return JSON object: { "id1": {...}, "id2": {...} }
   return '{"current":' + cachedData.toJSON() + '}'
 }
 
 // Get specific resource - GET /signalk/v2/api/resources/weather/{id}
-export function resource_get(requestJson: string): string {
+export function resources_get_resource(requestJson: string): string {
   const req = ResourceGetRequest.parse(requestJson)
 
   if (req.id === 'current') {
@@ -339,13 +339,13 @@ export function resource_get(requestJson: string): string {
 }
 
 // Optional: Set resource - PUT /signalk/v2/api/resources/weather/{id}
-export function resource_set(requestJson: string): string {
+export function resources_set_resource(requestJson: string): string {
   // Handle resource creation/update
   return '{"success":true}'
 }
 
 // Optional: Delete resource - DELETE /signalk/v2/api/resources/weather/{id}
-export function resource_delete(requestJson: string): string {
+export function resources_delete_resource(requestJson: string): string {
   // Handle resource deletion
   return '{"success":true}'
 }

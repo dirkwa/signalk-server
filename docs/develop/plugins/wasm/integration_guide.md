@@ -79,12 +79,12 @@ if !register_resource_provider("weather-forecasts") {
 
 After registering, your plugin must export these handler functions:
 
-#### `resource_list` - List resources matching a query
+#### `resources_list_resources` - List resources matching a query
 
 **AssemblyScript:**
 
 ```typescript
-export function resource_list(queryJson: string): string {
+export function resources_list_resources(queryJson: string): string {
   // queryJson: {"bbox": [...], "distance": 1000, ...}
   // Return JSON object: {"resource-id-1": {...}, "resource-id-2": {...}}
   return '{"forecast-1": {"name": "Current Weather", "type": "weather"}}'
@@ -95,7 +95,7 @@ export function resource_list(queryJson: string): string {
 
 ```rust
 #[no_mangle]
-pub extern "C" fn resource_list(
+pub extern "C" fn resources_list_resources(
     request_ptr: *const u8, request_len: usize,
     response_ptr: *mut u8, response_max_len: usize,
 ) -> i32 {
@@ -105,35 +105,35 @@ pub extern "C" fn resource_list(
 }
 ```
 
-#### `resource_get` - Get a single resource
+#### `resources_get_resource` - Get a single resource
 
 **AssemblyScript:**
 
 ```typescript
-export function resource_get(requestJson: string): string {
+export function resources_get_resource(requestJson: string): string {
   // requestJson: {"id": "forecast-1", "property": null}
   return '{"name": "Current Weather", "temperature": 20.5, "humidity": 0.65}'
 }
 ```
 
-#### `resource_set` - Create or update a resource
+#### `resources_set_resource` - Create or update a resource
 
 **AssemblyScript:**
 
 ```typescript
-export function resource_set(requestJson: string): string {
+export function resources_set_resource(requestJson: string): string {
   // requestJson: {"id": "forecast-1", "value": {...}}
   // Return empty string on success, or error message
   return ''
 }
 ```
 
-#### `resource_delete` - Delete a resource
+#### `resources_delete_resource` - Delete a resource
 
 **AssemblyScript:**
 
 ```typescript
-export function resource_delete(requestJson: string): string {
+export function resources_delete_resource(requestJson: string): string {
   // requestJson: {"id": "forecast-1"}
   return ''
 }
@@ -338,7 +338,7 @@ export function radar_get_radars(): string {
 }
 
 // Return RadarInfo JSON for a specific radar
-export function radar_get_info(requestJson: string): string {
+export function radar_get_radar_info(requestJson: string): string {
   const info = {
     id: 'radar-0',
     name: 'Furuno DRS4D-NXT',

@@ -412,12 +412,12 @@ start(config: string): i32 {
 
 ```typescript
 // List all resources - GET /signalk/v2/api/resources/weather
-export function resource_list(queryJson: string): string {
+export function resources_list_resources(queryJson: string): string {
   return '{"current":' + cachedData.toJSON() + '}'
 }
 
 // Get specific resource - GET /signalk/v2/api/resources/weather/{id}
-export function resource_get(requestJson: string): string {
+export function resources_get_resource(requestJson: string): string {
   const req = ResourceGetRequest.parse(requestJson)
   if (req.id === 'current') {
     return cachedData.toJSON()
