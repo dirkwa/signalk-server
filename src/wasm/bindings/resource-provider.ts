@@ -105,28 +105,6 @@ export function updateResourceProviderInstance(
 }
 
 /**
- * Migrate resource provider registrations from old pluginId to new pluginId
- * This is needed because during plugin loading, we use packageName as temporary pluginId,
- * but the real pluginId comes from the WASM module's plugin_id() export.
- *
- * NOTE: We only update the pluginId in the provider object, NOT the Map key.
- * The closures in providerMethods capture the original key, so we must keep it.
- */
-export function migrateResourceProviderPluginId(
-  oldPluginId: string,
-  newPluginId: string
-): void {
-  wasmResourceProviders.forEach((provider, key) => {
-    if (provider.pluginId === oldPluginId) {
-      provider.pluginId = newPluginId
-      debug(
-        `Updated resource provider ${key} pluginId from ${oldPluginId} to ${newPluginId}`
-      )
-    }
-  })
-}
-
-/**
  * Clean up resource provider registrations for a plugin
  * @param pluginId The plugin ID
  * @param app The Signal K app (optional, if provided will also unregister from ResourcesApi)

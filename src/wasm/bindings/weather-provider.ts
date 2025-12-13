@@ -152,22 +152,6 @@ export function updateWeatherProviderInstance(
 }
 
 /**
- * Migrate weather provider registrations from old pluginId to new pluginId
- */
-export function migrateWeatherProviderPluginId(
-  oldPluginId: string,
-  newPluginId: string
-): void {
-  const provider = wasmWeatherProviders.get(oldPluginId)
-  if (provider) {
-    provider.pluginId = newPluginId
-    wasmWeatherProviders.delete(oldPluginId)
-    wasmWeatherProviders.set(newPluginId, provider)
-    debug(`Migrated weather provider from ${oldPluginId} to ${newPluginId}`)
-  }
-}
-
-/**
  * Clean up weather provider registrations for a plugin
  * @param pluginId The plugin ID
  * @param app The Signal K app (optional, if provided will also unregister from WeatherApi)

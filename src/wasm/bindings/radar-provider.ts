@@ -179,22 +179,6 @@ export function updateRadarProviderInstance(
 }
 
 /**
- * Migrate radar provider registrations from old pluginId to new pluginId
- */
-export function migrateRadarProviderPluginId(
-  oldPluginId: string,
-  newPluginId: string
-): void {
-  const provider = wasmRadarProviders.get(oldPluginId)
-  if (provider) {
-    provider.pluginId = newPluginId
-    wasmRadarProviders.delete(oldPluginId)
-    wasmRadarProviders.set(newPluginId, provider)
-    debug(`Migrated radar provider from ${oldPluginId} to ${newPluginId}`)
-  }
-}
-
-/**
  * Clean up radar provider registrations for a plugin
  * @param pluginId The plugin ID
  * @param app The Signal K app (optional, if provided will also unregister from RadarApi)

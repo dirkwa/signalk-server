@@ -19,18 +19,9 @@ import {
   writePluginConfig
 } from '../wasm-storage'
 import { setupWasmPluginRoutes } from './plugin-routes'
-import {
-  migrateResourceProviderPluginId,
-  updateResourceProviderInstance
-} from '../bindings/resource-provider'
-import {
-  migrateWeatherProviderPluginId,
-  updateWeatherProviderInstance
-} from '../bindings/weather-provider'
-import {
-  migrateRadarProviderPluginId,
-  updateRadarProviderInstance
-} from '../bindings/radar-provider'
+import { updateResourceProviderInstance } from '../bindings/resource-provider'
+import { updateWeatherProviderInstance } from '../bindings/weather-provider'
+import { updateRadarProviderInstance } from '../bindings/radar-provider'
 import { derivePluginId } from '../../pluginid'
 
 const debug = Debug('signalk:wasm:loader')
@@ -174,15 +165,6 @@ export async function registerWasmPlugin(
     const pluginName = tempInstance.exports.name?.() || packageName
     const schemaJson = tempInstance.exports.schema()
     const schema = schemaJson ? JSON.parse(schemaJson) : {}
-
-    // Migrate any provider registrations from packageName to real pluginId
-    // This is needed because registerResourceProvider()/registerWeatherProvider()/registerRadarProvider() is called
-    // during plugin_start() before we know the real pluginId
-    if (packageName !== pluginId) {
-      migrateResourceProviderPluginId(packageName, pluginId)
-      migrateWeatherProviderPluginId(packageName, pluginId)
-      migrateRadarProviderPluginId(packageName, pluginId)
-    }
 
     // Update the plugin instance reference for providers
     updateResourceProviderInstance(pluginId, tempInstance)
