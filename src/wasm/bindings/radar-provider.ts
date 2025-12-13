@@ -518,12 +518,8 @@ export function createRadarProviderBinding(
             return false
           },
 
-          // ============================================
-          // v5 API Methods
-          // ============================================
-
           /**
-           * Get capability manifest for a radar (v5)
+           * Get capability manifest for a radar
            * @param radarId The radar ID
            */
           getCapabilities: async (radarId: string): Promise<any | null> => {
@@ -561,7 +557,7 @@ export function createRadarProviderBinding(
           },
 
           /**
-           * Get current state in v5 format
+           * Get current state
            * @param radarId The radar ID
            */
           getState: async (radarId: string): Promise<any | null> => {
@@ -597,7 +593,7 @@ export function createRadarProviderBinding(
           },
 
           /**
-           * Get a single control value (v5)
+           * Get a single control value
            * @param radarId The radar ID
            * @param controlId The control ID
            */
@@ -639,7 +635,7 @@ export function createRadarProviderBinding(
           },
 
           /**
-           * Set a single control value (v5)
+           * Set a single control value
            * @param radarId The radar ID
            * @param controlId The control ID
            * @param value The value to set
@@ -676,11 +672,11 @@ export function createRadarProviderBinding(
           },
 
           // ============================================
-          // v6 ARPA Target Methods
+          // ARPA Target Methods
           // ============================================
 
           /**
-           * Get all tracked ARPA targets (v6)
+           * Get all tracked ARPA targets
            * @param radarId The radar ID
            */
           getTargets: async (radarId: string): Promise<any | null> => {
@@ -718,7 +714,7 @@ export function createRadarProviderBinding(
           },
 
           /**
-           * Manually acquire a target at the specified position (v6)
+           * Manually acquire a target at the specified position
            * @param radarId The radar ID
            * @param bearing Bearing in degrees
            * @param distance Distance in meters
@@ -759,7 +755,7 @@ export function createRadarProviderBinding(
           },
 
           /**
-           * Cancel tracking of a target (v6)
+           * Cancel tracking of a target
            * @param radarId The radar ID
            * @param targetId The target ID to cancel
            */
@@ -794,7 +790,7 @@ export function createRadarProviderBinding(
           },
 
           /**
-           * Get ARPA settings (v6)
+           * Get ARPA settings
            * @param radarId The radar ID
            */
           getArpaSettings: async (radarId: string): Promise<any | null> => {
@@ -832,7 +828,7 @@ export function createRadarProviderBinding(
           },
 
           /**
-           * Update ARPA settings (v6)
+           * Update ARPA settings
            * @param radarId The radar ID
            * @param settings Partial settings to update
            */
