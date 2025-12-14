@@ -46,8 +46,8 @@ The `emit()` function accepts an optional second parameter to specify the Signal
 
 **Why does this matter?**
 
-- **v1 deltas** are processed through `app.signalk.addDelta()` and update the full Signal K data model
-- **v2 deltas** are emitted as events for v2 API subscribers without contaminating v1 paths
+- **v1 deltas** update the full Signal K data model and are available via the REST API and WebSocket subscriptions
+- **v2 deltas** are emitted as events for v2 API subscribers without mixing into the v1 data model
 
 Most plugins should use v1 (the default). Only use v2 when emitting Course API data or other v2-specific paths.
 
