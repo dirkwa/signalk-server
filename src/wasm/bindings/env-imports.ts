@@ -177,7 +177,7 @@ export function createEnvImports(
      *
      * @param ptr - Pointer to delta JSON string in WASM memory
      * @param len - Length of delta JSON string
-     * @param version - Signal K version: 0 = v1 (default), 1 = v2
+     * @param version - Signal K version: 1 = v1 (default), 2 = v2
      *
      * Plugins should use v1 for regular navigation data (the default).
      * Use v2 for Course API paths and other v2-specific data to prevent
@@ -186,16 +186,16 @@ export function createEnvImports(
      * This mirrors the TypeScript plugin API where handleMessage accepts
      * an optional skVersion parameter.
      */
-    sk_handle_message: (ptr: number, len: number, version: number = 0) => {
+    sk_handle_message: (ptr: number, len: number, version: number = 1) => {
       try {
         const deltaJson = readUtf8String(ptr, len)
         debug(
-          `[${pluginId}] Emitting delta (v${version === 1 ? '2' : '1'}): ${deltaJson.substring(0, 200)}...`
+          `[${pluginId}] Emitting delta (v${version === 2 ? '2' : '1'}): ${deltaJson.substring(0, 200)}...`
         )
         if (app && app.handleMessage) {
           try {
             const delta = JSON.parse(deltaJson)
-            const skVersion = version === 1 ? SKVersion.v2 : SKVersion.v1
+            const skVersion = version === 2 ? SKVersion.v2 : SKVersion.v1
             app.handleMessage(pluginId, delta, skVersion)
             debug(`[${pluginId}] Delta processed by server (${skVersion})`)
           } catch (parseError) {

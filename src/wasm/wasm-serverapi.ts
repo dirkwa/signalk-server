@@ -51,7 +51,7 @@ export function createServerAPIBridge(
        *
        * @param pluginIdParam - Plugin identifier
        * @param deltaJson - Delta message as JSON string
-       * @param version - Signal K version: 0 = v1 (default), 1 = v2
+       * @param version - Signal K version: 1 = v1 (default), 2 = v2
        *
        * Plugins should use v1 for regular navigation data.
        * Use v2 for Course API paths and other v2-specific data.
@@ -59,7 +59,7 @@ export function createServerAPIBridge(
       handleMessage: (
         pluginIdParam: string,
         deltaJson: string,
-        version: number = 0
+        version: number = 1
       ) => {
         if (!capabilities.dataWrite) {
           throw new Error(`Plugin ${pluginId} lacks dataWrite capability`)
@@ -67,7 +67,7 @@ export function createServerAPIBridge(
 
         try {
           const delta = JSON.parse(deltaJson)
-          const skVersion = version === 1 ? SKVersion.v2 : SKVersion.v1
+          const skVersion = version === 2 ? SKVersion.v2 : SKVersion.v1
           debug(`Plugin ${pluginId} emitting delta (${skVersion}):`, delta)
 
           // Forward to server's handleMessage with version

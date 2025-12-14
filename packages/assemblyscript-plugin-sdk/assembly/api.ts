@@ -83,8 +83,8 @@ declare function sk_save_config_ffi(configPtr: usize, configLen: usize): i32
 /**
  * Signal K version for delta emission
  */
-export const SK_VERSION_V1: i32 = 0
-export const SK_VERSION_V2: i32 = 1
+export const SK_VERSION_V1: i32 = 1
+export const SK_VERSION_V2: i32 = 2
 
 /**
  * Emit a delta message to the Signal K server
