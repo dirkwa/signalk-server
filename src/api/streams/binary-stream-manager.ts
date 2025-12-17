@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Binary Stream Manager
  *
  * Manages WebSocket streaming of high-frequency binary data from WASM plugins.
- * Handles buffering, client connections, and backpressure.
+ * Handles buffering, client connections, and slow consumer disconnection.
  */
 
 import Debug from 'debug'
@@ -27,12 +26,19 @@ const MAX_CONSECUTIVE_DROPS = 30 // ~0.5 seconds at 60Hz
 const MAX_BUFFERED_FRAMES = 100
 
 /**
+ * Security principal representing the authenticated user/device
+ */
+export interface StreamPrincipal {
+  identifier: string
+}
+
+/**
  * Client connected to a binary stream
  */
 interface StreamClient {
   streamId: string
   ws: WebSocket
-  principal: any
+  principal: StreamPrincipal
   consecutiveDropCount: number
   connectedAt: number
 }
@@ -99,7 +105,7 @@ export class BinaryStreamManager {
    * @param ws - WebSocket connection
    * @param principal - Security principal (authenticated user)
    */
-  addClient(streamId: string, ws: WebSocket, principal: any): void {
+  addClient(streamId: string, ws: WebSocket, principal: StreamPrincipal): void {
     debug('Adding client to stream: %s', streamId)
 
     const client: StreamClient = {

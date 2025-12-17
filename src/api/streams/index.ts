@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Binary Stream WebSocket Endpoints
  *
@@ -9,16 +8,34 @@
 import Debug from 'debug'
 import WebSocket from 'ws'
 import { IncomingMessage } from 'http'
-import { binaryStreamManager } from './binary-stream-manager'
+import { Duplex } from 'stream'
+import { Server as HttpServer } from 'http'
+import { Server as HttpsServer } from 'https'
+import { binaryStreamManager, StreamPrincipal } from './binary-stream-manager'
 
 const debug = Debug('signalk:streams')
 
+/**
+ * Security strategy interface for stream authentication
+ */
+interface StreamSecurityStrategy {
+  shouldAllowWrite: (request: IncomingMessage, requestType: string) => boolean
+  authorizeWS?: (request: IncomingMessage) => void
+}
+
+/**
+ * Application interface for binary stream initialization
+ */
 interface StreamApplication {
-  server: any
-  securityStrategy: {
-    shouldAllowWrite: (request: any, requestType: string) => boolean
-    authorizeWS?: (request: any) => void
-  }
+  server: HttpServer | HttpsServer | null
+  securityStrategy: StreamSecurityStrategy
+}
+
+/**
+ * Extended request with SignalK principal attached by security middleware
+ */
+interface AuthenticatedRequest extends IncomingMessage {
+  skPrincipal?: StreamPrincipal
 }
 
 /**
@@ -40,7 +57,7 @@ export function initializeBinaryStreams(app: StreamApplication): void {
   debug('Adding upgrade listener to server')
   app.server.on(
     'upgrade',
-    (request: IncomingMessage, socket: any, head: Buffer) => {
+    (request: IncomingMessage, socket: Duplex, head: Buffer) => {
       debug(
         'Upgrade request received: %s, headers.host: %s',
         request.url,
@@ -80,7 +97,8 @@ export function initializeBinaryStreams(app: StreamApplication): void {
         debug('Processing WebSocket upgrade for stream: %s', streamId)
 
         // Authenticate the request (if security is enabled)
-        let principal: any = null
+        let principal: StreamPrincipal = { identifier: 'unknown' }
+        const authRequest = request as AuthenticatedRequest
 
         // Check if security is enabled
         if (
@@ -91,15 +109,13 @@ export function initializeBinaryStreams(app: StreamApplication): void {
             // Security is enabled, perform authentication
             if (app.securityStrategy.authorizeWS) {
               app.securityStrategy.authorizeWS(request)
-              principal = (request as any).skPrincipal
+              principal = authRequest.skPrincipal || { identifier: 'unknown' }
             } else {
               // Fallback: use shouldAllowWrite for basic auth check
               if (!app.securityStrategy.shouldAllowWrite(request, 'streams')) {
                 throw new Error('Unauthorized')
               }
-              principal = (request as any).skPrincipal || {
-                identifier: 'unknown'
-              }
+              principal = authRequest.skPrincipal || { identifier: 'unknown' }
             }
           } catch (error) {
             debug(`Authentication failed for stream ${streamId}: ${error}`)
