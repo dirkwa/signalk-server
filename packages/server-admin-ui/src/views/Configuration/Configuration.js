@@ -324,7 +324,7 @@ export default class PluginConfigurationList extends Component {
 
                     if (wasmDisabledForPlugin) {
                       badgeClass = 'badge-danger'
-                      badgeText = 'No WASM'
+                      badgeText = 'WASM disabled'
                     } else if (plugin.data.enabled && !configurationRequired) {
                       badgeClass = 'badge-success'
                       badgeText = 'Enabled'
