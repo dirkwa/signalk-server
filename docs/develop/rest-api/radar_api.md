@@ -955,6 +955,41 @@ app.radarApi.register(plugin.id, {
 
 For WASM plugins, use the `radarProvider` capability and implement the corresponding FFI exports.
 
+## Accessing the Radar API from Plugins
+
+Plugins that want to **consume** radar data (rather than provide it) can access the Radar API programmatically using the `getRadarApi()` method on the server app object.
+
+This provides typed, in-process access to the Radar API without going through HTTP:
+
+```typescript
+plugin.start = async (settings) => {
+  // Check if Radar API is available
+  if (app.getRadarApi) {
+    try {
+      const radarApi = await app.getRadarApi()
+
+      // List all available radars
+      const radars = await radarApi.getRadars()
+      app.debug(`Found ${radars.length} radars`)
+
+      // Get info for a specific radar
+      for (const radar of radars) {
+        const info = await radarApi.getRadarInfo(radar.id)
+        if (info) {
+          app.debug(
+            `Radar ${info.name}: status=${info.status}, range=${info.range}m`
+          )
+        }
+      }
+    } catch (err) {
+      app.debug('Radar API not available:', err.message)
+    }
+  }
+}
+```
+
+This pattern follows the same approach as the History API's `getHistoryApi()` method. The property is optional to support older servers that don't have radar API support.
+
 ## Naming Conventions
 
 Following consistent naming conventions ensures that clients can work with any radar provider without custom mapping code. When multiple providers use the same control IDs, client UIs "just work" across brands.

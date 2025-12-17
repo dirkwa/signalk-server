@@ -757,6 +757,34 @@ export interface RadarProviderRegistry {
 }
 
 /**
+ * Interface for accessing the Radar API from plugins.
+ *
+ * This provides typed, in-process programmatic access to the Radar API,
+ * similar to {@link history!WithHistoryApi | WithHistoryApi} for the History API.
+ *
+ * @category Radar API
+ *
+ * @example
+ * ```javascript
+ * // Check if Radar API is available
+ * if (app.getRadarApi) {
+ *   const radarApi = await app.getRadarApi();
+ *   const radars = await radarApi.getRadars();
+ *   app.debug(`Found ${radars.length} radars`);
+ * }
+ * ```
+ */
+export type WithRadarApi = {
+  /**
+   * Returns a promise for the active Radar API implementation, or rejects if unavailable.
+   * The property is optional to support older servers that do not have radar API support.
+   *
+   * @returns Promise that resolves to a {@link RadarApi} instance if available, or rejects with an error if not.
+   */
+  getRadarApi?: () => Promise<RadarApi>
+}
+
+/**
  * List of registered radar providers (for /_providers endpoint)
  *
  * @hidden visible through API
