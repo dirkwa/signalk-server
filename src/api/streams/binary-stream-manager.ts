@@ -58,8 +58,12 @@ export class BinaryStreamManager {
     // Log periodically
     if (this.emitCount % 500 === 0) {
       const clients = this.clients.get(streamId)
-      console.log(
-        `[binaryStreamManager] emitData #${this.emitCount}: streamId="${streamId}", dataLen=${data.length}, clients=${clients?.size || 0}`
+      debug(
+        'emitData #%d: streamId=%s, dataLen=%d, clients=%d',
+        this.emitCount,
+        streamId,
+        data.length,
+        clients?.size || 0
       )
     }
 
@@ -96,8 +100,7 @@ export class BinaryStreamManager {
    * @param principal - Security principal (authenticated user)
    */
   addClient(streamId: string, ws: WebSocket, principal: any): void {
-    debug(`Adding client to stream: ${streamId}`)
-    console.log(`[binaryStreamManager] addClient: streamId="${streamId}"`)
+    debug('Adding client to stream: %s', streamId)
 
     const client: StreamClient = {
       streamId,
@@ -139,9 +142,10 @@ export class BinaryStreamManager {
     for (const client of clients) {
       if (client.ws === ws) {
         clients.delete(client)
-        debug(`Removed client from stream: ${streamId}`)
-        console.log(
-          `[binaryStreamManager] removeClient: streamId="${streamId}", remaining=${clients.size}`
+        debug(
+          'Removed client from stream: %s, remaining: %d',
+          streamId,
+          clients.size
         )
         break
       }

@@ -27,34 +27,29 @@ interface StreamApplication {
  * @param app - SignalK application instance
  */
 export function initializeBinaryStreams(app: StreamApplication): void {
-  console.log(
-    '[signalk:streams] initializeBinaryStreams called, app.server exists:',
-    !!app.server
-  )
+  debug('initializeBinaryStreams called, app.server exists: %s', !!app.server)
   if (!app.server) {
     debug('HTTP server not available, skipping binary stream initialization')
-    console.log(
-      '[signalk:streams] HTTP server not available, skipping binary stream initialization'
-    )
     return
   }
 
   debug('Initializing binary stream WebSocket endpoints')
-  console.log('[signalk:streams] Registering upgrade handler on server')
 
   // Handle WebSocket upgrade requests for binary streams
   // Note: This listener is added to app.server which should be an HTTP server
-  console.log('[signalk:streams] Adding upgrade listener to server')
+  debug('Adding upgrade listener to server')
   app.server.on(
     'upgrade',
     (request: IncomingMessage, socket: any, head: Buffer) => {
-      console.log(
-        `[signalk:streams] Upgrade request received: ${request.url}, headers.host: ${request.headers.host}`
+      debug(
+        'Upgrade request received: %s, headers.host: %s',
+        request.url,
+        request.headers.host
       )
       try {
         const url = new URL(request.url!, `http://${request.headers.host}`)
         const pathname = url.pathname
-        console.log(`[signalk:streams] Pathname: ${pathname}`)
+        debug('Pathname: %s', pathname)
 
         // Match: /signalk/v2/api/streams/:streamId (support path segments in streamId)
         const streamMatch = pathname.match(
@@ -70,26 +65,19 @@ export function initializeBinaryStreams(app: StreamApplication): void {
 
         if (streamMatch) {
           streamId = decodeURIComponent(streamMatch[1])
-          console.log(`[signalk:streams] Matched stream pattern: ${streamId}`)
+          debug('Matched stream pattern: %s', streamId)
         } else if (radarMatch) {
           // Alias: map radar endpoint to radars/{radarId} stream
           const radarId = radarMatch[1]
           streamId = `radars/${radarId}`
-          console.log(
-            `[signalk:streams] Matched radar stream pattern: ${streamId}`
-          )
+          debug('Matched radar stream pattern: %s', streamId)
         } else {
           // Not a binary stream endpoint, let other handlers process
-          console.log(
-            `[signalk:streams] No match for path, ignoring: ${pathname}`
-          )
+          debug('No match for path, ignoring: %s', pathname)
           return
         }
 
-        debug(`WebSocket upgrade request for stream: ${streamId}`)
-        console.log(
-          `[signalk:streams] Processing WebSocket upgrade for stream: ${streamId}`
-        )
+        debug('Processing WebSocket upgrade for stream: %s', streamId)
 
         // Authenticate the request (if security is enabled)
         let principal: any = null
@@ -128,15 +116,10 @@ export function initializeBinaryStreams(app: StreamApplication): void {
         }
 
         // Create WebSocket connection
-        console.log(
-          `[signalk:streams] Creating WebSocket server for stream: ${streamId}`
-        )
+        debug('Creating WebSocket server for stream: %s', streamId)
         const wss = new WebSocket.Server({ noServer: true })
         wss.handleUpgrade(request, socket, head, (ws) => {
-          debug(`WebSocket connected to stream: ${streamId}`)
-          console.log(
-            `[signalk:streams] WebSocket connected to stream: ${streamId}`
-          )
+          debug('WebSocket connected to stream: %s', streamId)
 
           // Register client with stream manager
           binaryStreamManager.addClient(streamId!, ws, principal)
