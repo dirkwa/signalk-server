@@ -11,7 +11,7 @@ export * from './mmsi/mmsi'
 export * from './propertyvalues'
 export * from './brand'
 export * from './weatherapi'
-export * from './radarapi'
+export * as radar from './radarapi'
 export * from './streambundle'
 export * from './subscriptionmanager'
 /** @category History API */

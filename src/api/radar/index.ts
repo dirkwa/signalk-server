@@ -8,16 +8,7 @@ import { WithSecurityStrategy } from '../../security'
 import { Responses } from '../'
 import { SignalKMessageHub } from '../../app'
 
-import {
-  RadarProvider,
-  RadarProviders,
-  RadarProviderMethods,
-  RadarInfo,
-  RadarStatus,
-  RadarControls,
-  isRadarProvider,
-  ArpaSettings
-} from '@signalk/server-api'
+import { radar } from '@signalk/server-api'
 
 const RADAR_API_PATH = `/signalk/v2/api/vessels/self/radars`
 
@@ -25,7 +16,7 @@ interface RadarApplication
   extends WithSecurityStrategy, SignalKMessageHub, IRouter {}
 
 export class RadarApi {
-  private radarProviders: Map<string, RadarProvider> = new Map()
+  private radarProviders: Map<string, radar.RadarProvider> = new Map()
   private defaultProviderId?: string
 
   constructor(private app: RadarApplication) {}
@@ -40,13 +31,13 @@ export class RadarApi {
   /**
    * Register plugin as radar provider.
    */
-  register(pluginId: string, provider: RadarProvider) {
+  register(pluginId: string, provider: radar.RadarProvider) {
     debug(`** Registering radar provider... ${pluginId}`)
 
     if (!pluginId || !provider) {
       throw new Error(`Error registering radar provider ${pluginId}!`)
     }
-    if (!isRadarProvider(provider)) {
+    if (!radar.isRadarProvider(provider)) {
       throw new Error(
         `${pluginId} is missing RadarProvider properties/methods!`
       )
@@ -97,8 +88,8 @@ export class RadarApi {
   /**
    * Get list of all radars from all providers.
    */
-  async getRadars(): Promise<RadarInfo[]> {
-    const radars: RadarInfo[] = []
+  async getRadars(): Promise<radar.RadarInfo[]> {
+    const radars: radar.RadarInfo[] = []
     for (const [pluginId, provider] of this.radarProviders) {
       try {
         const radarIds = await provider.methods.getRadars()
@@ -118,7 +109,7 @@ export class RadarApi {
   /**
    * Get info for a specific radar by ID.
    */
-  async getRadarInfo(radarId: string): Promise<RadarInfo | null> {
+  async getRadarInfo(radarId: string): Promise<radar.RadarInfo | null> {
     // Search all providers for this radar
     for (const [pluginId, provider] of this.radarProviders) {
       try {
@@ -149,7 +140,7 @@ export class RadarApi {
    */
   private async findProviderForRadar(
     radarId: string
-  ): Promise<RadarProviderMethods | null> {
+  ): Promise<radar.RadarProviderMethods | null> {
     for (const [pluginId, provider] of this.radarProviders) {
       try {
         const radarIds = await provider.methods.getRadars()
@@ -194,8 +185,8 @@ export class RadarApi {
       async (req: Request, res: Response) => {
         debug(`** ${req.method} ${req.path}`)
         try {
-          const r: RadarProviders = {}
-          this.radarProviders.forEach((v: RadarProvider, k: string) => {
+          const r: radar.RadarProviders = {}
+          this.radarProviders.forEach((v: radar.RadarProvider, k: string) => {
             r[k] = {
               name: v.name,
               isDefault: k === this.defaultProviderId
@@ -309,7 +300,8 @@ export class RadarApi {
             })
             return
           }
-          const controls: Partial<RadarControls> = req.body.value ?? req.body
+          const controls: Partial<radar.RadarControls> =
+            req.body.value ?? req.body
           const success = await provider.setControls(req.params.id, controls)
           if (success) {
             res.status(200).json(Responses.ok)
@@ -353,7 +345,7 @@ export class RadarApi {
             })
             return
           }
-          const state: RadarStatus = req.body.value
+          const state: radar.RadarStatus = req.body.value
           if (!['off', 'standby', 'transmit', 'warming'].includes(state)) {
             res.status(400).json({
               statusCode: 400,
@@ -1064,7 +1056,7 @@ export class RadarApi {
             })
             return
           }
-          const settings: Partial<ArpaSettings> =
+          const settings: Partial<radar.ArpaSettings> =
             req.body.value !== undefined ? req.body.value : req.body
           const result = await provider.setArpaSettings(req.params.id, settings)
           if (result.success) {

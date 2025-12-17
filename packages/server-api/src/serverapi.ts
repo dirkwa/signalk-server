@@ -5,9 +5,9 @@ import {
   PropertyValuesEmitter,
   ResourceProviderRegistry,
   WeatherProviderRegistry,
-  RadarProviderRegistry,
   Delta
 } from '.'
+import { RadarProviderRegistry } from './radarapi'
 import { CourseApi } from './course'
 import { HistoryApiRegistry, WithHistoryApi } from './history'
 import { StreamBundle } from './streambundle'
