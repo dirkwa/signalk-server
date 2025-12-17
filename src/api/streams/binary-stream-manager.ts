@@ -33,7 +33,7 @@ interface StreamClient {
   streamId: string
   ws: WebSocket
   principal: any
-  backpressureDropCount: number
+  consecutiveDropCount: number
   connectedAt: number
 }
 
@@ -106,7 +106,7 @@ export class BinaryStreamManager {
       streamId,
       ws,
       principal,
-      backpressureDropCount: 0,
+      consecutiveDropCount: 0,
       connectedAt: Date.now()
     }
 
@@ -182,20 +182,20 @@ export class BinaryStreamManager {
   }
 
   /**
-   * Send binary data to a specific client with backpressure handling
+   * Send binary data to a specific client, disconnecting slow consumers
    *
    * @param client - Client to send to
    * @param data - Binary data
    */
   private sendToClient(client: StreamClient, data: Buffer): void {
-    // Check backpressure
+    // Check if client buffer is full (slow consumer)
     if (client.ws.bufferedAmount > MAX_WEBSOCKET_BUFFER_SIZE) {
-      client.backpressureDropCount++
+      client.consecutiveDropCount++
 
-      if (client.backpressureDropCount > MAX_CONSECUTIVE_DROPS) {
+      if (client.consecutiveDropCount > MAX_CONSECUTIVE_DROPS) {
         debug(
           `Disconnecting slow client on stream ${client.streamId} ` +
-            `(dropped ${client.backpressureDropCount} frames)`
+            `(dropped ${client.consecutiveDropCount} frames)`
         )
         try {
           client.ws.close(1008, 'Client cannot keep up with data rate')
@@ -215,7 +215,7 @@ export class BinaryStreamManager {
     }
 
     // Reset drop counter on successful send
-    client.backpressureDropCount = 0
+    client.consecutiveDropCount = 0
 
     // Send binary frame
     try {
