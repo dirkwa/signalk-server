@@ -587,7 +587,7 @@ export class RadarApi {
     )
 
     // ============================================
-    // v5 API Endpoints
+    // Capability and State Endpoints
     // ============================================
 
     // GET /radars/:id/capabilities - Get radar capability manifest (cacheable)
@@ -631,7 +631,7 @@ export class RadarApi {
       }
     )
 
-    // GET /radars/:id/state - Get current radar state (v5 format)
+    // GET /radars/:id/state - Get current radar state
     this.app.get(
       `${RADAR_API_PATH}/:id/state`,
       async (req: Request, res: Response) => {
@@ -813,7 +813,7 @@ export class RadarApi {
     // should expose their own streamUrl for direct client connection.
 
     // ============================================
-    // v6 ARPA Target Endpoints
+    // ARPA Target Endpoints
     // ============================================
 
     // GET /radars/:id/targets - Get all tracked ARPA targets

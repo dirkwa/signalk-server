@@ -43,7 +43,7 @@ export interface LegendEntry {
 }
 
 // ============================================================================
-// v5 API Types
+// Capability and State Types
 // ============================================================================
 
 /**
@@ -223,7 +223,7 @@ export interface CapabilityManifest {
 }
 
 /**
- * Current radar state in v5 format.
+ * Current radar state.
  * Contains status and all current control values.
  *
  * @category Radar API
@@ -242,7 +242,7 @@ export interface CapabilityManifest {
  * }
  * ```
  */
-export interface RadarStateV5 {
+export interface RadarState {
   /** Radar ID */
   id: string
   /** ISO 8601 timestamp of when state was captured */
@@ -262,7 +262,7 @@ export interface RadarStateV5 {
 }
 
 // ============================================================================
-// v6 ARPA Target Types
+// ARPA Target Types
 // ============================================================================
 
 /**
@@ -614,11 +614,11 @@ export interface RadarProviderMethods {
   handleStreamConnection?: (radarId: string, ws: WebSocket) => void
 
   // ============================================
-  // v5 API Methods
+  // Capability and State Methods
   // ============================================
 
   /**
-   * Get capability manifest for a radar (v5).
+   * Get capability manifest for a radar.
    * Returns detailed capabilities including supported controls, ranges, features.
    * @param radarId The radar ID
    * @returns CapabilityManifest or null if not found
@@ -626,15 +626,15 @@ export interface RadarProviderMethods {
   getCapabilities?: (radarId: string) => Promise<CapabilityManifest | null>
 
   /**
-   * Get current radar state in v5 format.
+   * Get current radar state.
    * Returns status and all current control values.
    * @param radarId The radar ID
    * @returns RadarState or null if not found
    */
-  getState?: (radarId: string) => Promise<RadarStateV5 | null>
+  getState?: (radarId: string) => Promise<RadarState | null>
 
   /**
-   * Get a single control value (v5).
+   * Get a single control value.
    * @param radarId The radar ID
    * @param controlId The semantic control ID (e.g., "gain", "beamSharpening")
    * @returns Control value or null if not found
@@ -643,7 +643,7 @@ export interface RadarProviderMethods {
   getControl?: (radarId: string, controlId: string) => Promise<any | null>
 
   /**
-   * Set a single control value (v5).
+   * Set a single control value.
    * @param radarId The radar ID
    * @param controlId The semantic control ID (e.g., "gain", "beamSharpening")
    * @param value The value to set
@@ -657,18 +657,18 @@ export interface RadarProviderMethods {
   ) => Promise<{ success: boolean; error?: string }>
 
   // ============================================
-  // v6 ARPA Target Methods
+  // ARPA Target Methods
   // ============================================
 
   /**
-   * Get all tracked ARPA targets (v6).
+   * Get all tracked ARPA targets.
    * @param radarId The radar ID
    * @returns Target list response or null if not supported
    */
   getTargets?: (radarId: string) => Promise<TargetListResponse | null>
 
   /**
-   * Manually acquire a target at the specified position (v6).
+   * Manually acquire a target at the specified position.
    * @param radarId The radar ID
    * @param bearing Bearing in degrees (0-360, true north)
    * @param distance Distance in meters
@@ -681,7 +681,7 @@ export interface RadarProviderMethods {
   ) => Promise<{ success: boolean; targetId?: number; error?: string }>
 
   /**
-   * Cancel tracking of a target (v6).
+   * Cancel tracking of a target.
    * @param radarId The radar ID
    * @param targetId The target ID to cancel
    * @returns true on success
@@ -689,7 +689,7 @@ export interface RadarProviderMethods {
   cancelTarget?: (radarId: string, targetId: number) => Promise<boolean>
 
   /**
-   * Handle WebSocket target stream connection (v6).
+   * Handle WebSocket target stream connection.
    * Streams target updates in real-time.
    * @param radarId The radar ID
    * @param ws WebSocket connection to send target updates to
@@ -697,14 +697,14 @@ export interface RadarProviderMethods {
   handleTargetStreamConnection?: (radarId: string, ws: WebSocket) => void
 
   /**
-   * Get ARPA settings (v6).
+   * Get ARPA settings.
    * @param radarId The radar ID
    * @returns ARPA settings or null if not supported
    */
   getArpaSettings?: (radarId: string) => Promise<ArpaSettings | null>
 
   /**
-   * Update ARPA settings (v6).
+   * Update ARPA settings.
    * @param radarId The radar ID
    * @param settings Partial settings to update
    * @returns Result with success flag and optional error
