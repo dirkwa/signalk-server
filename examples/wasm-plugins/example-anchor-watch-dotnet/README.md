@@ -59,6 +59,8 @@ under active development. The WASI Component Model ecosystem is rapidly evolving
 For now, use **AssemblyScript** for Signal K WASM plugins - it works reliably and
 produces much smaller binaries (3-10 KB vs 20+ MB).
 
+For technical details, see the upstream issue: https://github.com/bytecodealliance/componentize-dotnet/issues/103
+
 ---
 
 ## Reference Documentation
@@ -699,6 +701,8 @@ This error occurs because:
 8. Discovered componentize-dotnet only supports Wasmtime/WAMR ❌
 9. No `@bytecodealliance/wasmtime` npm package exists ❌
 10. **Conclusion: Wait for better tooling**
+
+For technical details, see the upstream issue: https://github.com/bytecodealliance/componentize-dotnet/issues/103
 
 ## Future Possibilities
 
