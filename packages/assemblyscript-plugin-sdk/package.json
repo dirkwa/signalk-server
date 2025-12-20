@@ -45,12 +45,6 @@
     "url": "git+https://github.com/SignalK/signalk-server.git",
     "directory": "packages/assemblyscript-plugin-sdk"
   },
-  "files": [
-    "assembly/**/*.ts",
-    "asconfig.json",
-    "README.md",
-    "LICENSE"
-  ],
   "publishConfig": {
     "access": "public"
   }
