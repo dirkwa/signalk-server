@@ -580,7 +580,7 @@ The Signal K runtime handles all state transitions automatically.
 - Verify the URL is accessible
 - Check API keys/authentication
 
-See the [example-weather-plugin](../../../../examples/wasm-plugins/example-weather-plugin/) for a complete implementation.
+See the [example-weather-plugin](https://github.com/SignalK/signalk-server/tree/master/examples/wasm-plugins/example-weather-plugin) for a complete implementation.
 
 ## AssemblyScript Limitations
 
@@ -623,4 +623,4 @@ DEBUG=signalk:wasm:* npm start
 ## Additional Resources
 
 - [AssemblyScript Documentation](https://www.assemblyscript.org/)
-- [Example Plugins](../../../../examples/wasm-plugins/)
+- [Example Plugins](https://github.com/SignalK/signalk-server/tree/master/examples/wasm-plugins)
