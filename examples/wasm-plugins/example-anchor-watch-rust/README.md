@@ -74,31 +74,7 @@ npm install -g ./signalk-anchor-watch-rust-0.1.0.tgz
 
 ## Configuration
 
-Enable and configure the plugin via the Signal K Admin UI:
-
-1. Navigate to **Server** → **Plugin Config**
-2. Find "Anchor Watch (Rust)"
-3. Click **Enable**
-4. Configure settings
-5. Click **Submit**
-
-### Configuration Schema
-
-```json
-{
-  "anchorLat": 52.1234,
-  "anchorLon": 4.5678,
-  "maxRadius": 50,
-  "checkInterval": 10
-}
-```
-
-| Property        | Type    | Default | Description                          |
-| --------------- | ------- | ------- | ------------------------------------ |
-| `anchorLat`     | number  | 0       | Anchor latitude (degrees)            |
-| `anchorLon`     | number  | 0       | Anchor longitude (degrees)           |
-| `maxRadius`     | number  | 50      | Max swing radius in meters (10-1000) |
-| `checkInterval` | integer | 10      | Check interval in seconds            |
+Enable and configure the plugin via the Signal K Admin UI under **Server → Plugin Config**. Configuration options are documented in the plugin's schema.
 
 ## PUT Handlers
 

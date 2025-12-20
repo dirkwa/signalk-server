@@ -356,26 +356,7 @@ public class PutResponse
 
 ## Configuration
 
-Configure the plugin through the Admin UI or by editing `~/.signalk/plugin-config-data/example-anchor-watch-dotnet.json`:
-
-```json
-{
-  "enabled": true,
-  "enableDebug": false,
-  "configuration": {
-    "maxRadius": 50,
-    "alarmEnabled": false
-  }
-}
-```
-
-### Configuration Options
-
-| Option         | Type    | Default | Description                         |
-| -------------- | ------- | ------- | ----------------------------------- |
-| `maxRadius`    | number  | 50      | Default drag alarm radius in meters |
-| `alarmEnabled` | boolean | false   | Enable alarm on startup             |
-| `enableDebug`  | boolean | false   | Enable debug logging                |
+Configure the plugin via the Signal K Admin UI under **Server → Plugin Config**. Configuration options are documented in the plugin's schema.
 
 ## PUT Request/Response Format
 

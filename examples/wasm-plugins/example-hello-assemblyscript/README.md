@@ -109,10 +109,7 @@ See [signalk-logviewer](https://github.com/SignalK/signalk-server/tree/master/pa
 
 ## Configuration
 
-The plugin accepts the following configuration:
-
-- **message** (string): Welcome message to display (default: "Hello from AssemblyScript!")
-- **updateInterval** (number): Update interval in milliseconds (default: 5000)
+Configure the plugin via the Signal K Admin UI under **Server → Plugin Config**. Configuration options are documented in the plugin's schema.
 
 ## Development
 

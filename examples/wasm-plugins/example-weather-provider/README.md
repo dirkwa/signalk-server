@@ -52,13 +52,7 @@ npm run build
 
 ## Configuration
 
-```json
-{
-  "apiKey": "your-openweathermap-api-key",
-  "defaultLatitude": 60.1699,
-  "defaultLongitude": 24.9384
-}
-```
+Configure the plugin via the Signal K Admin UI under **Server → Plugin Config**. You will need to provide your OpenWeatherMap API key. Configuration options are documented in the plugin's schema.
 
 ## Testing
 
