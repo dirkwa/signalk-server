@@ -225,7 +225,359 @@ After installing your plugin, verify it appears in the Admin UI:
 
 **Important**: The Admin UI shows all plugins (both Node.js and WASM) in a unified list. WASM plugins integrate seamlessly with the existing plugin configuration system.
 
+## API Reference
+
+### Base Classes
+
+#### `Plugin`
+
+Abstract base class for all plugins.
+
+**Methods to implement:**
+
+- `id(): string` - Unique plugin identifier
+- `name(): string` - Human-readable name
+- `schema(): string` - JSON schema for configuration
+- `start(config: string): i32` - Initialize plugin
+- `stop(): i32` - Clean shutdown
+
+### Signal K Types
+
+#### `Delta`
+
+Represents a Signal K delta message.
+
+```typescript
+const delta = new Delta('vessels.self', [update])
+```
+
+#### `Update`
+
+Represents an update within a delta.
+
+```typescript
+const update = new Update(source, timestamp, [pathValue])
+```
+
+#### `PathValue`
+
+Represents a path-value pair.
+
+```typescript
+const pathValue = new PathValue('navigation.position', positionJson)
+```
+
+#### `Source`
+
+Represents the source of data.
+
+```typescript
+const source = new Source('my-plugin', 'plugin')
+```
+
+#### `Position`
+
+GPS position with latitude/longitude.
+
+```typescript
+const pos = new Position(60.1, 24.9)
+const posJson = pos.toJSON()
+```
+
+#### `Notification`
+
+Signal K notification.
+
+```typescript
+const notif = new Notification(NotificationState.normal, 'Hello!')
+const notifJson = notif.toJSON()
+```
+
+### API Functions
+
+#### `emit(delta: Delta): void`
+
+Emit a delta message to Signal K server.
+
+```typescript
+emit(delta)
+```
+
+**Requires capability:** `dataWrite: true`
+
+#### `setStatus(message: string): void`
+
+Set plugin status (shown in admin UI).
+
+```typescript
+setStatus('Running normally')
+```
+
+#### `setError(message: string): void`
+
+Report an error (shown in admin UI).
+
+```typescript
+setError('Sensor connection failed')
+```
+
+#### `debug(message: string): void`
+
+Log debug message to server logs.
+
+```typescript
+debug('Processing data: ' + value.toString())
+```
+
+#### `getSelfPath(path: string): string | null`
+
+Read data from vessel.self.
+
+```typescript
+const speedJson = getSelfPath('navigation.speedOverGround')
+if (speedJson !== null) {
+  const speed = parseFloat(speedJson)
+}
+```
+
+**Requires capability:** `dataRead: true`
+
+#### `getPath(path: string): string | null`
+
+Read data from any context.
+
+```typescript
+const posJson = getPath('vessels.self.navigation.position')
+```
+
+**Requires capability:** `dataRead: true`
+
+#### `readConfig(): string`
+
+Read plugin configuration.
+
+```typescript
+const configJson = readConfig()
+```
+
+#### `saveConfig(configJson: string): i32`
+
+Save plugin configuration.
+
+```typescript
+const result = saveConfig(JSON.stringify(config))
+if (result !== 0) {
+  setError('Failed to save config')
+}
+```
+
+### Helper Functions
+
+```typescript
+import {
+  createSimpleDelta,
+  getCurrentTimestamp
+} from '@signalk/assemblyscript-plugin-sdk'
+
+// Quick delta creation
+const delta = createSimpleDelta('my-plugin', 'test.value', '"hello"')
+emit(delta)
+```
+
+### JSON Value Encoding
+
+Values must be JSON-encoded strings:
+
+```typescript
+// Numbers
+const pathValue = new PathValue('temperature', '25.5')
+
+// Strings (note the quotes)
+const pathValue = new PathValue('name', '"My Boat"')
+
+// Objects
+const pathValue = new PathValue(
+  'position',
+  '{"latitude":60.1,"longitude":24.9}'
+)
+
+// Use helper classes
+const pos = new Position(60.1, 24.9)
+const pathValue = new PathValue('position', pos.toJSON())
+```
+
+## Resource Providers
+
+WASM plugins can register as **resource providers** to serve data via the Signal K REST API.
+
+### Setup
+
+1. Add capability to `package.json`:
+
+```json
+{
+  "wasmCapabilities": {
+    "resourceProvider": true
+  }
+}
+```
+
+2. Register in your plugin's `start()`:
+
+```typescript
+import {
+  registerResourceProvider,
+  ResourceGetRequest
+} from '@signalk/assemblyscript-plugin-sdk/assembly/resources'
+
+start(config: string): i32 {
+  if (registerResourceProvider('weather')) {
+    debug('Registered as weather resource provider')
+  }
+  return 0
+}
+```
+
+3. Export handler functions:
+
+```typescript
+// List all resources - GET /signalk/v2/api/resources/weather
+export function resources_list_resources(queryJson: string): string {
+  return '{"current":' + cachedData.toJSON() + '}'
+}
+
+// Get specific resource - GET /signalk/v2/api/resources/weather/{id}
+export function resources_get_resource(requestJson: string): string {
+  const req = ResourceGetRequest.parse(requestJson)
+  if (req.id === 'current') {
+    return cachedData.toJSON()
+  }
+  return '{"error":"Not found"}'
+}
+```
+
+### API Access
+
+Once registered, your resources are available at:
+
+```bash
+curl http://localhost:3000/signalk/v2/api/resources/weather
+curl http://localhost:3000/signalk/v2/api/resources/weather/current
+```
+
+## Network Requests with Asyncify
+
+AssemblyScript plugins can make HTTP requests using the `as-fetch` library with Asyncify support.
+
+### Setup
+
+1. Add dependencies:
+
+```bash
+npm install as-fetch @signalk/assemblyscript-plugin-sdk
+```
+
+2. Enable the Asyncify transform in `asconfig.json`:
+
+```json
+{
+  "options": {
+    "bindings": "esm",
+    "exportRuntime": true,
+    "transform": ["as-fetch/transform"]
+  }
+}
+```
+
+3. Declare network capability in `package.json`:
+
+```json
+{
+  "wasmCapabilities": {
+    "network": true
+  }
+}
+```
+
+### Making Requests
+
+```typescript
+import { fetchSync } from 'as-fetch/sync'
+
+const response = fetchSync('https://api.example.com/data')
+
+if (response && response.status === 200) {
+  const data = response.text()
+  // Process data...
+}
+```
+
+### How Asyncify Works
+
+Asyncify enables synchronous-style async code in WASM:
+
+1. WASM execution pauses when `fetchSync()` is called
+2. HTTP request happens in JavaScript
+3. When response arrives, WASM execution resumes
+4. Your code continues with the response
+
+The Signal K runtime handles all state transitions automatically.
+
+### Troubleshooting Network Requests
+
+**fetchSync hangs or doesn't work:**
+
+- Ensure `"transform": ["as-fetch/transform"]` is in `asconfig.json`
+- Use correct import: `import { fetchSync } from 'as-fetch/sync'`
+- Verify `"network": true` in `wasmCapabilities`
+
+**Request fails:**
+
+- Check Node.js version >= 18 (required for native fetch)
+- Verify the URL is accessible
+- Check API keys/authentication
+
+See the [example-weather-plugin](../../../../examples/wasm-plugins/example-weather-plugin/) for a complete implementation.
+
+## AssemblyScript Limitations
+
+AssemblyScript is a **strict subset** of TypeScript. Notable differences:
+
+- No `any` type
+- No union types (use tagged enums)
+- No dynamic arrays (use fixed-size or manual memory)
+- No standard library (console, setTimeout, etc.)
+- Manual memory management
+
+See [AssemblyScript documentation](https://www.assemblyscript.org/) for details.
+
+## Troubleshooting
+
+### Plugin doesn't load
+
+Check that:
+
+- `wasmManifest` points to correct file
+- `signalk-wasm-plugin` keyword is present
+- WASM binary is valid: `file plugin.wasm`
+
+### Compilation errors
+
+Common issues:
+
+- Using disallowed TypeScript features
+- Missing type annotations
+- Incorrect memory operations
+
+### Runtime errors
+
+Check server logs:
+
+```bash
+DEBUG=signalk:wasm:* npm start
+```
+
 ## Additional Resources
 
-- See the [AssemblyScript SDK](../../../../packages/assemblyscript-plugin-sdk/README.md) for full API reference
-- See the [example-hello-assemblyscript](../../../../examples/wasm-plugins/example-hello-assemblyscript/README.md) example for complete working code
+- [AssemblyScript Documentation](https://www.assemblyscript.org/)
+- [Example Plugins](../../../../examples/wasm-plugins/)
