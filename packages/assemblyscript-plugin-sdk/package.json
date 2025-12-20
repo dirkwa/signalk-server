@@ -48,7 +48,6 @@
     "assembly/**/*.ts",
     "asconfig.json",
     "README.md",
-    "CHANGELOG.md",
     "LICENSE"
   ],
   "publishConfig": {
