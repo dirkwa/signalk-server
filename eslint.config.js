@@ -17,7 +17,8 @@ module.exports = defineConfig([
     // Auto-generated WASM bindings (created by AssemblyScript compiler)
     'examples/wasm-plugins/**/build/**',
     'examples/wasm-plugins/**/plugin.js',
-    'examples/wasm-plugins/**/plugin.d.ts'
+    'examples/wasm-plugins/**/plugin.d.ts',
+    'packages/assemblyscript-plugin-sdk/build/**'
   ]),
 
   // TypeScript options
