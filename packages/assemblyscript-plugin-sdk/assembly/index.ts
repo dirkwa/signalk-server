@@ -10,3 +10,6 @@ export * from './signalk'
 export * from './api'
 export * from './network'
 export * from './resources'
+
+// Re-export JSON parsing library for plugin authors
+export { JSON } from 'assemblyscript-json/assembly'

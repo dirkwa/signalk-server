@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "as-fetch": "^2.1.4",
+    "assemblyscript-json": "^1.1.0",
     "@signalk/assemblyscript-plugin-sdk": "^0.2.0"
   }
 }

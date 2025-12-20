@@ -4,6 +4,8 @@
  * Allows WASM plugins to act as resource providers (routes, waypoints, weather, etc.)
  */
 
+import { JSON } from 'assemblyscript-json/assembly'
+
 // ===== FFI Declarations =====
 
 /**
@@ -85,42 +87,19 @@ export class ResourceGetRequest {
   id: string = ''
   property: string | null = null
 
-  static parse(json: string): ResourceGetRequest {
+  static parse(jsonStr: string): ResourceGetRequest {
     const req = new ResourceGetRequest()
+    const parsed = JSON.parse(jsonStr)
 
-    // Basic JSON parsing for id
-    const idMatch = json.indexOf('"id"')
-    if (idMatch >= 0) {
-      const colonPos = json.indexOf(':', idMatch)
-      const quoteStart = json.indexOf('"', colonPos)
-      if (quoteStart >= 0) {
-        const idStart = quoteStart + 1
-        const idEnd = json.indexOf('"', idStart)
-        if (idEnd > idStart) {
-          req.id = json.substring(idStart, idEnd)
-        }
+    if (parsed.isObj) {
+      const obj = parsed as JSON.Obj
+      const idValue = obj.getString('id')
+      if (idValue !== null) {
+        req.id = idValue.valueOf()
       }
-    }
-
-    // Basic parsing for property (optional)
-    const propMatch = json.indexOf('"property"')
-    if (propMatch >= 0) {
-      const colonPos = json.indexOf(':', propMatch)
-      const nextChar = json.charCodeAt(colonPos + 1)
-      // Skip whitespace
-      let pos = colonPos + 1
-      while (pos < json.length && (json.charCodeAt(pos) === 32 || json.charCodeAt(pos) === 9)) {
-        pos++
-      }
-      if (json.charCodeAt(pos) !== 110) { // 'n' for null
-        const quoteStart = json.indexOf('"', pos)
-        if (quoteStart >= 0) {
-          const propStart = quoteStart + 1
-          const propEnd = json.indexOf('"', propStart)
-          if (propEnd > propStart) {
-            req.property = json.substring(propStart, propEnd)
-          }
-        }
+      const propValue = obj.getString('property')
+      if (propValue !== null) {
+        req.property = propValue.valueOf()
       }
     }
 
@@ -135,38 +114,19 @@ export class ResourceSetRequest {
   id: string = ''
   value: string = '{}'  // JSON string of the value
 
-  static parse(json: string): ResourceSetRequest {
+  static parse(jsonStr: string): ResourceSetRequest {
     const req = new ResourceSetRequest()
+    const parsed = JSON.parse(jsonStr)
 
-    // Parse id
-    const idMatch = json.indexOf('"id"')
-    if (idMatch >= 0) {
-      const colonPos = json.indexOf(':', idMatch)
-      const quoteStart = json.indexOf('"', colonPos)
-      if (quoteStart >= 0) {
-        const idStart = quoteStart + 1
-        const idEnd = json.indexOf('"', idStart)
-        if (idEnd > idStart) {
-          req.id = json.substring(idStart, idEnd)
-        }
+    if (parsed.isObj) {
+      const obj = parsed as JSON.Obj
+      const idValue = obj.getString('id')
+      if (idValue !== null) {
+        req.id = idValue.valueOf()
       }
-    }
-
-    // Parse value (nested object) - find "value": and extract until matching }
-    const valueMatch = json.indexOf('"value"')
-    if (valueMatch >= 0) {
-      const colonPos = json.indexOf(':', valueMatch)
-      const braceStart = json.indexOf('{', colonPos)
-      if (braceStart >= 0) {
-        let depth = 1
-        let pos = braceStart + 1
-        while (pos < json.length && depth > 0) {
-          const c = json.charCodeAt(pos)
-          if (c === 123) depth++ // {
-          else if (c === 125) depth-- // }
-          pos++
-        }
-        req.value = json.substring(braceStart, pos)
+      const valueObj = obj.getObj('value')
+      if (valueObj !== null) {
+        req.value = valueObj.stringify()
       }
     }
 
@@ -180,19 +140,15 @@ export class ResourceSetRequest {
 export class ResourceDeleteRequest {
   id: string = ''
 
-  static parse(json: string): ResourceDeleteRequest {
+  static parse(jsonStr: string): ResourceDeleteRequest {
     const req = new ResourceDeleteRequest()
+    const parsed = JSON.parse(jsonStr)
 
-    const idMatch = json.indexOf('"id"')
-    if (idMatch >= 0) {
-      const colonPos = json.indexOf(':', idMatch)
-      const quoteStart = json.indexOf('"', colonPos)
-      if (quoteStart >= 0) {
-        const idStart = quoteStart + 1
-        const idEnd = json.indexOf('"', idStart)
-        if (idEnd > idStart) {
-          req.id = json.substring(idStart, idEnd)
-        }
+    if (parsed.isObj) {
+      const obj = parsed as JSON.Obj
+      const idValue = obj.getString('id')
+      if (idValue !== null) {
+        req.id = idValue.valueOf()
       }
     }
 

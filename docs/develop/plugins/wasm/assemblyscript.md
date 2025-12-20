@@ -384,6 +384,49 @@ const delta = createSimpleDelta('my-plugin', 'test.value', '"hello"')
 emit(delta)
 ```
 
+### JSON Parsing
+
+The SDK includes [assemblyscript-json](https://github.com/near/assemblyscript-json) for parsing JSON data. This is useful when working with configuration, API responses, or resource provider requests.
+
+```typescript
+import { JSON } from '@signalk/assemblyscript-plugin-sdk/assembly'
+
+// Parse a JSON string
+const jsonStr = '{"name": "My Boat", "speed": 5.2}'
+const parsed = JSON.parse(jsonStr)
+
+if (parsed.isObj) {
+  const obj = parsed as JSON.Obj
+
+  // Get string values
+  const nameValue = obj.getString('name')
+  if (nameValue !== null) {
+    const name = nameValue.valueOf() // "My Boat"
+  }
+
+  // Get number values
+  const speedValue = obj.getNum('speed')
+  if (speedValue !== null) {
+    const speed = speedValue.valueOf() // 5.2 (as f64)
+  }
+}
+```
+
+**Available methods on `JSON.Obj`:**
+
+- `getString(key)` - Returns `JSON.Str | null`
+- `getNum(key)` - Returns `JSON.Num | null`
+- `getBool(key)` - Returns `JSON.Bool | null`
+- `getObj(key)` - Returns `JSON.Obj | null`
+- `getArr(key)` - Returns `JSON.Arr | null`
+- `getValue(key)` - Returns `JSON.Value | null`
+
+**Note:** Plugins using resource providers or parsing complex JSON should add `assemblyscript-json` to their dependencies:
+
+```bash
+npm install assemblyscript-json
+```
+
 ### JSON Value Encoding
 
 Values must be JSON-encoded strings:
