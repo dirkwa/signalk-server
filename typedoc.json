@@ -48,6 +48,7 @@
   "excludeInternal": true,
   "sortEntryPoints": true,
   "exclude": [
+    "packages/assemblyscript-plugin-sdk",
     "packages/resources-provider-plugin",
     "packages/server-admin-ui",
     "packages/server-admin-ui-dependencies",
