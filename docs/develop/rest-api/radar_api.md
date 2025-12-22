@@ -24,9 +24,10 @@ Build a **single, adaptive UI** that works with any radar—now and in the futur
 2. **Generate UI widgets from the schema:**
    - `type: "boolean"` → Toggle switch
    - `type: "number"` with `range` → Slider with min/max/step
-   - `type: "enum"` with `values` → Dropdown or button group
+   - `type: "enum"` with `values` → Dropdown or button group (hide values where `readOnly: true`)
    - `type: "compound"` → Nested panel (e.g., mode selector + value slider)
-   - `readOnly: true` → Display-only label (for info like serial number)
+   - `readOnly: true` on control → Display-only label (for info like serial number)
+   - `readOnly: true` on enum value → Value can be reported but not set (e.g., "off", "warming" for power)
 3. **Apply constraints dynamically** — gray out controls when conditions are met, show reasons
 4. **Poll state for current values** — the schema tells you what to expect
 
@@ -152,9 +153,10 @@ _Response:_
       "category": "base",
       "type": "enum",
       "values": [
-        { "value": "off", "label": "Off" },
+        { "value": "off", "label": "Off", "readOnly": true },
         { "value": "standby", "label": "Standby" },
-        { "value": "transmit", "label": "Transmit" }
+        { "value": "transmit", "label": "Transmit" },
+        { "value": "warming", "label": "Warming Up", "readOnly": true }
       ]
     },
     {
@@ -751,6 +753,7 @@ interface EnumValue {
   value: string | number
   label: string
   description?: string
+  readOnly?: boolean // True if this value can be reported but not set by clients
 }
 
 interface PropertyDefinition {
