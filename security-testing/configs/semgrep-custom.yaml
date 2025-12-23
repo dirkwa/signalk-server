@@ -1,0 +1,130 @@
+# Custom Semgrep rules for SignalK Server
+# Focus on Node.js/Express security patterns
+
+rules:
+  # JWT Security
+  - id: jwt-weak-algorithm
+    pattern: |
+      jwt.sign($PAYLOAD, $SECRET, { algorithm: "none" })
+    message: "JWT signed with 'none' algorithm - tokens can be forged"
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  - id: jwt-no-expiration
+    pattern: |
+      jwt.sign($PAYLOAD, $SECRET, { ...,$OPTIONS, expiresIn: "NEVER" })
+    message: "JWT with no expiration - tokens never expire"
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  # Path Traversal
+  - id: path-traversal-express
+    patterns:
+      - pattern: |
+          res.sendFile($PATH, ...)
+      - pattern-not: |
+          res.sendFile(path.join($ROOT, $SAFE), ...)
+    message: "Potential path traversal in sendFile"
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  # Prototype Pollution
+  - id: prototype-pollution-merge
+    pattern-either:
+      - pattern: Object.assign({}, $USER_INPUT)
+      - pattern: _.merge({}, $USER_INPUT)
+      - pattern: _.extend({}, $USER_INPUT)
+    message: "Potential prototype pollution via object merge"
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  # Command Injection
+  - id: command-injection-exec
+    pattern-either:
+      - pattern: child_process.exec($CMD, ...)
+      - pattern: require('child_process').exec($CMD, ...)
+    message: "Potential command injection - use execFile instead"
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  # SQL Injection (if any DB usage)
+  - id: sql-injection-template
+    pattern: |
+      $DB.query(`... ${$VAR} ...`)
+    message: "Potential SQL injection via template literal"
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  # Insecure Randomness
+  - id: insecure-random
+    pattern: Math.random()
+    message: "Math.random() is not cryptographically secure - use crypto.randomBytes()"
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  # Express Security
+  - id: cors-allow-all
+    pattern: |
+      cors({ origin: "*" })
+    message: "CORS allows all origins - consider restricting"
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  - id: missing-helmet
+    pattern: |
+      const app = express()
+    message: "Consider using helmet middleware for security headers"
+    languages: [javascript, typescript]
+    severity: INFO
+
+  # WebSocket Security
+  - id: websocket-no-origin-check
+    patterns:
+      - pattern: |
+          new WebSocket.Server({ ... })
+      - pattern-not: |
+          new WebSocket.Server({ ..., verifyClient: $FUNC })
+    message: "WebSocket server without origin verification"
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  # Password Security
+  - id: hardcoded-password
+    pattern-regex: 'password\s*[:=]\s*["\'][^"\']+["\']'
+    message: "Potential hardcoded password"
+    languages: [javascript, typescript]
+    severity: ERROR
+
+  - id: weak-bcrypt-rounds
+    pattern: |
+      bcrypt.$FUNC($DATA, $ROUNDS, ...)
+    metavariable-comparison:
+      metavariable: $ROUNDS
+      comparison: $ROUNDS < 10
+    message: "Bcrypt rounds should be at least 10"
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  # File Operations
+  - id: dangerous-file-inclusion
+    pattern-either:
+      - pattern: require($VAR)
+      - pattern: import($VAR)
+    message: "Dynamic require/import - potential code injection"
+    languages: [javascript, typescript]
+    severity: WARNING
+
+  # SignalK Specific
+  - id: signalk-unvalidated-delta
+    pattern: |
+      app.handleMessage($SOURCE, $DELTA)
+    message: "Delta message handling - ensure source validation"
+    languages: [javascript, typescript]
+    severity: INFO
+
+  - id: signalk-plugin-no-validation
+    pattern: |
+      plugin.start($CONFIG)
+    message: "Plugin start - ensure config validation"
+    languages: [javascript, typescript]
+    severity: INFO
