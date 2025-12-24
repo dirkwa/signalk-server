@@ -56,13 +56,13 @@ async function getToken(username, password) {
   return null
 }
 
-describe('Prototype Pollution via lodash _.set()', function() {
+describe('Prototype Pollution via lodash _.set()', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -71,7 +71,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
     } catch (e) {}
   })
 
-  describe('ApplicationData _.set() Vulnerability', function() {
+  describe('ApplicationData _.set() Vulnerability', function () {
     /**
      * VULNERABILITY: src/interfaces/applicationData.js line 157
      *
@@ -83,7 +83,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
      * - constructor.prototype.polluted = true
      */
 
-    it('should document prototype pollution risk in applicationData', function() {
+    it('should document prototype pollution risk in applicationData', function () {
       console.log(`
       POTENTIAL VULNERABILITY: Prototype Pollution via _.set()
 
@@ -109,7 +109,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
       expect(true).to.be.true
     })
 
-    it('should test prototype pollution via applicationData endpoint', async function() {
+    it('should test prototype pollution via applicationData endpoint', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
@@ -134,7 +134,9 @@ describe('Prototype Pollution via lodash _.set()', function() {
             }
           )
 
-          console.log(`      Path "${pollutionPath}": status=${response.status}`)
+          console.log(
+            `      Path "${pollutionPath}": status=${response.status}`
+          )
 
           // Check if global Object was polluted
           const testObj = {}
@@ -148,7 +150,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
     })
   })
 
-  describe('PUT Handler _.set() Vulnerability', function() {
+  describe('PUT Handler _.set() Vulnerability', function () {
     /**
      * VULNERABILITY: src/put.js line 137
      *
@@ -158,7 +160,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
      * where path comes from the URL: vessels/self/navigation/position
      */
 
-    it('should document prototype pollution risk in put.js', function() {
+    it('should document prototype pollution risk in put.js', function () {
       console.log(`
       POTENTIAL VULNERABILITY: Prototype Pollution via PUT handler
 
@@ -182,10 +184,10 @@ describe('Prototype Pollution via lodash _.set()', function() {
   })
 })
 
-describe('Command Injection via Module Installation', function() {
+describe('Command Injection via Module Installation', function () {
   this.timeout(30000)
 
-  describe('NPM Spawn Command Injection', function() {
+  describe('NPM Spawn Command Injection', function () {
     /**
      * VULNERABILITY: src/modules.ts lines 193-211
      *
@@ -199,7 +201,7 @@ describe('Command Injection via Module Installation', function() {
      * Package names on Windows are vulnerable if they contain shell metacharacters.
      */
 
-    it('should document command injection risk in module installation', function() {
+    it('should document command injection risk in module installation', function () {
       console.log(`
       POTENTIAL VULNERABILITY: Command Injection in NPM Operations
 
@@ -230,7 +232,7 @@ describe('Command Injection via Module Installation', function() {
       expect(true).to.be.true
     })
 
-    it('should document the install path validation', function() {
+    it('should document the install path validation', function () {
       console.log(`
       ANALYSIS: Module Installation Validation
 
@@ -256,10 +258,10 @@ describe('Command Injection via Module Installation', function() {
   })
 })
 
-describe('Cache Poisoning Vulnerabilities', function() {
+describe('Cache Poisoning Vulnerabilities', function () {
   this.timeout(30000)
 
-  describe('Delta Cache Context Path Caching', function() {
+  describe('Delta Cache Context Path Caching', function () {
     /**
      * RISK: src/deltacache.ts lines 36-55
      *
@@ -270,7 +272,7 @@ describe('Cache Poisoning Vulnerabilities', function() {
      * they could potentially poison the cache affecting other users.
      */
 
-    it('should document cache poisoning potential in deltacache', function() {
+    it('should document cache poisoning potential in deltacache', function () {
       console.log(`
       POTENTIAL VULNERABILITY: Cache Poisoning in DeltaCache
 
@@ -306,7 +308,7 @@ describe('Cache Poisoning Vulnerabilities', function() {
     })
   })
 
-  describe('Module Cache NPM Query Results', function() {
+  describe('Module Cache NPM Query Results', function () {
     /**
      * RISK: src/modules.ts lines 228-264
      *
@@ -314,7 +316,7 @@ describe('Cache Poisoning Vulnerabilities', function() {
      * Multiple requests share this cache.
      */
 
-    it('should document npm cache timing issues', function() {
+    it('should document npm cache timing issues', function () {
       console.log(`
       RISK: NPM Module Cache Timing
 
@@ -345,10 +347,10 @@ describe('Cache Poisoning Vulnerabilities', function() {
   })
 })
 
-describe('Object.assign Merge Vulnerabilities', function() {
+describe('Object.assign Merge Vulnerabilities', function () {
   this.timeout(30000)
 
-  describe('Resource API Object.assign', function() {
+  describe('Resource API Object.assign', function () {
     /**
      * RISK: src/api/resources/index.ts lines 375 and 397
      *
@@ -359,7 +361,7 @@ describe('Object.assign Merge Vulnerabilities', function() {
      * potentially pollute the result object.
      */
 
-    it('should document Object.assign merge risks', function() {
+    it('should document Object.assign merge risks', function () {
       console.log(`
       POTENTIAL VULNERABILITY: Object.assign with External Data
 
@@ -391,10 +393,10 @@ describe('Object.assign Merge Vulnerabilities', function() {
   })
 })
 
-describe('UDP JSON Parsing from Untrusted Sources', function() {
+describe('UDP JSON Parsing from Untrusted Sources', function () {
   this.timeout(30000)
 
-  describe('GoFree Discovery UDP Parsing', function() {
+  describe('GoFree Discovery UDP Parsing', function () {
     /**
      * VULNERABILITY: src/discovery.js lines 87-126
      *
@@ -403,7 +405,7 @@ describe('UDP JSON Parsing from Untrusted Sources', function() {
      * with attacker-controlled IP and port values.
      */
 
-    it('should document UDP SSRF via discovery', function() {
+    it('should document UDP SSRF via discovery', function () {
       console.log(`
       VULNERABILITY: SSRF via UDP Discovery (GoFree)
 
@@ -440,7 +442,7 @@ describe('UDP JSON Parsing from Untrusted Sources', function() {
       expect(true).to.be.true
     })
 
-    it('should test UDP discovery SSRF injection', async function() {
+    it('should test UDP discovery SSRF injection', async function () {
       console.log(`
       To manually test UDP discovery SSRF:
 
@@ -467,16 +469,16 @@ describe('UDP JSON Parsing from Untrusted Sources', function() {
   })
 })
 
-describe('Regex Denial of Service (ReDoS)', function() {
+describe('Regex Denial of Service (ReDoS)', function () {
   this.timeout(30000)
 
-  describe('Path and Context Regex Patterns', function() {
+  describe('Path and Context Regex Patterns', function () {
     /**
      * The subscription and ACL regex patterns could be vulnerable
      * to ReDoS if crafted input causes exponential backtracking.
      */
 
-    it('should test regex complexity with nested patterns', function() {
+    it('should test regex complexity with nested patterns', function () {
       console.log(`
       ANALYSIS: Regex Denial of Service (ReDoS)
 
@@ -499,7 +501,7 @@ describe('Regex Denial of Service (ReDoS)', function() {
       const testPatterns = [
         { pattern: '.*', input: 'a'.repeat(1000) },
         { pattern: '.*\\..*\\..*\\..*', input: 'a.b.c.d.' + 'e'.repeat(100) },
-        { pattern: '(.*)*', input: 'aaaaaaaaaaaaaaaaaaaab' }  // Classic ReDoS
+        { pattern: '(.*)*', input: 'aaaaaaaaaaaaaaaaaaaab' } // Classic ReDoS
       ]
 
       testPatterns.forEach(({ pattern, input }) => {
@@ -507,7 +509,9 @@ describe('Regex Denial of Service (ReDoS)', function() {
         const start = Date.now()
         regex.test(input)
         const elapsed = Date.now() - start
-        console.log(`      Pattern "${pattern.substring(0, 30)}...": ${elapsed}ms`)
+        console.log(
+          `      Pattern "${pattern.substring(0, 30)}...": ${elapsed}ms`
+        )
 
         // Anything over 100ms is concerning
         if (elapsed > 100) {
@@ -520,17 +524,17 @@ describe('Regex Denial of Service (ReDoS)', function() {
   })
 })
 
-describe('Second-Order Injection Patterns', function() {
+describe('Second-Order Injection Patterns', function () {
   this.timeout(30000)
 
-  describe('Stored Data Re-parsing', function() {
+  describe('Stored Data Re-parsing', function () {
     /**
      * Second-order injection occurs when:
      * 1. Attacker stores malicious data
      * 2. Later, that data is retrieved and used unsafely
      */
 
-    it('should document second-order injection risks', function() {
+    it('should document second-order injection risks', function () {
       console.log(`
       ANALYSIS: Second-Order Injection Patterns
 
@@ -572,10 +576,10 @@ describe('Second-Order Injection Patterns', function() {
   })
 })
 
-describe('Async Race Condition Analysis', function() {
+describe('Async Race Condition Analysis', function () {
   this.timeout(30000)
 
-  describe('Promise.allSettled Without Atomicity', function() {
+  describe('Promise.allSettled Without Atomicity', function () {
     /**
      * RISK: src/api/resources/index.ts getFromAll() and listFromAll()
      *
@@ -583,7 +587,7 @@ describe('Async Race Condition Analysis', function() {
      * No atomicity guarantee - state could change between queries.
      */
 
-    it('should document async race conditions', function() {
+    it('should document async race conditions', function () {
       console.log(`
       ANALYSIS: Async Race Conditions
 
@@ -623,13 +627,13 @@ describe('Async Race Condition Analysis', function() {
   })
 })
 
-describe('Missing Input Validation', function() {
+describe('Missing Input Validation', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -638,28 +642,28 @@ describe('Missing Input Validation', function() {
     } catch (e) {}
   })
 
-  describe('Version Parameter Validation', function() {
+  describe('Version Parameter Validation', function () {
     /**
      * ApplicationData uses semver.coerce() for version validation.
      * This is lenient and may accept unexpected inputs.
      */
 
-    it('should test version parameter edge cases', async function() {
+    it('should test version parameter edge cases', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
       }
 
       const edgeCases = [
-        '1.0.0',           // Normal
-        '1',               // Partial
-        '1.0.0-alpha',     // Prerelease
-        '1.0.0+build',     // Build metadata
-        '../../../etc',    // Path traversal attempt
-        '1.0.0\n',         // Newline injection
-        '1.0.0\x00',       // Null byte injection
-        'a'.repeat(1000),  // Long string
-        '1.0.0/../1.0.0',  // Path in version
+        '1.0.0', // Normal
+        '1', // Partial
+        '1.0.0-alpha', // Prerelease
+        '1.0.0+build', // Build metadata
+        '../../../etc', // Path traversal attempt
+        '1.0.0\n', // Newline injection
+        '1.0.0\x00', // Null byte injection
+        'a'.repeat(1000), // Long string
+        '1.0.0/../1.0.0' // Path in version
       ]
 
       console.log('      Testing version parameter validation:')
@@ -672,7 +676,9 @@ describe('Missing Input Validation', function() {
               headers: { Authorization: `Bearer ${adminToken}` }
             }
           )
-          console.log(`      Version "${version.substring(0, 20)}...": status=${response.status}`)
+          console.log(
+            `      Version "${version.substring(0, 20)}...": status=${response.status}`
+          )
         } catch (e) {
           console.log(`      Version "${version.substring(0, 20)}...": error`)
         }
@@ -680,21 +686,21 @@ describe('Missing Input Validation', function() {
     })
   })
 
-  describe('AppId Parameter Validation', function() {
-    it('should test appId parameter edge cases', async function() {
+  describe('AppId Parameter Validation', function () {
+    it('should test appId parameter edge cases', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
       }
 
       const edgeCases = [
-        'normalapp',           // Normal
-        '../etc/passwd',       // Path traversal (should be blocked)
-        'app\x00name',         // Null byte
-        'a'.repeat(100),       // Long (should fail > 30 chars)
-        'app/name',            // Slash (should be blocked)
-        'app%2fname',          // URL-encoded slash
-        '..%2f..%2fetc',       // Double-encoded traversal
+        'normalapp', // Normal
+        '../etc/passwd', // Path traversal (should be blocked)
+        'app\x00name', // Null byte
+        'a'.repeat(100), // Long (should fail > 30 chars)
+        'app/name', // Slash (should be blocked)
+        'app%2fname', // URL-encoded slash
+        '..%2f..%2fetc' // Double-encoded traversal
       ]
 
       console.log('      Testing appId parameter validation:')
@@ -707,7 +713,9 @@ describe('Missing Input Validation', function() {
               headers: { Authorization: `Bearer ${adminToken}` }
             }
           )
-          console.log(`      AppId "${appId.substring(0, 20)}...": status=${response.status}`)
+          console.log(
+            `      AppId "${appId.substring(0, 20)}...": status=${response.status}`
+          )
         } catch (e) {
           console.log(`      AppId "${appId.substring(0, 20)}...": error`)
         }
@@ -716,11 +724,11 @@ describe('Missing Input Validation', function() {
   })
 })
 
-describe('Signal/Process Handling', function() {
+describe('Signal/Process Handling', function () {
   this.timeout(30000)
 
-  describe('Graceful Shutdown Analysis', function() {
-    it('should document signal handling security', function() {
+  describe('Graceful Shutdown Analysis', function () {
+    it('should document signal handling security', function () {
       console.log(`
       ANALYSIS: Signal/Process Handling
 
@@ -750,11 +758,11 @@ describe('Signal/Process Handling', function() {
   })
 })
 
-describe('Environment Variable Security', function() {
+describe('Environment Variable Security', function () {
   this.timeout(30000)
 
-  describe('Sensitive Environment Variables', function() {
-    it('should document all security-relevant env vars', function() {
+  describe('Sensitive Environment Variables', function () {
+    it('should document all security-relevant env vars', function () {
       console.log(`
       ENVIRONMENT VARIABLE SECURITY ANALYSIS
 
@@ -789,13 +797,13 @@ describe('Environment Variable Security', function() {
   })
 })
 
-describe('Directory Traversal Deep Analysis', function() {
+describe('Directory Traversal Deep Analysis', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -804,8 +812,8 @@ describe('Directory Traversal Deep Analysis', function() {
     } catch (e) {}
   })
 
-  describe('Plugin Configuration Path Traversal', function() {
-    it('should test for path traversal in various endpoints', async function() {
+  describe('Plugin Configuration Path Traversal', function () {
+    it('should test for path traversal in various endpoints', async function () {
       if (!securityEnabled) {
         this.skip()
         return
@@ -816,9 +824,9 @@ describe('Directory Traversal Deep Analysis', function() {
         '..%2f..%2f..%2fetc%2fpasswd',
         '....//....//....//etc/passwd',
         '%2e%2e/%2e%2e/%2e%2e/etc/passwd',
-        '..%252f..%252f..%252fetc/passwd',  // Double-encoded
-        '..\\..\\..\\etc\\passwd',           // Windows
-        '..%5c..%5c..%5cetc%5cpasswd',       // Encoded Windows
+        '..%252f..%252f..%252fetc/passwd', // Double-encoded
+        '..\\..\\..\\etc\\passwd', // Windows
+        '..%5c..%5c..%5cetc%5cpasswd' // Encoded Windows
       ]
 
       const endpoints = [
@@ -829,18 +837,26 @@ describe('Directory Traversal Deep Analysis', function() {
 
       console.log('      Testing path traversal vectors:')
       for (const endpoint of endpoints) {
-        for (const payload of traversalPayloads.slice(0, 3)) {  // Test first 3
+        for (const payload of traversalPayloads.slice(0, 3)) {
+          // Test first 3
           try {
             const response = await request(
               `${endpoint}${encodeURIComponent(payload)}`,
               {
-                headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {}
+                headers: adminToken
+                  ? { Authorization: `Bearer ${adminToken}` }
+                  : {}
               }
             )
 
             // Check for passwd file content
-            if (typeof response.body === 'string' && response.body.includes('root:')) {
-              console.log(`      CRITICAL: Path traversal successful at ${endpoint}!`)
+            if (
+              typeof response.body === 'string' &&
+              response.body.includes('root:')
+            ) {
+              console.log(
+                `      CRITICAL: Path traversal successful at ${endpoint}!`
+              )
             }
           } catch (e) {
             // Expected for most attempts

@@ -29,8 +29,8 @@ function request(method, path, body = null, headers = {}) {
       method,
       headers: {
         'Content-Type': 'application/json',
-        ...headers,
-      },
+        ...headers
+      }
     }
 
     const req = lib.request(options, (res) => {
@@ -41,7 +41,7 @@ function request(method, path, body = null, headers = {}) {
           resolve({
             status: res.statusCode,
             headers: res.headers,
-            body: data ? JSON.parse(data) : null,
+            body: data ? JSON.parse(data) : null
           })
         } catch {
           resolve({ status: res.statusCode, headers: res.headers, body: data })
@@ -69,7 +69,7 @@ describe('ACL/Authorization Security Tests', function () {
       const adminEndpoints = [
         '/skServer/restart',
         '/skServer/security/config',
-        '/skServer/security/users',
+        '/skServer/security/users'
       ]
 
       for (const endpoint of adminEndpoints) {
@@ -78,7 +78,9 @@ describe('ACL/Authorization Security Tests', function () {
         // 404 = endpoint may not exist or security not enabled
         // 200 without auth = SECURITY ISSUE (logged below)
         if (res.status === 200) {
-          console.log(`  WARNING: ${endpoint} accessible without authentication`)
+          console.log(
+            `  WARNING: ${endpoint} accessible without authentication`
+          )
         }
         expect(res.status).to.be.oneOf([200, 401, 403, 404])
       }
@@ -89,7 +91,7 @@ describe('ACL/Authorization Security Tests', function () {
       const res = await request('POST', '/signalk/v1/auth/login', {
         username: 'user',
         password: 'password',
-        permissions: 'admin',  // Attempted escalation
+        permissions: 'admin' // Attempted escalation
       })
 
       // If login succeeds, verify returned permissions
@@ -107,7 +109,7 @@ describe('ACL/Authorization Security Tests', function () {
         '/signalk/v1/api/vessels/self%2f..%2f..%2fetc%2fpasswd',
         '/signalk/v1/api/vessels/self/navigation/..%252f..%252f',
         '/signalk/v1/api/vessels/self/navigation/position/../../speedOverGround',
-        '/signalk/v1/api/../skServer/security/users',
+        '/signalk/v1/api/../skServer/security/users'
       ]
 
       for (const path of bypassAttempts) {
@@ -126,7 +128,7 @@ describe('ACL/Authorization Security Tests', function () {
     it('should not allow null byte injection in paths', async () => {
       const nullByteAttempts = [
         '/signalk/v1/api/vessels/self%00.json',
-        '/signalk/v1/api/vessels/self\x00/navigation',
+        '/signalk/v1/api/vessels/self\x00/navigation'
       ]
 
       for (const path of nullByteAttempts) {
@@ -144,7 +146,7 @@ describe('ACL/Authorization Security Tests', function () {
       const contextAttempts = [
         '/signalk/v1/api/vessels/urn:mrn:imo:mmsi:123456789',
         '/signalk/v1/api/vessels/*',
-        '/signalk/v1/api/vessels/self/../other-vessel',
+        '/signalk/v1/api/vessels/self/../other-vessel'
       ]
 
       for (const path of contextAttempts) {
@@ -161,12 +163,15 @@ describe('ACL/Authorization Security Tests', function () {
       const redosPatterns = [
         'navigation.' + 'a'.repeat(50),
         'navigation.((a+)+)+b',
-        'navigation.' + '.*'.repeat(20),
+        'navigation.' + '.*'.repeat(20)
       ]
 
       for (const pattern of redosPatterns) {
         const startTime = Date.now()
-        const res = await request('GET', `/signalk/v1/api/vessels/self/${pattern}`)
+        const res = await request(
+          'GET',
+          `/signalk/v1/api/vessels/self/${pattern}`
+        )
         const elapsed = Date.now() - startTime
 
         // Should complete in reasonable time (< 5 seconds)
@@ -190,7 +195,7 @@ describe('ACL/Authorization Security Tests', function () {
         const broadSubscriptions = [
           { context: '*', subscribe: [{ path: '*' }] },
           { context: '**', subscribe: [{ path: '**' }] },
-          { context: 'vessels.*', subscribe: [{ path: '*.*.*.*.*' }] },
+          { context: 'vessels.*', subscribe: [{ path: '*.*.*.*.*' }] }
         ]
 
         for (const sub of broadSubscriptions) {
@@ -231,19 +236,21 @@ describe('ACL/Authorization Security Tests', function () {
             updates: [
               {
                 source: { label: 'attacker' },
-                values: [{ path: 'security.admin', value: true }],
-              },
-            ],
+                values: [{ path: 'security.admin', value: true }]
+              }
+            ]
           },
           {
             context: 'vessels.other',
             updates: [
               {
                 source: { label: 'attacker' },
-                values: [{ path: 'navigation.position', value: { lat: 0, lon: 0 } }],
-              },
-            ],
-          },
+                values: [
+                  { path: 'navigation.position', value: { lat: 0, lon: 0 } }
+                ]
+              }
+            ]
+          }
         ]
 
         for (const delta of maliciousDeltas) {
@@ -260,9 +267,13 @@ describe('ACL/Authorization Security Tests', function () {
 
   describe('PUT Request Authorization', () => {
     it('should reject PUT without authentication', async () => {
-      const res = await request('PUT', '/signalk/v1/api/vessels/self/navigation/speedOverGround', {
-        value: 10,
-      })
+      const res = await request(
+        'PUT',
+        '/signalk/v1/api/vessels/self/navigation/speedOverGround',
+        {
+          value: 10
+        }
+      )
 
       // 405 = Method not allowed (PUT may not be supported on this path)
       // 401/403 = Properly rejected due to auth
@@ -276,7 +287,7 @@ describe('ACL/Authorization Security Tests', function () {
       const maliciousPaths = [
         '/signalk/v1/api/vessels/self/../../../etc/config',
         '/signalk/v1/api/vessels/self/navigation/__proto__/polluted',
-        '/signalk/v1/api/vessels/self/navigation/constructor/prototype',
+        '/signalk/v1/api/vessels/self/navigation/constructor/prototype'
       ]
 
       for (const path of maliciousPaths) {
@@ -287,10 +298,14 @@ describe('ACL/Authorization Security Tests', function () {
     })
 
     it('should not allow source spoofing in PUT', async () => {
-      const res = await request('PUT', '/signalk/v1/api/vessels/self/navigation/speedOverGround', {
-        value: 10,
-        source: 'trusted-navigation-system',  // Spoofed source
-      })
+      const res = await request(
+        'PUT',
+        '/signalk/v1/api/vessels/self/navigation/speedOverGround',
+        {
+          value: 10,
+          source: 'trusted-navigation-system' // Spoofed source
+        }
+      )
 
       // Should be rejected or source should be overwritten
       // 405 = Method not allowed is also acceptable
@@ -303,7 +318,7 @@ describe('ACL/Authorization Security Tests', function () {
       const adminEndpoints = [
         { method: 'GET', path: '/skServer/security/config' },
         { method: 'GET', path: '/skServer/security/users' },
-        { method: 'GET', path: '/skServer/settings' },
+        { method: 'GET', path: '/skServer/settings' }
       ]
 
       const issues = []
@@ -312,12 +327,18 @@ describe('ACL/Authorization Security Tests', function () {
         // 200 without auth on sensitive endpoints is a security issue
         if (res.status === 200) {
           // Check if it actually returned sensitive data
-          if (res.body && (res.body.users || res.body.secretKey || res.body.acls)) {
+          if (
+            res.body &&
+            (res.body.users || res.body.secretKey || res.body.acls)
+          ) {
             issues.push(`${method} ${path} exposes sensitive data without auth`)
           }
         }
         // Accept 200/401/403/404 - we log issues above
-        expect(res.status).to.be.oneOf([200, 400, 401, 403, 404], `${method} ${path}`)
+        expect(res.status).to.be.oneOf(
+          [200, 400, 401, 403, 404],
+          `${method} ${path}`
+        )
       }
 
       if (issues.length > 0) {

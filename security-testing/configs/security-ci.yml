@@ -91,7 +91,7 @@ jobs:
           npm start &
           sleep 10
         env:
-          SECURITYSTRATEGY: ''  # Use dummy security for basic tests
+          SECURITYSTRATEGY: '' # Use dummy security for basic tests
 
       - name: Run security tests
         run: npm run test:security

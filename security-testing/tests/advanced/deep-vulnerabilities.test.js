@@ -56,10 +56,10 @@ async function getToken(username, password) {
   return null
 }
 
-describe('Subscription Manager Regex Vulnerability', function() {
+describe('Subscription Manager Regex Vulnerability', function () {
   this.timeout(30000)
 
-  describe('Path Matcher Regex Bug', function() {
+  describe('Path Matcher Regex Bug', function () {
     /**
      * VULNERABILITY: src/subscriptionmanager.ts line 225-228
      *
@@ -72,7 +72,7 @@ describe('Subscription Manager Regex Vulnerability', function() {
      * SAME BUG as tokensecurity.js - only replaces FIRST occurrence!
      */
 
-    it('should document pathMatcher regex vulnerability', function() {
+    it('should document pathMatcher regex vulnerability', function () {
       console.log(`
       VULNERABILITY: Subscription Path Matcher Regex Bug
 
@@ -111,7 +111,7 @@ describe('Subscription Manager Regex Vulnerability', function() {
     })
   })
 
-  describe('Context Matcher Regex Bug', function() {
+  describe('Context Matcher Regex Bug', function () {
     /**
      * VULNERABILITY: src/subscriptionmanager.ts line 240-242
      *
@@ -122,7 +122,7 @@ describe('Subscription Manager Regex Vulnerability', function() {
      * SAME BUG AGAIN!
      */
 
-    it('should document contextMatcher regex vulnerability', function() {
+    it('should document contextMatcher regex vulnerability', function () {
       console.log(`
       VULNERABILITY: Subscription Context Matcher Regex Bug
 
@@ -143,10 +143,10 @@ describe('Subscription Manager Regex Vulnerability', function() {
   })
 })
 
-describe('Timing Attack in Authentication', function() {
+describe('Timing Attack in Authentication', function () {
   this.timeout(30000)
 
-  describe('User Enumeration via Timing', function() {
+  describe('User Enumeration via Timing', function () {
     /**
      * VULNERABILITY: src/tokensecurity.js line 285-295
      *
@@ -163,7 +163,7 @@ describe('Timing Attack in Authentication', function() {
      * Timing difference reveals user existence!
      */
 
-    it('should document timing attack vulnerability', function() {
+    it('should document timing attack vulnerability', function () {
       console.log(`
       VULNERABILITY: Timing Attack for User Enumeration
 
@@ -185,7 +185,7 @@ describe('Timing Attack in Authentication', function() {
       expect(true).to.be.true
     })
 
-    it('should measure timing difference for user enumeration', async function() {
+    it('should measure timing difference for user enumeration', async function () {
       // Skip if security not enabled
       const testResp = await request('/skServer/plugins')
       if (testResp.status !== 401) {
@@ -223,16 +223,21 @@ describe('Timing Attack in Authentication', function() {
         existingTimes.push(Date.now() - start)
       }
 
-      const avgNonExistent = nonExistentTimes.reduce((a, b) => a + b, 0) / iterations
+      const avgNonExistent =
+        nonExistentTimes.reduce((a, b) => a + b, 0) / iterations
       const avgExisting = existingTimes.reduce((a, b) => a + b, 0) / iterations
 
       console.log(`      Non-existent user avg: ${avgNonExistent.toFixed(2)}ms`)
       console.log(`      Existing user avg: ${avgExisting.toFixed(2)}ms`)
-      console.log(`      Timing difference: ${(avgExisting - avgNonExistent).toFixed(2)}ms`)
+      console.log(
+        `      Timing difference: ${(avgExisting - avgNonExistent).toFixed(2)}ms`
+      )
 
       // If there's a significant difference, timing attack is possible
       if (avgExisting - avgNonExistent > 50) {
-        console.log(`      ⚠️  TIMING ATTACK POSSIBLE - ${(avgExisting - avgNonExistent).toFixed(2)}ms difference`)
+        console.log(
+          `      ⚠️  TIMING ATTACK POSSIBLE - ${(avgExisting - avgNonExistent).toFixed(2)}ms difference`
+        )
       }
 
       expect(true).to.be.true
@@ -240,13 +245,13 @@ describe('Timing Attack in Authentication', function() {
   })
 })
 
-describe('Prototype Pollution via lodash _.set()', function() {
+describe('Prototype Pollution via lodash _.set()', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -255,7 +260,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
     } catch (e) {}
   })
 
-  describe('ApplicationData Prototype Pollution', function() {
+  describe('ApplicationData Prototype Pollution', function () {
     /**
      * VULNERABILITY: src/interfaces/applicationData.js line 157
      *
@@ -265,7 +270,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
      * If path contains __proto__ or constructor.prototype, pollution occurs!
      */
 
-    it('should test prototype pollution in applicationData', async function() {
+    it('should test prototype pollution in applicationData', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
@@ -277,17 +282,22 @@ describe('Prototype Pollution via lodash _.set()', function() {
       const pollutionPaths = [
         '__proto__/polluted',
         'constructor/prototype/polluted',
-        '__proto__',
+        '__proto__'
       ]
 
       for (const pollutePath of pollutionPaths) {
-        const response = await request(`/signalk/v1/applicationData/global/testapp/1.0.0/${pollutePath}`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify('pwned')
-        })
+        const response = await request(
+          `/signalk/v1/applicationData/global/testapp/1.0.0/${pollutePath}`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify('pwned')
+          }
+        )
 
-        console.log(`      POST applicationData/${pollutePath} - Status: ${response.status}`)
+        console.log(
+          `      POST applicationData/${pollutePath} - Status: ${response.status}`
+        )
       }
 
       // Verify prototype not polluted
@@ -311,7 +321,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
     })
   })
 
-  describe('JSON Patch Injection', function() {
+  describe('JSON Patch Injection', function () {
     /**
      * VULNERABILITY: src/interfaces/applicationData.js line 159
      *
@@ -320,7 +330,7 @@ describe('Prototype Pollution via lodash _.set()', function() {
      * JSON Patch can contain operations that modify prototype chain!
      */
 
-    it('should test JSON patch injection', async function() {
+    it('should test JSON patch injection', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
@@ -334,11 +344,14 @@ describe('Prototype Pollution via lodash _.set()', function() {
         { op: 'add', path: '/constructor/prototype/polluted', value: 'pwned' }
       ]
 
-      const response = await request('/signalk/v1/applicationData/global/testapp/1.0.0', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(maliciousPatch)
-      })
+      const response = await request(
+        '/signalk/v1/applicationData/global/testapp/1.0.0',
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(maliciousPatch)
+        }
+      )
 
       console.log(`      JSON Patch attack - Status: ${response.status}`)
 
@@ -359,13 +372,13 @@ describe('Prototype Pollution via lodash _.set()', function() {
   })
 })
 
-describe('Path Traversal in Plugin Config', function() {
+describe('Path Traversal in Plugin Config', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -374,7 +387,7 @@ describe('Path Traversal in Plugin Config', function() {
     } catch (e) {}
   })
 
-  describe('Plugin ID Path Traversal', function() {
+  describe('Plugin ID Path Traversal', function () {
     /**
      * VULNERABILITY: src/interfaces/plugins.ts line 236-241
      *
@@ -389,7 +402,7 @@ describe('Path Traversal in Plugin Config', function() {
      * If plugin ID contains ../, files outside config directory can be accessed!
      */
 
-    it('should test path traversal in plugin config', async function() {
+    it('should test path traversal in plugin config', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -399,16 +412,21 @@ describe('Path Traversal in Plugin Config', function() {
         '../../../etc/passwd',
         '..%2F..%2F..%2Fetc%2Fpasswd',
         '....//....//etc/passwd',
-        'plugin/../../../sensitive',
+        'plugin/../../../sensitive'
       ]
 
       for (const id of traversalIds) {
         // Try to get plugin config with traversal path
-        const response = await request(`/skServer/plugins/${encodeURIComponent(id)}/config`, {
-          headers
-        })
+        const response = await request(
+          `/skServer/plugins/${encodeURIComponent(id)}/config`,
+          {
+            headers
+          }
+        )
 
-        console.log(`      GET plugin/${id.substring(0, 25)}... - Status: ${response.status}`)
+        console.log(
+          `      GET plugin/${id.substring(0, 25)}... - Status: ${response.status}`
+        )
 
         // Should not expose sensitive files
         if (response.body && typeof response.body === 'string') {
@@ -441,13 +459,13 @@ describe('Path Traversal in Plugin Config', function() {
   })
 })
 
-describe('User Identifier Path Injection', function() {
+describe('User Identifier Path Injection', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -456,7 +474,7 @@ describe('User Identifier Path Injection', function() {
     } catch (e) {}
   })
 
-  describe('User Directory Path Traversal', function() {
+  describe('User Directory Path Traversal', function () {
     /**
      * VULNERABILITY: src/interfaces/applicationData.js line 205, 235
      *
@@ -468,7 +486,7 @@ describe('User Identifier Path Injection', function() {
      * User identifier comes from JWT payload.
      */
 
-    it('should document user identifier path injection risk', async function() {
+    it('should document user identifier path injection risk', async function () {
       console.log(`
       POTENTIAL VULNERABILITY: User Identifier Path Injection
 
@@ -495,10 +513,10 @@ describe('User Identifier Path Injection', function() {
   })
 })
 
-describe('TCP Stream Unauthenticated Subscriptions', function() {
+describe('TCP Stream Unauthenticated Subscriptions', function () {
   this.timeout(30000)
 
-  describe('TCP Subscribe Without Auth', function() {
+  describe('TCP Subscribe Without Auth', function () {
     /**
      * VULNERABILITY: src/interfaces/tcp.ts line 131-139
      *
@@ -512,7 +530,7 @@ describe('TCP Stream Unauthenticated Subscriptions', function() {
      * RECEIVING via subscription is still allowed!
      */
 
-    it('should document TCP subscription without authentication', function() {
+    it('should document TCP subscription without authentication', function () {
       console.log(`
       VULNERABILITY: Unauthenticated TCP Subscriptions
 
@@ -543,7 +561,7 @@ describe('TCP Stream Unauthenticated Subscriptions', function() {
       expect(true).to.be.true
     })
 
-    it('should test TCP subscription without token', async function() {
+    it('should test TCP subscription without token', async function () {
       const net = require('net')
       const port = 8375
 
@@ -571,7 +589,9 @@ describe('TCP Stream Unauthenticated Subscriptions', function() {
           // Check if we're receiving delta messages
           if (str.includes('updates') || str.includes('navigation')) {
             subscriptionWorked = true
-            console.log(`      ⚠️  Received data without auth: ${str.substring(0, 100)}...`)
+            console.log(
+              `      ⚠️  Received data without auth: ${str.substring(0, 100)}...`
+            )
           }
         })
 
@@ -583,7 +603,9 @@ describe('TCP Stream Unauthenticated Subscriptions', function() {
         setTimeout(() => {
           client.destroy()
           if (subscriptionWorked) {
-            console.log('      ⚠️  VULNERABILITY CONFIRMED: TCP subscriptions work without authentication!')
+            console.log(
+              '      ⚠️  VULNERABILITY CONFIRMED: TCP subscriptions work without authentication!'
+            )
           }
           resolve()
         }, 3000)
@@ -594,10 +616,10 @@ describe('TCP Stream Unauthenticated Subscriptions', function() {
   })
 })
 
-describe('Discovery UDP JSON Injection', function() {
+describe('Discovery UDP JSON Injection', function () {
   this.timeout(30000)
 
-  describe('GoFree Discovery Parsing', function() {
+  describe('GoFree Discovery Parsing', function () {
     /**
      * VULNERABILITY: src/discovery.js line 91
      *
@@ -607,7 +629,7 @@ describe('Discovery UDP JSON Injection', function() {
      * Attacker on same network can broadcast malicious JSON.
      */
 
-    it('should document UDP JSON injection risk', function() {
+    it('should document UDP JSON injection risk', function () {
       console.log(`
       VULNERABILITY: UDP JSON Injection in Discovery
 

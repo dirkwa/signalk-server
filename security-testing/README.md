@@ -79,6 +79,7 @@ The tests are designed to work with or without security enabled:
 - **200 responses**: May be a finding if sensitive data is exposed
 
 Watch for these console warnings during test runs:
+
 - `CRITICAL:` - Severe security issues requiring immediate attention
 - `SECURITY ISSUE:` - Confirmed vulnerabilities
 - `WARNING:` - Potential issues to investigate
@@ -86,17 +87,17 @@ Watch for these console warnings during test runs:
 
 ## npm Scripts Reference
 
-| Script | Description |
-|--------|-------------|
-| `npm run test:security` | Run all security tests (500+ tests) |
-| `npm run test:security:websocket` | WebSocket tests only |
-| `npm run test:security:auth` | Authentication tests only |
-| `npm run test:security:acl` | ACL/authorization tests only |
-| `npm run test:security:api` | REST API tests only |
-| `npm run test:security:fuzz` | Input fuzzing tests only |
-| `npm run security:scan` | Dependency vulnerability scan |
-| `npm run security:sast` | Static analysis with Semgrep |
-| `npm run security:all` | Complete security test suite |
+| Script                            | Description                         |
+| --------------------------------- | ----------------------------------- |
+| `npm run test:security`           | Run all security tests (500+ tests) |
+| `npm run test:security:websocket` | WebSocket tests only                |
+| `npm run test:security:auth`      | Authentication tests only           |
+| `npm run test:security:acl`       | ACL/authorization tests only        |
+| `npm run test:security:api`       | REST API tests only                 |
+| `npm run test:security:fuzz`      | Input fuzzing tests only            |
+| `npm run security:scan`           | Dependency vulnerability scan       |
+| `npm run security:sast`           | Static analysis with Semgrep        |
+| `npm run security:all`            | Complete security test suite        |
 
 ## CI Integration
 
@@ -117,13 +118,13 @@ jobs:
 
 Run `npm audit --production` to see current dependency vulnerabilities:
 
-| Package | Severity | Issue |
-|---------|----------|-------|
-| json-patch | Critical | Prototype pollution |
-| cookie | Low | Out of bounds characters |
-| nanoid/primus | Moderate | Predictable generation |
-| semver/mdns-js | High | ReDoS vulnerability |
-| tmp/inquirer | Low | Symlink write issue |
+| Package        | Severity | Issue                    |
+| -------------- | -------- | ------------------------ |
+| json-patch     | Critical | Prototype pollution      |
+| cookie         | Low      | Out of bounds characters |
+| nanoid/primus  | Moderate | Predictable generation   |
+| semver/mdns-js | High     | ReDoS vulnerability      |
+| tmp/inquirer   | Low      | Symlink write issue      |
 
 ## Reporting Vulnerabilities
 
@@ -140,14 +141,14 @@ If you find a security vulnerability:
 
 ## Tools Reference
 
-| Purpose | Tool | Installation |
-|---------|------|--------------|
-| CVE scanning | Snyk | `npm install -g snyk` |
-| CVE scanning | npm audit | Built-in |
-| SAST | Semgrep | `pip install semgrep` |
-| DAST | OWASP ZAP | Docker |
-| WebSocket testing | wscat | `npm install -g wscat` |
-| Secrets scanning | gitleaks | `brew install gitleaks` |
+| Purpose           | Tool      | Installation            |
+| ----------------- | --------- | ----------------------- |
+| CVE scanning      | Snyk      | `npm install -g snyk`   |
+| CVE scanning      | npm audit | Built-in                |
+| SAST              | Semgrep   | `pip install semgrep`   |
+| DAST              | OWASP ZAP | Docker                  |
+| WebSocket testing | wscat     | `npm install -g wscat`  |
+| Secrets scanning  | gitleaks  | `brew install gitleaks` |
 
 ## Contributing
 
@@ -162,7 +163,7 @@ When adding new security tests:
 
 ---
 
-*Framework version: 2.0.0*
-*Compatible with SignalK Server: 2.x*
-*Tests: 500+ passing*
-*Vulnerabilities documented: 167*
+_Framework version: 2.0.0_
+_Compatible with SignalK Server: 2.x_
+_Tests: 500+ passing_
+_Vulnerabilities documented: 167_

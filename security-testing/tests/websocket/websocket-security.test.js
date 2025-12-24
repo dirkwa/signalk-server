@@ -72,8 +72,8 @@ describe('WebSocket Security Tests', function () {
           requestId: 'test-' + Date.now(),
           put: {
             path: 'navigation.speedOverGround',
-            value: 999,
-          },
+            value: 999
+          }
         }
 
         ws.send(JSON.stringify(putRequest))
@@ -117,14 +117,16 @@ describe('WebSocket Security Tests', function () {
         'eyJhbGciOiJub25lIn0.eyJpZCI6ImFkbWluIn0.', // Algorithm none attack
         '../../../etc/passwd',
         '<script>alert(1)</script>',
-        "'; DROP TABLE users; --",
+        "'; DROP TABLE users; --"
       ]
 
       for (const token of malformedTokens) {
         const url = WS_URL + '?token=' + encodeURIComponent(token)
         try {
           const ws = await createWS(url)
-          console.log(`WARNING: Malformed token accepted: ${token.slice(0, 20)}...`)
+          console.log(
+            `WARNING: Malformed token accepted: ${token.slice(0, 20)}...`
+          )
           ws.close()
         } catch (err) {
           // Expected - malformed tokens should be rejected
@@ -152,7 +154,7 @@ describe('WebSocket Security Tests', function () {
           'not json at all',
           '',
           '\x00\x00\x00',
-          '{"__proto__": {"admin": true}}',
+          '{"__proto__": {"admin": true}}'
         ]
 
         for (const msg of malformedMessages) {
@@ -179,7 +181,7 @@ describe('WebSocket Security Tests', function () {
         const payloads = [
           { __proto__: { admin: true } },
           { constructor: { prototype: { admin: true } } },
-          { updates: [{ __proto__: { isAdmin: true } }] },
+          { updates: [{ __proto__: { isAdmin: true } }] }
         ]
 
         for (const payload of payloads) {
@@ -210,9 +212,9 @@ describe('WebSocket Security Tests', function () {
             updates: [
               {
                 source: { label: 'test' },
-                values: [{ path: 'test.path', value: 'x'.repeat(size) }],
-              },
-            ],
+                values: [{ path: 'test.path', value: 'x'.repeat(size) }]
+              }
+            ]
           })
 
           try {
@@ -274,14 +276,14 @@ describe('WebSocket Security Tests', function () {
           '..\\..\\windows\\system32',
           'vessels.self; DROP TABLE deltas;',
           'vessels.<script>alert(1)</script>',
-          'vessels.self.navigation.*', // Should work if allowed
+          'vessels.self.navigation.*' // Should work if allowed
         ]
 
         for (const path of maliciousPaths) {
           ws.send(
             JSON.stringify({
               context: 'vessels.self',
-              subscribe: [{ path, period: 1000 }],
+              subscribe: [{ path, period: 1000 }]
             })
           )
         }
@@ -296,17 +298,12 @@ describe('WebSocket Security Tests', function () {
 
   describe('Origin Validation', () => {
     it('should validate WebSocket origin header', async () => {
-      const origins = [
-        'http://evil.com',
-        'http://localhost:3000',
-        'null',
-        '',
-      ]
+      const origins = ['http://evil.com', 'http://localhost:3000', 'null', '']
 
       for (const origin of origins) {
         try {
           const ws = await createWS(WS_URL, {
-            headers: { Origin: origin },
+            headers: { Origin: origin }
           })
           console.log(`Origin '${origin}' accepted`)
           ws.close()

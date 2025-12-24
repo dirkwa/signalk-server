@@ -57,13 +57,13 @@ async function getToken(username, password) {
   return null
 }
 
-describe('Plugin/Module Installation Security Tests', function() {
+describe('Plugin/Module Installation Security Tests', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -72,7 +72,7 @@ describe('Plugin/Module Installation Security Tests', function() {
     } catch (e) {}
   })
 
-  describe('Appstore Endpoint Security', function() {
+  describe('Appstore Endpoint Security', function () {
     /**
      * POTENTIAL VULNERABILITY: src/interfaces/appstore.js
      *
@@ -82,16 +82,19 @@ describe('Plugin/Module Installation Security Tests', function() {
      * 3. Command injection via package name
      */
 
-    it('should require authentication for plugin installation', async function() {
-      const response = await request('/skServer/appstore/install/signalk-test-plugin/1.0.0', {
-        method: 'POST'
-      })
+    it('should require authentication for plugin installation', async function () {
+      const response = await request(
+        '/skServer/appstore/install/signalk-test-plugin/1.0.0',
+        {
+          method: 'POST'
+        }
+      )
 
       // Should require auth
       expect([401, 403]).to.include(response.status)
     })
 
-    it('should not allow path traversal in package name', async function() {
+    it('should not allow path traversal in package name', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -102,23 +105,28 @@ describe('Plugin/Module Installation Security Tests', function() {
         'signalk-plugin;rm -rf /',
         'signalk-plugin$(whoami)',
         'signalk-plugin`id`',
-        '@malicious/../../../exploit',
+        '@malicious/../../../exploit'
       ]
 
       for (const name of maliciousNames) {
-        const response = await request(`/skServer/appstore/install/${encodeURIComponent(name)}/1.0.0`, {
-          method: 'POST',
-          headers
-        })
+        const response = await request(
+          `/skServer/appstore/install/${encodeURIComponent(name)}/1.0.0`,
+          {
+            method: 'POST',
+            headers
+          }
+        )
 
-        console.log(`      Install "${name.substring(0, 30)}..." - Status: ${response.status}`)
+        console.log(
+          `      Install "${name.substring(0, 30)}..." - Status: ${response.status}`
+        )
 
         // Should be rejected or require specific handling
         expect([400, 401, 403, 404, 500]).to.include(response.status)
       }
     })
 
-    it('should not allow command injection in version', async function() {
+    it('should not allow command injection in version', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -128,14 +136,17 @@ describe('Plugin/Module Installation Security Tests', function() {
         '1.0.0$(whoami)',
         '1.0.0`cat /etc/passwd`',
         '|| ls -la',
-        '&& rm -rf /',
+        '&& rm -rf /'
       ]
 
       for (const version of maliciousVersions) {
-        const response = await request(`/skServer/appstore/install/signalk-test/${encodeURIComponent(version)}`, {
-          method: 'POST',
-          headers
-        })
+        const response = await request(
+          `/skServer/appstore/install/signalk-test/${encodeURIComponent(version)}`,
+          {
+            method: 'POST',
+            headers
+          }
+        )
 
         console.log(`      Version "${version}" - Status: ${response.status}`)
       }
@@ -143,7 +154,7 @@ describe('Plugin/Module Installation Security Tests', function() {
       expect(true).to.be.true
     })
 
-    it('should list available plugins without exposing sensitive data', async function() {
+    it('should list available plugins without exposing sensitive data', async function () {
       const response = await request('/skServer/appstore/available/')
 
       if (response.status === 200 && response.body) {
@@ -159,13 +170,13 @@ describe('Plugin/Module Installation Security Tests', function() {
   })
 })
 
-describe('JWT Security Analysis', function() {
+describe('JWT Security Analysis', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -174,7 +185,7 @@ describe('JWT Security Analysis', function() {
     } catch (e) {}
   })
 
-  describe('JWT Token Analysis', function() {
+  describe('JWT Token Analysis', function () {
     /**
      * Analysis of JWT implementation in src/tokensecurity.js
      *
@@ -184,7 +195,7 @@ describe('JWT Security Analysis', function() {
      * 3. getConfig() properly removes secretKey before returning (good)
      */
 
-    it('should not expose JWT secret in security config endpoint', async function() {
+    it('should not expose JWT secret in security config endpoint', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -201,10 +212,12 @@ describe('JWT Security Analysis', function() {
         expect(response.body.secretKey).to.be.undefined
       }
 
-      console.log(`      GET /skServer/security/config - Status: ${response.status}`)
+      console.log(
+        `      GET /skServer/security/config - Status: ${response.status}`
+      )
     })
 
-    it('should analyze JWT token structure', async function() {
+    it('should analyze JWT token structure', async function () {
       if (!adminToken) {
         this.skip()
         return
@@ -221,11 +234,15 @@ describe('JWT Security Analysis', function() {
       console.log('      JWT Payload keys:', Object.keys(payload))
 
       // Check algorithm - should be HS256 or stronger
-      expect(['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512']).to.include(header.alg)
+      expect(['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512']).to.include(
+        header.alg
+      )
 
       // Check that token has expiration
       if (payload.exp) {
-        console.log(`      Token expires: ${new Date(payload.exp * 1000).toISOString()}`)
+        console.log(
+          `      Token expires: ${new Date(payload.exp * 1000).toISOString()}`
+        )
       }
 
       // Ensure sensitive data not in token
@@ -234,10 +251,14 @@ describe('JWT Security Analysis', function() {
       expect(payloadStr.toLowerCase()).to.not.include('secret')
     })
 
-    it('should reject tokens with algorithm:none attack', async function() {
+    it('should reject tokens with algorithm:none attack', async function () {
       // Create a token with alg:none (classic JWT attack)
-      const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')
-      const payload = Buffer.from(JSON.stringify({ id: 'admin' })).toString('base64url')
+      const header = Buffer.from(
+        JSON.stringify({ alg: 'none', typ: 'JWT' })
+      ).toString('base64url')
+      const payload = Buffer.from(JSON.stringify({ id: 'admin' })).toString(
+        'base64url'
+      )
       const noneToken = `${header}.${payload}.`
 
       const response = await request('/skServer/plugins', {
@@ -246,10 +267,12 @@ describe('JWT Security Analysis', function() {
 
       // Should be rejected
       expect([401, 403]).to.include(response.status)
-      console.log(`      alg:none token - Status: ${response.status} (should be 401/403)`)
+      console.log(
+        `      alg:none token - Status: ${response.status} (should be 401/403)`
+      )
     })
 
-    it('should reject tokens with tampered payload', async function() {
+    it('should reject tokens with tampered payload', async function () {
       if (!adminToken) {
         this.skip()
         return
@@ -258,10 +281,12 @@ describe('JWT Security Analysis', function() {
       const parts = adminToken.split('.')
 
       // Tamper with payload - try to escalate to admin
-      const tamperedPayload = Buffer.from(JSON.stringify({
-        id: 'attacker',
-        type: 'admin'
-      })).toString('base64url')
+      const tamperedPayload = Buffer.from(
+        JSON.stringify({
+          id: 'attacker',
+          type: 'admin'
+        })
+      ).toString('base64url')
 
       const tamperedToken = `${parts[0]}.${tamperedPayload}.${parts[2]}`
 
@@ -271,18 +296,20 @@ describe('JWT Security Analysis', function() {
 
       // Should be rejected due to invalid signature
       expect([401, 403]).to.include(response.status)
-      console.log(`      Tampered token - Status: ${response.status} (should be 401/403)`)
+      console.log(
+        `      Tampered token - Status: ${response.status} (should be 401/403)`
+      )
     })
   })
 })
 
-describe('Backup/Restore Security Tests', function() {
+describe('Backup/Restore Security Tests', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -291,7 +318,7 @@ describe('Backup/Restore Security Tests', function() {
     } catch (e) {}
   })
 
-  describe('Backup Download Security', function() {
+  describe('Backup Download Security', function () {
     /**
      * POTENTIAL VULNERABILITY: src/serverroutes.ts line 1153
      *
@@ -301,7 +328,7 @@ describe('Backup/Restore Security Tests', function() {
      * 2. ZIP slip vulnerability in restore
      */
 
-    it('should require authentication for backup download', async function() {
+    it('should require authentication for backup download', async function () {
       const response = await request('/skServer/backup')
 
       if (!securityEnabled) {
@@ -312,7 +339,7 @@ describe('Backup/Restore Security Tests', function() {
       }
     })
 
-    it('should require authentication for restore', async function() {
+    it('should require authentication for restore', async function () {
       const response = await request('/skServer/restore', {
         method: 'POST',
         body: JSON.stringify({})
@@ -322,8 +349,8 @@ describe('Backup/Restore Security Tests', function() {
     })
   })
 
-  describe('Restore Path Traversal', function() {
-    it('should validate backup file extension', async function() {
+  describe('Restore Path Traversal', function () {
+    it('should validate backup file extension', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -344,13 +371,13 @@ describe('Backup/Restore Security Tests', function() {
   })
 })
 
-describe('SSRF via Provider Configuration', function() {
+describe('SSRF via Provider Configuration', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -359,7 +386,7 @@ describe('SSRF via Provider Configuration', function() {
     } catch (e) {}
   })
 
-  describe('Provider SSRF Potential', function() {
+  describe('Provider SSRF Potential', function () {
     /**
      * POTENTIAL VULNERABILITY: src/interfaces/providers.js
      *
@@ -370,7 +397,7 @@ describe('SSRF via Provider Configuration', function() {
      * 3. Exfiltrate data through NMEA connections
      */
 
-    it('should list current providers', async function() {
+    it('should list current providers', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -384,7 +411,7 @@ describe('SSRF via Provider Configuration', function() {
       }
     })
 
-    it('should document SSRF risk in provider creation', async function() {
+    it('should document SSRF risk in provider creation', async function () {
       console.log(`
       POTENTIAL SSRF RISK: Provider Configuration
 
@@ -406,14 +433,14 @@ describe('SSRF via Provider Configuration', function() {
       expect(true).to.be.true
     })
 
-    it('should require authentication for provider creation', async function() {
+    it('should require authentication for provider creation', async function () {
       const maliciousProvider = {
         id: 'ssrf-test',
         enabled: true,
         type: 'TCP',
         options: {
           type: 'tcp',
-          host: '169.254.169.254',  // AWS metadata
+          host: '169.254.169.254', // AWS metadata
           port: 80
         }
       }
@@ -429,13 +456,13 @@ describe('SSRF via Provider Configuration', function() {
   })
 })
 
-describe('Configuration Injection Tests', function() {
+describe('Configuration Injection Tests', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -444,8 +471,8 @@ describe('Configuration Injection Tests', function() {
     } catch (e) {}
   })
 
-  describe('Security Config Manipulation', function() {
-    it('should not allow disabling security via API', async function() {
+  describe('Security Config Manipulation', function () {
+    it('should not allow disabling security via API', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -462,27 +489,32 @@ describe('Configuration Injection Tests', function() {
         })
       })
 
-      console.log(`      PUT /skServer/security/config - Status: ${response.status}`)
+      console.log(
+        `      PUT /skServer/security/config - Status: ${response.status}`
+      )
 
       // Verify prototype not polluted
       expect({}.admin).to.be.undefined
     })
 
-    it('should not allow adding admin users without proper auth', async function() {
-      const response = await request('/skServer/security/users/malicious-admin', {
-        method: 'PUT',
-        body: JSON.stringify({
-          type: 'admin',
-          password: 'hacked123'
-        })
-      })
+    it('should not allow adding admin users without proper auth', async function () {
+      const response = await request(
+        '/skServer/security/users/malicious-admin',
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            type: 'admin',
+            password: 'hacked123'
+          })
+        }
+      )
 
       expect([401, 403, 405]).to.include(response.status)
     })
   })
 
-  describe('Settings File Injection', function() {
-    it('should sanitize provider ID to prevent config pollution', async function() {
+  describe('Settings File Injection', function () {
+    it('should sanitize provider ID to prevent config pollution', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -492,7 +524,7 @@ describe('Configuration Injection Tests', function() {
         'constructor',
         'prototype',
         '../../../etc/passwd',
-        '"; rm -rf /',
+        '"; rm -rf /'
       ]
 
       for (const id of maliciousIds) {
@@ -507,7 +539,9 @@ describe('Configuration Injection Tests', function() {
           })
         })
 
-        console.log(`      Provider ID "${id.substring(0, 20)}" - Status: ${response.status}`)
+        console.log(
+          `      Provider ID "${id.substring(0, 20)}" - Status: ${response.status}`
+        )
       }
 
       // Verify prototype not polluted
@@ -516,19 +550,19 @@ describe('Configuration Injection Tests', function() {
   })
 })
 
-describe('WebSocket Message Replay/Tampering', function() {
+describe('WebSocket Message Replay/Tampering', function () {
   this.timeout(30000)
 
   let adminToken = null
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
     } catch (e) {}
   })
 
-  describe('Message Replay Attacks', function() {
-    it('should document replay attack potential', async function() {
+  describe('Message Replay Attacks', function () {
+    it('should document replay attack potential', async function () {
       console.log(`
       REPLAY ATTACK POTENTIAL: WebSocket Messages
 
@@ -551,13 +585,15 @@ describe('WebSocket Message Replay/Tampering', function() {
       expect(true).to.be.true
     })
 
-    it('should test rapid message replay', async function() {
+    it('should test rapid message replay', async function () {
       if (!adminToken) {
         this.skip()
         return
       }
 
-      const ws = new WebSocket(`${WS_URL}/signalk/v1/stream?token=${adminToken}`)
+      const ws = new WebSocket(
+        `${WS_URL}/signalk/v1/stream?token=${adminToken}`
+      )
 
       await new Promise((resolve, reject) => {
         ws.on('open', resolve)
@@ -568,14 +604,18 @@ describe('WebSocket Message Replay/Tampering', function() {
       // Capture a message format
       const testDelta = {
         context: 'vessels.self',
-        updates: [{
-          source: { label: 'replay-test' },
-          timestamp: new Date().toISOString(),
-          values: [{
-            path: 'navigation.position',
-            value: { latitude: 0, longitude: 0 }
-          }]
-        }]
+        updates: [
+          {
+            source: { label: 'replay-test' },
+            timestamp: new Date().toISOString(),
+            values: [
+              {
+                path: 'navigation.position',
+                value: { latitude: 0, longitude: 0 }
+              }
+            ]
+          }
+        ]
       }
 
       // Send same message 100 times rapidly (replay attack)
@@ -583,7 +623,7 @@ describe('WebSocket Message Replay/Tampering', function() {
         ws.send(JSON.stringify(testDelta))
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
       ws.close()
       console.log('      Sent 100 replayed messages - server survived')
@@ -592,10 +632,10 @@ describe('WebSocket Message Replay/Tampering', function() {
   })
 })
 
-describe('MDNS/Discovery Security', function() {
+describe('MDNS/Discovery Security', function () {
   this.timeout(30000)
 
-  describe('Service Discovery Risks', function() {
+  describe('Service Discovery Risks', function () {
     /**
      * POTENTIAL VULNERABILITY: src/mdns.js
      *
@@ -605,7 +645,7 @@ describe('MDNS/Discovery Security', function() {
      * 3. Enumerate vessel information
      */
 
-    it('should document mDNS security considerations', async function() {
+    it('should document mDNS security considerations', async function () {
       console.log(`
       MDNS SECURITY CONSIDERATIONS
 
@@ -633,12 +673,14 @@ describe('MDNS/Discovery Security', function() {
       expect(true).to.be.true
     })
 
-    it('should check if discovery endpoint requires auth', async function() {
+    it('should check if discovery endpoint requires auth', async function () {
       const response = await request('/skServer/runDiscovery', {
         method: 'PUT'
       })
 
-      console.log(`      PUT /skServer/runDiscovery - Status: ${response.status}`)
+      console.log(
+        `      PUT /skServer/runDiscovery - Status: ${response.status}`
+      )
 
       // Should require authentication in security mode
       expect([200, 401, 403]).to.include(response.status)

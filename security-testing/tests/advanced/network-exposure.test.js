@@ -57,10 +57,10 @@ async function getToken(username, password) {
   return null
 }
 
-describe('Public Internet Exposure Analysis', function() {
+describe('Public Internet Exposure Analysis', function () {
   this.timeout(30000)
 
-  describe('Server Binding Analysis', function() {
+  describe('Server Binding Analysis', function () {
     /**
      * CRITICAL: Server binds to 0.0.0.0 by default
      *
@@ -77,7 +77,7 @@ describe('Public Internet Exposure Analysis', function() {
      * - IPv6 if enabled (:: equivalent)
      */
 
-    it('should document 0.0.0.0 binding risks', function() {
+    it('should document 0.0.0.0 binding risks', function () {
       console.log(`
       CRITICAL RISK: Server Binds to 0.0.0.0 (All Interfaces)
 
@@ -118,7 +118,7 @@ describe('Public Internet Exposure Analysis', function() {
       expect(true).to.be.true
     })
 
-    it('should check for IPv6 exposure', async function() {
+    it('should check for IPv6 exposure', async function () {
       // Check if IPv6 is accessible
       console.log(`
       IPv6 EXPOSURE CHECK:
@@ -144,18 +144,24 @@ describe('Public Internet Exposure Analysis', function() {
           for (const iface of interfaces[name]) {
             if (iface.family === 'IPv6' && !iface.internal) {
               // Check if it's a public address (not link-local or ULA)
-              if (!iface.address.startsWith('fe80') &&
-                  !iface.address.startsWith('fc') &&
-                  !iface.address.startsWith('fd')) {
+              if (
+                !iface.address.startsWith('fe80') &&
+                !iface.address.startsWith('fc') &&
+                !iface.address.startsWith('fd')
+              ) {
                 hasPublicIPv6 = true
-                console.log(`      Found potential public IPv6: ${iface.address}`)
+                console.log(
+                  `      Found potential public IPv6: ${iface.address}`
+                )
               }
             }
           }
         }
 
         if (hasPublicIPv6) {
-          console.log(`      WARNING: System has public IPv6 - SignalK may be exposed!`)
+          console.log(
+            `      WARNING: System has public IPv6 - SignalK may be exposed!`
+          )
         }
       } catch (e) {
         console.log(`      Could not enumerate interfaces: ${e.message}`)
@@ -163,12 +169,12 @@ describe('Public Internet Exposure Analysis', function() {
     })
   })
 
-  describe('Port Exposure Analysis', function() {
+  describe('Port Exposure Analysis', function () {
     /**
      * All listening ports and their security status
      */
 
-    it('should document all exposed ports', function() {
+    it('should document all exposed ports', function () {
       console.log(`
       PORT EXPOSURE ANALYSIS
 
@@ -214,7 +220,7 @@ describe('Public Internet Exposure Analysis', function() {
       expect(true).to.be.true
     })
 
-    it('should test unauthenticated TCP port 8375', async function() {
+    it('should test unauthenticated TCP port 8375', async function () {
       return new Promise((resolve) => {
         const client = new net.Socket()
         let receivedData = false
@@ -227,7 +233,9 @@ describe('Public Internet Exposure Analysis', function() {
 
         client.on('data', (data) => {
           if (!receivedData) {
-            console.log(`      Received data WITHOUT auth: ${data.toString().substring(0, 100)}...`)
+            console.log(
+              `      Received data WITHOUT auth: ${data.toString().substring(0, 100)}...`
+            )
             receivedData = true
           }
         })
@@ -239,7 +247,9 @@ describe('Public Internet Exposure Analysis', function() {
 
         setTimeout(() => {
           if (receivedData) {
-            console.log(`      VULNERABILITY CONFIRMED: TCP 8375 has no authentication!`)
+            console.log(
+              `      VULNERABILITY CONFIRMED: TCP 8375 has no authentication!`
+            )
           }
           client.destroy()
           resolve()
@@ -250,7 +260,7 @@ describe('Public Internet Exposure Analysis', function() {
     })
   })
 
-  describe('X-Forwarded-For Header Spoofing', function() {
+  describe('X-Forwarded-For Header Spoofing', function () {
     /**
      * VULNERABILITY: X-Forwarded-For is trusted without validation
      *
@@ -260,7 +270,7 @@ describe('Public Internet Exposure Analysis', function() {
      * const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress
      */
 
-    it('should document X-Forwarded-For risks', function() {
+    it('should document X-Forwarded-For risks', function () {
       console.log(`
       VULNERABILITY: X-Forwarded-For Header Spoofing
 
@@ -291,7 +301,7 @@ describe('Public Internet Exposure Analysis', function() {
       expect(true).to.be.true
     })
 
-    it('should test X-Forwarded-For spoofing', async function() {
+    it('should test X-Forwarded-For spoofing', async function () {
       // Test if server accepts spoofed X-Forwarded-For
       const response = await request('/signalk/v1/api/vessels/self', {
         headers: {
@@ -299,8 +309,12 @@ describe('Public Internet Exposure Analysis', function() {
         }
       })
 
-      console.log(`      Request with spoofed X-Forwarded-For returned: ${response.status}`)
-      console.log(`      Server likely logged IP as 8.8.8.8 instead of actual client IP`)
+      console.log(
+        `      Request with spoofed X-Forwarded-For returned: ${response.status}`
+      )
+      console.log(
+        `      Server likely logged IP as 8.8.8.8 instead of actual client IP`
+      )
 
       // The request should succeed (header is accepted)
       // This itself is the vulnerability
@@ -308,10 +322,10 @@ describe('Public Internet Exposure Analysis', function() {
   })
 })
 
-describe('mDNS Security Analysis', function() {
+describe('mDNS Security Analysis', function () {
   this.timeout(60000)
 
-  describe('Information Disclosure via mDNS', function() {
+  describe('Information Disclosure via mDNS', function () {
     /**
      * mDNS broadcasts contain sensitive vessel information
      *
@@ -329,7 +343,7 @@ describe('mDNS Security Analysis', function() {
      * }
      */
 
-    it('should document mDNS information disclosure', function() {
+    it('should document mDNS information disclosure', function () {
       console.log(`
       VULNERABILITY: mDNS Information Disclosure
 
@@ -365,7 +379,7 @@ describe('mDNS Security Analysis', function() {
     })
   })
 
-  describe('mDNS Flooding Attack', function() {
+  describe('mDNS Flooding Attack', function () {
     /**
      * VULNERABILITY: mDNS can be used for amplification attacks
      *
@@ -373,7 +387,7 @@ describe('mDNS Security Analysis', function() {
      * from all SignalK servers on the network.
      */
 
-    it('should document mDNS amplification risk', function() {
+    it('should document mDNS amplification risk', function () {
       console.log(`
       RISK: mDNS Amplification Attack
 
@@ -403,7 +417,7 @@ describe('mDNS Security Analysis', function() {
       expect(true).to.be.true
     })
 
-    it('should document mDNS conflict issues', function() {
+    it('should document mDNS conflict issues', function () {
       console.log(`
       ISSUE: Multiple mDNS Responders Conflict
 
@@ -447,12 +461,12 @@ describe('mDNS Security Analysis', function() {
     })
   })
 
-  describe('mDNS from Internet', function() {
+  describe('mDNS from Internet', function () {
     /**
      * What happens if mDNS packets reach the server from internet?
      */
 
-    it('should analyze mDNS internet exposure', function() {
+    it('should analyze mDNS internet exposure', function () {
       console.log(`
       ANALYSIS: mDNS Internet Exposure
 
@@ -490,11 +504,11 @@ describe('mDNS Security Analysis', function() {
   })
 })
 
-describe('Network Interface Enumeration', function() {
+describe('Network Interface Enumeration', function () {
   this.timeout(30000)
 
-  describe('Exposed Network Information', function() {
-    it('should check what network info is exposed', async function() {
+  describe('Exposed Network Information', function () {
+    it('should check what network info is exposed', async function () {
       // Check if network info is accessible via API
       const endpoints = [
         '/signalk/v1/api/vessels/self',
@@ -518,7 +532,9 @@ describe('Network Interface Enumeration', function() {
           const ipv6s = body.match(ipv6Pattern) || []
 
           if (ipv4s.length > 0 || ipv6s.length > 0) {
-            console.log(`      ${endpoint}: Found IPs - IPv4: ${ipv4s.slice(0, 3).join(', ')}`)
+            console.log(
+              `      ${endpoint}: Found IPs - IPv4: ${ipv4s.slice(0, 3).join(', ')}`
+            )
           }
         } catch (e) {
           // Endpoint not accessible, that's fine
@@ -528,16 +544,16 @@ describe('Network Interface Enumeration', function() {
   })
 })
 
-describe('Firewall Bypass via WebSocket', function() {
+describe('Firewall Bypass via WebSocket', function () {
   this.timeout(30000)
 
-  describe('WebSocket as Firewall Evasion', function() {
+  describe('WebSocket as Firewall Evasion', function () {
     /**
      * WebSocket connections can bypass some firewalls and proxies
      * because they look like regular HTTP initially.
      */
 
-    it('should document WebSocket firewall bypass', function() {
+    it('should document WebSocket firewall bypass', function () {
       console.log(`
       RISK: WebSocket Firewall Bypass
 
@@ -568,16 +584,16 @@ describe('Firewall Bypass via WebSocket', function() {
   })
 })
 
-describe('DNS Rebinding Attack', function() {
+describe('DNS Rebinding Attack', function () {
   this.timeout(30000)
 
-  describe('DNS Rebinding via WebSocket', function() {
+  describe('DNS Rebinding via WebSocket', function () {
     /**
      * DNS rebinding can bypass same-origin policy
      * to attack SignalK servers on internal networks.
      */
 
-    it('should document DNS rebinding risk', function() {
+    it('should document DNS rebinding risk', function () {
       console.log(`
       VULNERABILITY: DNS Rebinding Attack
 
@@ -614,13 +630,13 @@ describe('DNS Rebinding Attack', function() {
       expect(true).to.be.true
     })
 
-    it('should test Host header handling', async function() {
+    it('should test Host header handling', async function () {
       // Test if server accepts arbitrary Host headers
       const evilHosts = [
         'evil.com',
         'attacker.com:3000',
         'localhost.evil.com',
-        '192.168.1.1'  // IP rebinding
+        '192.168.1.1' // IP rebinding
       ]
 
       console.log('      Testing Host header handling:')
@@ -629,7 +645,7 @@ describe('DNS Rebinding Attack', function() {
         try {
           const response = await request('/signalk', {
             headers: {
-              'Host': host
+              Host: host
             }
           })
           console.log(`      Host "${host}": status=${response.status}`)
@@ -642,11 +658,11 @@ describe('DNS Rebinding Attack', function() {
   })
 })
 
-describe('Environment Variable Exposure', function() {
+describe('Environment Variable Exposure', function () {
   this.timeout(30000)
 
-  describe('Network-Related Environment Variables', function() {
-    it('should document network env vars', function() {
+  describe('Network-Related Environment Variables', function () {
+    it('should document network env vars', function () {
       console.log(`
       NETWORK-RELATED ENVIRONMENT VARIABLES
 
@@ -681,10 +697,10 @@ describe('Environment Variable Exposure', function() {
   })
 })
 
-describe('Summary: Internet Exposure Risks', function() {
+describe('Summary: Internet Exposure Risks', function () {
   this.timeout(30000)
 
-  it('should provide complete risk summary', function() {
+  it('should provide complete risk summary', function () {
     console.log(`
     ================================================================
     SIGNALK PUBLIC INTERNET EXPOSURE RISK SUMMARY

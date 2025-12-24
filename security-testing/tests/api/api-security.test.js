@@ -36,8 +36,8 @@ function request(method, path, body = null, headers = {}, rawBody = false) {
       method,
       headers: {
         'Content-Type': contentType,
-        ...headers,
-      },
+        ...headers
+      }
     }
 
     const req = lib.request(options, (res) => {
@@ -53,7 +53,7 @@ function request(method, path, body = null, headers = {}, rawBody = false) {
         resolve({
           status: res.statusCode,
           headers: res.headers,
-          body: parsedBody,
+          body: parsedBody
         })
       })
     })
@@ -128,7 +128,7 @@ describe('REST API Security Tests', function () {
   describe('CORS Configuration', () => {
     it('should not allow wildcard origin with credentials', async () => {
       const res = await request('GET', '/signalk', null, {
-        Origin: 'http://evil.com',
+        Origin: 'http://evil.com'
       })
 
       const corsOrigin = res.headers['access-control-allow-origin']
@@ -144,12 +144,12 @@ describe('REST API Security Tests', function () {
         'http://evil.com',
         'http://localhost.evil.com',
         'http://signalk.evil.com',
-        'null',
+        'null'
       ]
 
       for (const origin of maliciousOrigins) {
         const res = await request('GET', '/signalk', null, {
-          Origin: origin,
+          Origin: origin
         })
 
         const corsOrigin = res.headers['access-control-allow-origin']
@@ -160,11 +160,16 @@ describe('REST API Security Tests', function () {
     })
 
     it('should handle CORS preflight correctly', async () => {
-      const res = await request('OPTIONS', '/signalk/v1/api/vessels/self', null, {
-        Origin: 'http://localhost:8080',
-        'Access-Control-Request-Method': 'PUT',
-        'Access-Control-Request-Headers': 'Content-Type',
-      })
+      const res = await request(
+        'OPTIONS',
+        '/signalk/v1/api/vessels/self',
+        null,
+        {
+          Origin: 'http://localhost:8080',
+          'Access-Control-Request-Method': 'PUT',
+          'Access-Control-Request-Headers': 'Content-Type'
+        }
+      )
 
       // Should return proper preflight response
       expect(res.status).to.be.oneOf([200, 204, 403])
@@ -178,11 +183,11 @@ describe('REST API Security Tests', function () {
           nested: {
             deeply: {
               nested: {
-                value: 'test',
-              },
-            },
-          },
-        },
+                value: 'test'
+              }
+            }
+          }
+        }
       }
 
       // Create deeply nested object
@@ -192,7 +197,11 @@ describe('REST API Security Tests', function () {
         current = current.value
       }
 
-      const res = await request('PUT', '/signalk/v1/api/vessels/self/test', nestedPayload)
+      const res = await request(
+        'PUT',
+        '/signalk/v1/api/vessels/self/test',
+        nestedPayload
+      )
       // 405 = PUT not allowed on this path
       expect(res.status).to.be.oneOf([200, 400, 401, 405, 413])
     })
@@ -201,21 +210,31 @@ describe('REST API Security Tests', function () {
       // Can't create actual circular reference in JSON, but test similar patterns
       const payload = '{"a":{"b":{"a":{"b":"circular"}}}}'
 
-      const res = await request('PUT', '/signalk/v1/api/vessels/self/test', payload, { 'Content-Type': 'application/json' }, true)
+      const res = await request(
+        'PUT',
+        '/signalk/v1/api/vessels/self/test',
+        payload,
+        { 'Content-Type': 'application/json' },
+        true
+      )
       // 405 = PUT not allowed
       expect(res.status).to.be.oneOf([200, 400, 401, 405])
     })
 
     it('should reject prototype pollution in JSON', async () => {
       const pollutionPayloads = [
-        { '__proto__': { 'admin': true } },
-        { 'constructor': { 'prototype': { 'admin': true } } },
+        { __proto__: { admin: true } },
+        { constructor: { prototype: { admin: true } } },
         { '__proto__.admin': true },
-        { 'value': { '__proto__': { 'polluted': true } } },
+        { value: { __proto__: { polluted: true } } }
       ]
 
       for (const payload of pollutionPayloads) {
-        const res = await request('PUT', '/signalk/v1/api/vessels/self/test', payload)
+        const res = await request(
+          'PUT',
+          '/signalk/v1/api/vessels/self/test',
+          payload
+        )
         // 405 = PUT not allowed on this path
         expect(res.status).to.be.oneOf([200, 400, 401, 403, 405])
       }
@@ -233,7 +252,7 @@ describe('REST API Security Tests', function () {
           '/skServer/restore',
           largePayload,
           {
-            'Content-Type': 'application/octet-stream',
+            'Content-Type': 'application/octet-stream'
           },
           true
         )
@@ -253,7 +272,7 @@ describe('REST API Security Tests', function () {
         '/skServer/restore',
         maliciousContent,
         {
-          'Content-Type': 'application/x-sh',
+          'Content-Type': 'application/x-sh'
         },
         true
       )
@@ -274,7 +293,7 @@ describe('REST API Security Tests', function () {
         '/signalk/v1/api/vessels/self/../../../etc/passwd',
         '/signalk/v1/api/%2e%2e/%2e%2e/etc/passwd',
         '/signalk/v1/api/....//....//etc/passwd',
-        '/signalk/v1/api/..\\..\\windows\\system32\\config\\sam',
+        '/signalk/v1/api/..\\..\\windows\\system32\\config\\sam'
       ]
 
       for (const path of traversalAttempts) {
@@ -282,8 +301,8 @@ describe('REST API Security Tests', function () {
         expect(res.status).to.be.oneOf([200, 400, 404])
         if (res.body) {
           const bodyStr = JSON.stringify(res.body)
-          expect(bodyStr).to.not.include('"name"')  // package.json
-          expect(bodyStr).to.not.include('root:')   // /etc/passwd
+          expect(bodyStr).to.not.include('"name"') // package.json
+          expect(bodyStr).to.not.include('root:') // /etc/passwd
         }
       }
     })
@@ -292,7 +311,7 @@ describe('REST API Security Tests', function () {
       const staticTraversals = [
         '/admin/../../../etc/passwd',
         '/plugins/../package.json',
-        '/.well-known/../../.git/config',
+        '/.well-known/../../.git/config'
       ]
 
       for (const path of staticTraversals) {
@@ -314,7 +333,9 @@ describe('REST API Security Tests', function () {
 
       const rateLimited = results.some((s) => s === 429)
       if (!rateLimited) {
-        console.log(`  FINDING: No rate limiting after ${requests} rapid requests`)
+        console.log(
+          `  FINDING: No rate limiting after ${requests} rapid requests`
+        )
       }
     })
 
@@ -376,7 +397,7 @@ describe('REST API Security Tests', function () {
     it('should handle HTTP method override headers', async () => {
       // Some frameworks allow method override via headers
       const res = await request('POST', '/skServer/security/users', null, {
-        'X-HTTP-Method-Override': 'DELETE',
+        'X-HTTP-Method-Override': 'DELETE'
       })
 
       // Should not allow method override to bypass auth
@@ -391,7 +412,7 @@ describe('REST API Security Tests', function () {
         '../../../malicious-plugin',
         'plugin; rm -rf /',
         '<script>alert(1)</script>',
-        'plugin\x00.json',
+        'plugin\x00.json'
       ]
 
       for (const id of maliciousIds) {
@@ -403,7 +424,7 @@ describe('REST API Security Tests', function () {
 
     it('should require admin for plugin configuration', async () => {
       const res = await request('POST', '/skServer/plugins', {
-        enable: 'some-plugin',
+        enable: 'some-plugin'
       })
 
       // 404 = security not enabled, plugin endpoints may not exist
@@ -426,7 +447,7 @@ describe('REST API Security Tests', function () {
 
     it('should require admin for restore', async () => {
       const res = await request('POST', '/skServer/restore', {
-        data: 'fake-backup-data',
+        data: 'fake-backup-data'
       })
       // 400 = bad request format (acceptable)
       expect(res.status).to.be.oneOf([400, 401, 403, 404])

@@ -59,7 +59,9 @@ async function getToken(username, password) {
 // Helper to connect WebSocket with token
 function connectWS(token = null) {
   return new Promise((resolve, reject) => {
-    const url = token ? `${WS_URL}/signalk/v1/stream?token=${token}` : `${WS_URL}/signalk/v1/stream`
+    const url = token
+      ? `${WS_URL}/signalk/v1/stream?token=${token}`
+      : `${WS_URL}/signalk/v1/stream`
     const ws = new WebSocket(url)
 
     ws.on('open', () => resolve(ws))
@@ -73,13 +75,13 @@ function connectWS(token = null) {
   })
 }
 
-describe('ACL Bypass Vulnerability Tests', function() {
+describe('ACL Bypass Vulnerability Tests', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     // Try to get admin token to determine if security is enabled
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
@@ -101,7 +103,7 @@ describe('ACL Bypass Vulnerability Tests', function() {
     }
   })
 
-  describe('Regex Pattern Escaping Vulnerability', function() {
+  describe('Regex Pattern Escaping Vulnerability', function () {
     /**
      * VULNERABILITY: tokensecurity.js uses .replace() which only replaces FIRST occurrence
      *
@@ -118,7 +120,7 @@ describe('ACL Bypass Vulnerability Tests', function() {
      * - Dots after the first are treated as "any character" wildcard
      */
 
-    it('should detect regex escaping bug in context matching', async function() {
+    it('should detect regex escaping bug in context matching', async function () {
       // The vulnerability means a pattern like "vessels.self.navigation"
       // becomes regex: ^vessels\.self.navigation$
       // where the second . matches ANY character
@@ -131,7 +133,10 @@ describe('ACL Bypass Vulnerability Tests', function() {
         {
           aclPattern: 'vessels.self.navigation',
           shouldMatch: ['vessels.self.navigation'],
-          shouldNotMatch: ['vessels.selfXnavigation', 'vessels/self/navigation'],
+          shouldNotMatch: [
+            'vessels.selfXnavigation',
+            'vessels/self/navigation'
+          ],
           description: 'Multiple dots - only first escaped'
         },
         {
@@ -154,7 +159,9 @@ describe('ACL Bypass Vulnerability Tests', function() {
 
       for (const test of testPatterns) {
         const buggyRegex = new RegExp('^' + buggyEscape(test.aclPattern) + '$')
-        const correctRegex = new RegExp('^' + correctEscape(test.aclPattern) + '$')
+        const correctRegex = new RegExp(
+          '^' + correctEscape(test.aclPattern) + '$'
+        )
 
         console.log(`\n      Pattern: ${test.aclPattern}`)
         console.log(`      Buggy regex:   ${buggyRegex}`)
@@ -164,17 +171,23 @@ describe('ACL Bypass Vulnerability Tests', function() {
         for (const match of test.shouldMatch) {
           const buggyResult = buggyRegex.test(match)
           const correctResult = correctRegex.test(match)
-          console.log(`      "${match}" - buggy: ${buggyResult}, correct: ${correctResult}`)
+          console.log(
+            `      "${match}" - buggy: ${buggyResult}, correct: ${correctResult}`
+          )
         }
 
         for (const noMatch of test.shouldNotMatch) {
           const buggyResult = buggyRegex.test(noMatch)
           const correctResult = correctRegex.test(noMatch)
           // Due to the bug, some of these WILL match when they shouldn't
-          console.log(`      "${noMatch}" - buggy: ${buggyResult}, correct: ${correctResult}`)
+          console.log(
+            `      "${noMatch}" - buggy: ${buggyResult}, correct: ${correctResult}`
+          )
 
           if (buggyResult && !correctResult) {
-            console.log(`      ^^^ VULNERABILITY: This should NOT match but does due to bug!`)
+            console.log(
+              `      ^^^ VULNERABILITY: This should NOT match but does due to bug!`
+            )
           }
         }
       }
@@ -183,7 +196,7 @@ describe('ACL Bypass Vulnerability Tests', function() {
       expect(true).to.be.true
     })
 
-    it('should demonstrate ACL bypass with crafted context', async function() {
+    it('should demonstrate ACL bypass with crafted context', async function () {
       // If an ACL restricts "vessels.self.navigation.position"
       // An attacker might try "vessels.selfXnavigation.position"
       // which would match due to the unescaped dot
@@ -194,9 +207,9 @@ describe('ACL Bypass Vulnerability Tests', function() {
 
       // Due to the bug, position 2 and 3 dots are wildcards
       const bypassAttempts = [
-        'vessels.selfXnavigationYposition',  // X and Y match unescaped dots
-        'vessels.self!navigation.position',  // ! matches second unescaped dot
-        'vessels.self.navigationZposition',  // Z matches third unescaped dot
+        'vessels.selfXnavigationYposition', // X and Y match unescaped dots
+        'vessels.self!navigation.position', // ! matches second unescaped dot
+        'vessels.self.navigationZposition' // Z matches third unescaped dot
       ]
 
       let bypasses = 0
@@ -208,30 +221,36 @@ describe('ACL Bypass Vulnerability Tests', function() {
       }
 
       // At least some should bypass due to the bug
-      expect(bypasses).to.be.greaterThan(0, 'Expected regex escaping bug to allow bypasses')
+      expect(bypasses).to.be.greaterThan(
+        0,
+        'Expected regex escaping bug to allow bypasses'
+      )
     })
   })
 
-  describe('Multi-User ACL Permission Tests', function() {
+  describe('Multi-User ACL Permission Tests', function () {
     // These tests require security enabled and multiple users configured
 
-    it('should test readonly token cannot write', async function() {
+    it('should test readonly token cannot write', async function () {
       if (!securityEnabled) {
         this.skip()
         return
       }
 
       // Try to PUT with no token
-      const response = await request('/signalk/v1/api/vessels/self/navigation/courseOverGroundTrue', {
-        method: 'PUT',
-        body: JSON.stringify({ value: 1.5 })
-      })
+      const response = await request(
+        '/signalk/v1/api/vessels/self/navigation/courseOverGroundTrue',
+        {
+          method: 'PUT',
+          body: JSON.stringify({ value: 1.5 })
+        }
+      )
 
       // Should be denied
       expect([401, 403, 405]).to.include(response.status)
     })
 
-    it('should test token scope enforcement', async function() {
+    it('should test token scope enforcement', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
@@ -247,13 +266,13 @@ describe('ACL Bypass Vulnerability Tests', function() {
     })
   })
 
-  describe('Path Traversal in ACL Paths', function() {
-    it('should not allow path traversal in SignalK paths', async function() {
+  describe('Path Traversal in ACL Paths', function () {
+    it('should not allow path traversal in SignalK paths', async function () {
       const traversalPaths = [
         '/signalk/v1/api/vessels/self/../../../etc/passwd',
         '/signalk/v1/api/vessels/self/navigation/../../admin/settings',
         '/signalk/v1/api/vessels/self/./././navigation/position',
-        '/signalk/v1/api/vessels/..%2F..%2F..%2Fetc%2Fpasswd',
+        '/signalk/v1/api/vessels/..%2F..%2F..%2Fetc%2Fpasswd'
       ]
 
       for (const path of traversalPaths) {
@@ -270,8 +289,8 @@ describe('ACL Bypass Vulnerability Tests', function() {
     })
   })
 
-  describe('Context Spoofing Tests', function() {
-    it('should not allow context spoofing via delta messages', async function() {
+  describe('Context Spoofing Tests', function () {
+    it('should not allow context spoofing via delta messages', async function () {
       if (!securityEnabled) {
         this.skip()
         return
@@ -282,23 +301,27 @@ describe('ACL Bypass Vulnerability Tests', function() {
 
         // Try to inject a delta with a different context than our vessel
         const spoofedDelta = {
-          context: 'vessels.urn:mrn:imo:mmsi:123456789',  // Different vessel
-          updates: [{
-            source: { label: 'test' },
-            values: [{
-              path: 'navigation.position',
-              value: { latitude: 0, longitude: 0 }
-            }]
-          }]
+          context: 'vessels.urn:mrn:imo:mmsi:123456789', // Different vessel
+          updates: [
+            {
+              source: { label: 'test' },
+              values: [
+                {
+                  path: 'navigation.position',
+                  value: { latitude: 0, longitude: 0 }
+                }
+              ]
+            }
+          ]
         }
 
         ws.send(JSON.stringify(spoofedDelta))
 
         // Wait and check if it was rejected
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise((resolve) => setTimeout(resolve, 1000))
 
         ws.close()
-        expect(true).to.be.true  // Document test ran
+        expect(true).to.be.true // Document test ran
       } catch (e) {
         // Connection failure is acceptable
         expect(true).to.be.true
@@ -307,13 +330,13 @@ describe('ACL Bypass Vulnerability Tests', function() {
   })
 })
 
-describe('Delta and Subscription Injection Tests', function() {
+describe('Delta and Subscription Injection Tests', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -324,25 +347,29 @@ describe('Delta and Subscription Injection Tests', function() {
     }
   })
 
-  describe('Malicious Delta Payloads', function() {
-    it('should handle delta with prototype pollution attempt', async function() {
+  describe('Malicious Delta Payloads', function () {
+    it('should handle delta with prototype pollution attempt', async function () {
       try {
         const ws = await connectWS(adminToken)
 
         const maliciousDelta = {
           context: 'vessels.self',
-          updates: [{
-            source: { label: 'test' },
-            values: [{
-              path: '__proto__.polluted',
-              value: 'pwned'
-            }]
-          }]
+          updates: [
+            {
+              source: { label: 'test' },
+              values: [
+                {
+                  path: '__proto__.polluted',
+                  value: 'pwned'
+                }
+              ]
+            }
+          ]
         }
 
         ws.send(JSON.stringify(maliciousDelta))
 
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
 
         // Check that prototype wasn't polluted
         expect({}.polluted).to.be.undefined
@@ -354,24 +381,28 @@ describe('Delta and Subscription Injection Tests', function() {
       }
     })
 
-    it('should handle delta with constructor pollution attempt', async function() {
+    it('should handle delta with constructor pollution attempt', async function () {
       try {
         const ws = await connectWS(adminToken)
 
         const maliciousDelta = {
           context: 'vessels.self',
-          updates: [{
-            source: { label: 'test' },
-            values: [{
-              path: 'constructor.prototype.polluted',
-              value: 'pwned'
-            }]
-          }]
+          updates: [
+            {
+              source: { label: 'test' },
+              values: [
+                {
+                  path: 'constructor.prototype.polluted',
+                  value: 'pwned'
+                }
+              ]
+            }
+          ]
         }
 
         ws.send(JSON.stringify(maliciousDelta))
 
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
 
         ws.close()
         expect(true).to.be.true
@@ -380,7 +411,7 @@ describe('Delta and Subscription Injection Tests', function() {
       }
     })
 
-    it('should handle deeply nested delta values', async function() {
+    it('should handle deeply nested delta values', async function () {
       try {
         const ws = await connectWS(adminToken)
 
@@ -392,18 +423,22 @@ describe('Delta and Subscription Injection Tests', function() {
 
         const deepDelta = {
           context: 'vessels.self',
-          updates: [{
-            source: { label: 'test' },
-            values: [{
-              path: 'navigation.test',
-              value: nested
-            }]
-          }]
+          updates: [
+            {
+              source: { label: 'test' },
+              values: [
+                {
+                  path: 'navigation.test',
+                  value: nested
+                }
+              ]
+            }
+          ]
         }
 
         ws.send(JSON.stringify(deepDelta))
 
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
 
         ws.close()
         expect(true).to.be.true
@@ -412,28 +447,32 @@ describe('Delta and Subscription Injection Tests', function() {
       }
     })
 
-    it('should handle delta with command injection in source label', async function() {
+    it('should handle delta with command injection in source label', async function () {
       try {
         const ws = await connectWS(adminToken)
 
         const injectionDelta = {
           context: 'vessels.self',
-          updates: [{
-            source: {
-              label: '$(whoami)',
-              type: 'NMEA0183',
-              sentence: 'GGA'
-            },
-            values: [{
-              path: 'navigation.position',
-              value: { latitude: 0, longitude: 0 }
-            }]
-          }]
+          updates: [
+            {
+              source: {
+                label: '$(whoami)',
+                type: 'NMEA0183',
+                sentence: 'GGA'
+              },
+              values: [
+                {
+                  path: 'navigation.position',
+                  value: { latitude: 0, longitude: 0 }
+                }
+              ]
+            }
+          ]
         }
 
         ws.send(JSON.stringify(injectionDelta))
 
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
 
         ws.close()
         expect(true).to.be.true
@@ -443,8 +482,8 @@ describe('Delta and Subscription Injection Tests', function() {
     })
   })
 
-  describe('Subscription Injection Tests', function() {
-    it('should handle subscription with regex DoS pattern', async function() {
+  describe('Subscription Injection Tests', function () {
+    it('should handle subscription with regex DoS pattern', async function () {
       try {
         const ws = await connectWS(adminToken)
 
@@ -456,15 +495,17 @@ describe('Delta and Subscription Injection Tests', function() {
         // Evil regex pattern that could cause ReDoS
         const evilSubscription = {
           context: 'vessels.self',
-          subscribe: [{
-            path: '(a+)+$',  // Catastrophic backtracking pattern
-            period: 1000
-          }]
+          subscribe: [
+            {
+              path: '(a+)+$', // Catastrophic backtracking pattern
+              period: 1000
+            }
+          ]
         }
 
         ws.send(JSON.stringify(evilSubscription))
 
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise((resolve) => setTimeout(resolve, 1000))
 
         ws.close()
         expect(true).to.be.true
@@ -473,7 +514,7 @@ describe('Delta and Subscription Injection Tests', function() {
       }
     })
 
-    it('should handle subscription with path traversal', async function() {
+    it('should handle subscription with path traversal', async function () {
       try {
         const ws = await connectWS(adminToken)
 
@@ -483,15 +524,17 @@ describe('Delta and Subscription Injection Tests', function() {
 
         const traversalSub = {
           context: 'vessels.self',
-          subscribe: [{
-            path: '../../../etc/passwd',
-            period: 1000
-          }]
+          subscribe: [
+            {
+              path: '../../../etc/passwd',
+              period: 1000
+            }
+          ]
         }
 
         ws.send(JSON.stringify(traversalSub))
 
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
 
         ws.close()
         expect(true).to.be.true
@@ -500,7 +543,7 @@ describe('Delta and Subscription Injection Tests', function() {
       }
     })
 
-    it('should handle subscription to all paths (*)', async function() {
+    it('should handle subscription to all paths (*)', async function () {
       try {
         const ws = await connectWS(adminToken)
 
@@ -511,10 +554,12 @@ describe('Delta and Subscription Injection Tests', function() {
         // Subscribe to everything - could be resource exhaustion
         const wildcardSub = {
           context: '*',
-          subscribe: [{
-            path: '*',
-            period: 100  // Very frequent
-          }]
+          subscribe: [
+            {
+              path: '*',
+              period: 100 // Very frequent
+            }
+          ]
         }
 
         ws.send(JSON.stringify(wildcardSub))
@@ -526,7 +571,7 @@ describe('Delta and Subscription Injection Tests', function() {
           messageCount++
         })
 
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        await new Promise((resolve) => setTimeout(resolve, 2000))
 
         console.log(`      Received ${messageCount} messages in 2 seconds`)
 
@@ -538,24 +583,24 @@ describe('Delta and Subscription Injection Tests', function() {
     })
   })
 
-  describe('Delta Format Fuzzing', function() {
-    it('should handle missing required fields', async function() {
+  describe('Delta Format Fuzzing', function () {
+    it('should handle missing required fields', async function () {
       try {
         const ws = await connectWS(adminToken)
 
         const invalidDeltas = [
-          {},  // Empty
-          { context: 'vessels.self' },  // Missing updates
-          { updates: [] },  // Missing context
-          { context: 'vessels.self', updates: [{}] },  // Empty update
-          { context: 'vessels.self', updates: [{ values: [] }] },  // No source
+          {}, // Empty
+          { context: 'vessels.self' }, // Missing updates
+          { updates: [] }, // Missing context
+          { context: 'vessels.self', updates: [{}] }, // Empty update
+          { context: 'vessels.self', updates: [{ values: [] }] } // No source
         ]
 
         for (const delta of invalidDeltas) {
           ws.send(JSON.stringify(delta))
         }
 
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
 
         ws.close()
         expect(true).to.be.true
@@ -564,7 +609,7 @@ describe('Delta and Subscription Injection Tests', function() {
       }
     })
 
-    it('should handle invalid JSON', async function() {
+    it('should handle invalid JSON', async function () {
       try {
         const ws = await connectWS(adminToken)
 
@@ -576,14 +621,14 @@ describe('Delta and Subscription Injection Tests', function() {
           '[]',
           '""',
           '12345',
-          '<xml>not json</xml>',
+          '<xml>not json</xml>'
         ]
 
         for (const payload of invalidPayloads) {
           ws.send(payload)
         }
 
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
 
         ws.close()
         expect(true).to.be.true
@@ -592,15 +637,15 @@ describe('Delta and Subscription Injection Tests', function() {
       }
     })
 
-    it('should handle binary WebSocket messages', async function() {
+    it('should handle binary WebSocket messages', async function () {
       try {
         const ws = await connectWS(adminToken)
 
         // Send binary data
-        const binaryData = Buffer.from([0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD])
+        const binaryData = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0xfd])
         ws.send(binaryData)
 
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 500))
 
         ws.close()
         expect(true).to.be.true

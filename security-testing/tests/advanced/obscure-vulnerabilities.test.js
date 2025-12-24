@@ -56,10 +56,10 @@ async function getToken(username, password) {
   return null
 }
 
-describe('Assignment vs Comparison Bug', function() {
+describe('Assignment vs Comparison Bug', function () {
   this.timeout(30000)
 
-  describe('findRequest Assignment Bug', function() {
+  describe('findRequest Assignment Bug', function () {
     /**
      * BUG: src/interfaces/ws.js line 102
      *
@@ -73,7 +73,7 @@ describe('Assignment vs Comparison Bug', function() {
      * - Could cause request mixups between users
      */
 
-    it('should document assignment bug in ws.js findRequest', function() {
+    it('should document assignment bug in ws.js findRequest', function () {
       console.log(`
       BUG: Assignment Instead of Comparison
 
@@ -106,11 +106,13 @@ describe('Assignment vs Comparison Bug', function() {
       const buggyResult = buggyFind((r) => (r.requestId = 'ccc'))
 
       // The bug: we wanted 'ccc' but got 'first' because assignment returns truthy
-      console.log(`      Looking for 'ccc', buggy code returns: ${buggyResult.data}`)
-      expect(buggyResult.data).to.equal('first')  // BUG: Returns wrong request!
+      console.log(
+        `      Looking for 'ccc', buggy code returns: ${buggyResult.data}`
+      )
+      expect(buggyResult.data).to.equal('first') // BUG: Returns wrong request!
 
       // Correct version - reset the corrupted data first
-      requests[0].requestId = 'aaa'  // Fix corruption from buggy find
+      requests[0].requestId = 'aaa' // Fix corruption from buggy find
       const correctResult = requests.find((r) => r.requestId === 'ccc')
       console.log(`      Correct code returns: ${correctResult.data}`)
       expect(correctResult.data).to.equal('third')
@@ -118,13 +120,13 @@ describe('Assignment vs Comparison Bug', function() {
   })
 })
 
-describe('WebSocket Token Injection', function() {
+describe('WebSocket Token Injection', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -133,7 +135,7 @@ describe('WebSocket Token Injection', function() {
     } catch (e) {}
   })
 
-  describe('Post-Connection Token Injection', function() {
+  describe('Post-Connection Token Injection', function () {
     /**
      * POTENTIAL VULNERABILITY: src/interfaces/ws.js line 204-206
      *
@@ -148,7 +150,7 @@ describe('WebSocket Token Injection', function() {
      * 3. Bypass initial auth check
      */
 
-    it('should document post-connection token injection', function() {
+    it('should document post-connection token injection', function () {
       console.log(`
       POTENTIAL VULNERABILITY: Post-Connection Token Injection
 
@@ -174,7 +176,7 @@ describe('WebSocket Token Injection', function() {
       expect(true).to.be.true
     })
 
-    it('should test sending token after anonymous WebSocket connection', async function() {
+    it('should test sending token after anonymous WebSocket connection', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
@@ -190,26 +192,30 @@ describe('WebSocket Token Injection', function() {
       })
 
       // Wait for hello
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         ws.once('message', () => resolve())
       })
 
       // Now send token in a message
-      ws.send(JSON.stringify({
-        token: adminToken,
-        subscribe: [{ path: '*' }]
-      }))
+      ws.send(
+        JSON.stringify({
+          token: adminToken,
+          subscribe: [{ path: '*' }]
+        })
+      )
 
       let receivedData = false
       ws.on('message', (data) => {
         const msg = JSON.parse(data.toString())
         if (msg.updates) {
           receivedData = true
-          console.log(`      Received updates after sending token: ${JSON.stringify(msg).substring(0, 100)}...`)
+          console.log(
+            `      Received updates after sending token: ${JSON.stringify(msg).substring(0, 100)}...`
+          )
         }
       })
 
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise((resolve) => setTimeout(resolve, 2000))
 
       ws.close()
 
@@ -218,10 +224,10 @@ describe('WebSocket Token Injection', function() {
   })
 })
 
-describe('WebSocket Auth Bypass via Error Type', function() {
+describe('WebSocket Auth Bypass via Error Type', function () {
   this.timeout(30000)
 
-  describe('Non-Token Error Allows Connection', function() {
+  describe('Non-Token Error Allows Connection', function () {
     /**
      * VULNERABILITY: src/interfaces/ws.js line 474-482
      *
@@ -241,7 +247,7 @@ describe('WebSocket Auth Bypass via Error Type', function() {
      * the connection is AUTHORIZED anyway!
      */
 
-    it('should document auth bypass via non-token errors', function() {
+    it('should document auth bypass via non-token errors', function () {
       console.log(`
       VULNERABILITY: Auth Bypass via Non-Token Errors
 
@@ -279,10 +285,10 @@ describe('WebSocket Auth Bypass via Error Type', function() {
   })
 })
 
-describe('Weak Random Number Generation', function() {
+describe('Weak Random Number Generation', function () {
   this.timeout(30000)
 
-  describe('Math.random() in Security Context', function() {
+  describe('Math.random() in Security Context', function () {
     /**
      * WEAKNESS: src/interfaces/providers.js line 151
      *
@@ -293,7 +299,7 @@ describe('Weak Random Number Generation', function() {
      * it sets a bad precedent and could be exploited.
      */
 
-    it('should document weak random number usage', function() {
+    it('should document weak random number usage', function () {
       console.log(`
       WEAKNESS: Insecure Random Number Generator
 
@@ -321,16 +327,16 @@ describe('Weak Random Number Generation', function() {
   })
 })
 
-describe('Request ID Collision Attack', function() {
+describe('Request ID Collision Attack', function () {
   this.timeout(30000)
 
-  describe('PUT Request ID Handling', function() {
+  describe('PUT Request ID Handling', function () {
     /**
      * Combined with the assignment bug, request ID collisions
      * could cause serious issues.
      */
 
-    it('should document request ID collision risk', function() {
+    it('should document request ID collision risk', function () {
       console.log(`
       RISK: Request ID Collision
 
@@ -352,13 +358,13 @@ describe('Request ID Collision Attack', function() {
   })
 })
 
-describe('Cookie Security', function() {
+describe('Cookie Security', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -367,8 +373,8 @@ describe('Cookie Security', function() {
     } catch (e) {}
   })
 
-  describe('JAUTHENTICATION Cookie Analysis', function() {
-    it('should analyze cookie security settings', async function() {
+  describe('JAUTHENTICATION Cookie Analysis', function () {
+    it('should analyze cookie security settings', async function () {
       if (!securityEnabled) {
         this.skip()
         return
@@ -395,7 +401,9 @@ describe('Cookie Security', function() {
         console.log(`      SameSite: ${hasSameSite}`)
 
         if (!hasHttpOnly) {
-          console.log(`      ⚠️  MISSING HttpOnly - cookie vulnerable to XSS theft`)
+          console.log(
+            `      ⚠️  MISSING HttpOnly - cookie vulnerable to XSS theft`
+          )
         }
         if (!hasSecure) {
           console.log(`      ⚠️  MISSING Secure - cookie sent over HTTP`)
@@ -410,16 +418,16 @@ describe('Cookie Security', function() {
   })
 })
 
-describe('Race Condition in Token Verification', function() {
+describe('Race Condition in Token Verification', function () {
   this.timeout(30000)
 
-  describe('Concurrent Request Handling', function() {
+  describe('Concurrent Request Handling', function () {
     /**
      * The 60-second token re-verification window combined with
      * concurrent requests could cause race conditions.
      */
 
-    it('should document race condition potential', function() {
+    it('should document race condition potential', function () {
       console.log(`
       POTENTIAL RACE CONDITION: Token Re-verification
 
@@ -450,11 +458,11 @@ describe('Race Condition in Token Verification', function() {
   })
 })
 
-describe('TCP Stream Protocol Confusion', function() {
+describe('TCP Stream Protocol Confusion', function () {
   this.timeout(30000)
 
-  describe('Mixed JSON/NMEA on TCP', function() {
-    it('should test protocol confusion on TCP port', async function() {
+  describe('Mixed JSON/NMEA on TCP', function () {
+    it('should test protocol confusion on TCP port', async function () {
       const port = 8375
 
       return new Promise((resolve) => {
@@ -464,14 +472,18 @@ describe('TCP Stream Protocol Confusion', function() {
           console.log('      Connected to TCP port 8375')
 
           // Send a mix of JSON and NMEA
-          client.write('$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*47\r\n')
+          client.write(
+            '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*47\r\n'
+          )
           client.write('{"subscribe":[{"path":"*"}]}\r\n')
           client.write('GARBAGE DATA WITHOUT NEWLINE')
-          client.write('\x00\x01\x02\x03')  // Binary
+          client.write('\x00\x01\x02\x03') // Binary
 
           setTimeout(() => {
             client.destroy()
-            console.log('      Server handled mixed protocol data without crash')
+            console.log(
+              '      Server handled mixed protocol data without crash'
+            )
             resolve()
           }, 2000)
         })
@@ -487,31 +499,37 @@ describe('TCP Stream Protocol Confusion', function() {
   })
 })
 
-describe('Information Disclosure via Errors', function() {
+describe('Information Disclosure via Errors', function () {
   this.timeout(30000)
 
-  describe('Stack Traces in Responses', function() {
-    it('should check for stack trace disclosure', async function() {
+  describe('Stack Traces in Responses', function () {
+    it('should check for stack trace disclosure', async function () {
       // Try to trigger errors that might leak stack traces
       const badRequests = [
         '/signalk/v1/api/vessels/self/' + 'A'.repeat(10000),
         '/signalk/v1/api/vessels/self/navigation/position?callback=<script>',
-        '/signalk/v1/api/../../../etc/passwd',
+        '/signalk/v1/api/../../../etc/passwd'
       ]
 
       for (const path of badRequests) {
         const response = await request(path)
 
         if (typeof response.body === 'string') {
-          const hasStack = response.body.includes('at ') &&
-                          (response.body.includes('.js:') || response.body.includes('.ts:'))
+          const hasStack =
+            response.body.includes('at ') &&
+            (response.body.includes('.js:') || response.body.includes('.ts:'))
 
           if (hasStack) {
-            console.log(`      ⚠️  Stack trace found in response to ${path.substring(0, 50)}...`)
+            console.log(
+              `      ⚠️  Stack trace found in response to ${path.substring(0, 50)}...`
+            )
           }
 
           // Check for internal path disclosure
-          if (response.body.includes('/home/') || response.body.includes('node_modules')) {
+          if (
+            response.body.includes('/home/') ||
+            response.body.includes('node_modules')
+          ) {
             console.log(`      ⚠️  Internal paths disclosed in response`)
           }
         }

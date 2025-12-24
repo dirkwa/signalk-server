@@ -1,2 +1,3 @@
 *.guard.ts
 public
+security-testing/configs/semgrep-custom.yaml

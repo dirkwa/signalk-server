@@ -12,17 +12,16 @@
  * These are the remaining "deep" vulnerabilities not yet tested.
  */
 
-const { describe, it, before, after } = require('mocha');
-const { expect } = require('chai');
+const { describe, it, before, after } = require('mocha')
+const { expect } = require('chai')
 
-describe('ACL & Permission Edge Cases', function() {
-  this.timeout(30000);
+describe('ACL & Permission Edge Cases', function () {
+  this.timeout(30000)
 
   // ==================== READONLY USER ESCALATION ====================
 
-  describe('Readonly User Privilege Escalation', function() {
-
-    it('should test readonly user trying to access admin endpoints', function() {
+  describe('Readonly User Privilege Escalation', function () {
+    it('should test readonly user trying to access admin endpoints', function () {
       /**
        * File: src/tokensecurity.js lines 158-177
        *
@@ -35,16 +34,16 @@ describe('ACL & Permission Edge Cases', function() {
         { method: 'POST', path: '/signalk/v1/api/security/devices' },
         { method: 'PUT', path: '/signalk/v1/api/security/users/admin' },
         { method: 'POST', path: '/signalk/v1/api/server/plugins/install' },
-        { method: 'DELETE', path: '/signalk/v1/api/security/users/victim' },
-      ];
+        { method: 'DELETE', path: '/signalk/v1/api/security/users/victim' }
+      ]
 
       // Readonly user should be denied on all these
-      escalationEndpoints.forEach(endpoint => {
-        expect(endpoint.method).to.be.oneOf(['PUT', 'POST', 'DELETE']);
-      });
-    });
+      escalationEndpoints.forEach((endpoint) => {
+        expect(endpoint.method).to.be.oneOf(['PUT', 'POST', 'DELETE'])
+      })
+    })
 
-    it('should test readonly user trying write operations', function() {
+    it('should test readonly user trying write operations', function () {
       /**
        * File: src/tokensecurity.js lines 139-156
        *
@@ -67,14 +66,14 @@ describe('ACL & Permission Edge Cases', function() {
           method: 'POST',
           body: { key: 'value' }
         }
-      ];
+      ]
 
-      writeOperations.forEach(op => {
-        expect(op.method).to.be.oneOf(['PUT', 'POST', 'DELETE']);
-      });
-    });
+      writeOperations.forEach((op) => {
+        expect(op.method).to.be.oneOf(['PUT', 'POST', 'DELETE'])
+      })
+    })
 
-    it('should test readonly permission string manipulation', function() {
+    it('should test readonly permission string manipulation', function () {
       /**
        * VULNERABILITY: Permission string comparison
        *
@@ -86,21 +85,21 @@ describe('ACL & Permission Edge Cases', function() {
         'ReadOnly',
         'READONLY',
         'Readonly',
-        'readonly ',    // Trailing space
-        ' readonly',    // Leading space
-        'readonly\n',   // Newline
+        'readonly ', // Trailing space
+        ' readonly', // Leading space
+        'readonly\n', // Newline
         'readonly\x00admin', // Null byte injection
-        'readonlyadmin', // Concatenated
-      ];
+        'readonlyadmin' // Concatenated
+      ]
 
-      permissionVariations.forEach(perm => {
+      permissionVariations.forEach((perm) => {
         // Only exact 'readonly' should be treated as readonly
-        const isExactMatch = perm === 'readonly';
-        expect(perm).to.be.a('string');
-      });
-    });
+        const isExactMatch = perm === 'readonly'
+        expect(perm).to.be.a('string')
+      })
+    })
 
-    it('should test permission inheritance from device to user', function() {
+    it('should test permission inheritance from device to user', function () {
       /**
        * File: src/tokensecurity.js lines 853-877 (getPrincipal)
        *
@@ -109,21 +108,21 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const devicePayload = {
         device: 'device-id',
-        permissions: 'readwrite',
+        permissions: 'readwrite'
         // Missing 'id' field - what happens?
-      };
+      }
 
       const userPayload = {
         id: 'username',
-        type: 'admin',
+        type: 'admin'
         // Missing device field - what happens?
-      };
+      }
 
-      expect(devicePayload).to.have.property('device');
-      expect(userPayload).to.have.property('id');
-    });
+      expect(devicePayload).to.have.property('device')
+      expect(userPayload).to.have.property('id')
+    })
 
-    it('should test AUTO identifier privilege escalation', function() {
+    it('should test AUTO identifier privilege escalation', function () {
       /**
        * File: src/tokensecurity.js line 746
        *
@@ -136,17 +135,16 @@ describe('ACL & Permission Edge Cases', function() {
         token: null,
         expectedPrincipal: { identifier: 'AUTO', permissions: 'readonly' },
         attackPrincipal: { identifier: 'AUTO', permissions: 'admin' }
-      };
+      }
 
-      expect(autoEscalation.expectedPrincipal.permissions).to.equal('readonly');
-    });
-  });
+      expect(autoEscalation.expectedPrincipal.permissions).to.equal('readonly')
+    })
+  })
 
   // ==================== CROSS-VESSEL ACL BYPASS ====================
 
-  describe('Cross-Vessel ACL Bypass', function() {
-
-    it('should test ACL context matching for other vessels', function() {
+  describe('Cross-Vessel ACL Bypass', function () {
+    it('should test ACL context matching for other vessels', function () {
       /**
        * File: src/tokensecurity.js lines 775-838 (checkACL)
        *
@@ -154,20 +152,20 @@ describe('ACL & Permission Edge Cases', function() {
        * What about accessing OTHER vessels' data?
        */
       const crossVesselContexts = [
-        'vessels.urn:mrn:imo:mmsi:123456789',  // Other vessel by MMSI
+        'vessels.urn:mrn:imo:mmsi:123456789', // Other vessel by MMSI
         'vessels.urn:mrn:signalk:uuid:other-vessel-uuid',
-        'vessels.*',  // Wildcard - should this work?
-        'vessels.self.navigation/../../../vessels/other',  // Path traversal
-        'vessels.attacker-vessel',
-      ];
+        'vessels.*', // Wildcard - should this work?
+        'vessels.self.navigation/../../../vessels/other', // Path traversal
+        'vessels.attacker-vessel'
+      ]
 
-      crossVesselContexts.forEach(ctx => {
+      crossVesselContexts.forEach((ctx) => {
         // ACL should validate vessel ownership/access
-        expect(ctx).to.include('vessels');
-      });
-    });
+        expect(ctx).to.include('vessels')
+      })
+    })
 
-    it('should test context normalization bypass', function() {
+    it('should test context normalization bypass', function () {
       /**
        * File: src/tokensecurity.js lines 559-560, 607, 635
        *
@@ -176,21 +174,21 @@ describe('ACL & Permission Edge Cases', function() {
        * Attack: Send delta with context that looks like selfContext but isn't
        */
       const normalizeBypassContexts = [
-        'vessels.self',             // Normal
-        'vessels.Self',             // Case difference
-        'vessels.SELF',             // All caps
-        'vessels. self',            // Space
-        'vessels.self\x00other',    // Null byte
-        'vessels.self/other',       // Slash
-        'Vessels.self',             // Capital V
-      ];
+        'vessels.self', // Normal
+        'vessels.Self', // Case difference
+        'vessels.SELF', // All caps
+        'vessels. self', // Space
+        'vessels.self\x00other', // Null byte
+        'vessels.self/other', // Slash
+        'Vessels.self' // Capital V
+      ]
 
-      normalizeBypassContexts.forEach(ctx => {
-        expect(ctx.toLowerCase()).to.include('self');
-      });
-    });
+      normalizeBypassContexts.forEach((ctx) => {
+        expect(ctx.toLowerCase()).to.include('self')
+      })
+    })
 
-    it('should test multi-vessel subscription leakage', function() {
+    it('should test multi-vessel subscription leakage', function () {
       /**
        * WebSocket subscriptions can request data from multiple vessels
        *
@@ -199,16 +197,16 @@ describe('ACL & Permission Edge Cases', function() {
       const dangerousSubscriptions = [
         { context: 'vessels.*', path: '*' },
         { context: 'vessels.urn:*', path: 'navigation.*' },
-        { context: '*', path: '*' },  // Everything!
-        { context: 'vessels', path: '**' },
-      ];
+        { context: '*', path: '*' }, // Everything!
+        { context: 'vessels', path: '**' }
+      ]
 
-      dangerousSubscriptions.forEach(sub => {
-        expect(sub.context).to.be.a('string');
-      });
-    });
+      dangerousSubscriptions.forEach((sub) => {
+        expect(sub.context).to.be.a('string')
+      })
+    })
 
-    it('should test vessel ID spoofing in delta messages', function() {
+    it('should test vessel ID spoofing in delta messages', function () {
       /**
        * Deltas specify their own context
        *
@@ -216,23 +214,26 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const spoofedDelta = {
         context: 'vessels.urn:mrn:imo:mmsi:123456789', // Victim vessel
-        updates: [{
-          values: [{
-            path: 'navigation.position',
-            value: { latitude: 0, longitude: 0 } // False position
-          }]
-        }]
-      };
+        updates: [
+          {
+            values: [
+              {
+                path: 'navigation.position',
+                value: { latitude: 0, longitude: 0 } // False position
+              }
+            ]
+          }
+        ]
+      }
 
-      expect(spoofedDelta.context).to.include('123456789');
-    });
-  });
+      expect(spoofedDelta.context).to.include('123456789')
+    })
+  })
 
   // ==================== AIS SPOOFING ====================
 
-  describe('AIS Spoofing via Delta Messages', function() {
-
-    it('should test AIS position spoofing', function() {
+  describe('AIS Spoofing via Delta Messages', function () {
+    it('should test AIS position spoofing', function () {
       /**
        * SAFETY CRITICAL: AIS data affects collision avoidance
        *
@@ -240,70 +241,82 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const aisSpoof = {
         context: 'vessels.urn:mrn:imo:mmsi:999999999', // Fake vessel
-        updates: [{
-          source: { type: 'AIS', label: 'spoofed-ais' },
-          values: [
-            {
-              path: 'navigation.position',
-              value: { latitude: 51.5074, longitude: -0.1278 } // London
-            },
-            {
-              path: 'navigation.speedOverGround',
-              value: 50 // 50 m/s = 97 knots - collision course!
-            },
-            {
-              path: 'navigation.courseOverGroundTrue',
-              value: 3.14159 // 180 degrees - heading toward victim
-            }
-          ]
-        }]
-      };
+        updates: [
+          {
+            source: { type: 'AIS', label: 'spoofed-ais' },
+            values: [
+              {
+                path: 'navigation.position',
+                value: { latitude: 51.5074, longitude: -0.1278 } // London
+              },
+              {
+                path: 'navigation.speedOverGround',
+                value: 50 // 50 m/s = 97 knots - collision course!
+              },
+              {
+                path: 'navigation.courseOverGroundTrue',
+                value: 3.14159 // 180 degrees - heading toward victim
+              }
+            ]
+          }
+        ]
+      }
 
-      expect(aisSpoof.context).to.include('mmsi');
-    });
+      expect(aisSpoof.context).to.include('mmsi')
+    })
 
-    it('should test AIS identity spoofing', function() {
+    it('should test AIS identity spoofing', function () {
       /**
        * Attack: Fake AIS target with misleading identity
        */
       const identitySpoof = {
         context: 'vessels.urn:mrn:imo:mmsi:999999999',
-        updates: [{
-          values: [
-            { path: 'name', value: 'US Coast Guard' },  // Impersonate authority
-            { path: 'mmsi', value: '999999999' },
-            { path: 'design.aisShipType', value: { id: 35, name: 'Military' } },
-            { path: 'communication.callsignVhf', value: 'USCG' },
-          ]
-        }]
-      };
+        updates: [
+          {
+            values: [
+              { path: 'name', value: 'US Coast Guard' }, // Impersonate authority
+              { path: 'mmsi', value: '999999999' },
+              {
+                path: 'design.aisShipType',
+                value: { id: 35, name: 'Military' }
+              },
+              { path: 'communication.callsignVhf', value: 'USCG' }
+            ]
+          }
+        ]
+      }
 
-      expect(identitySpoof.updates[0].values[0].value).to.include('Coast Guard');
-    });
+      expect(identitySpoof.updates[0].values[0].value).to.include('Coast Guard')
+    })
 
-    it('should test AIS target injection flood', function() {
+    it('should test AIS target injection flood', function () {
       /**
        * Attack: Inject many fake AIS targets to overwhelm display
        */
-      const targetCount = 1000; // Real-world AIS rarely shows this many
-      const floodTargets = [];
+      const targetCount = 1000 // Real-world AIS rarely shows this many
+      const floodTargets = []
 
       for (let i = 0; i < targetCount; i++) {
         floodTargets.push({
           context: `vessels.urn:mrn:imo:mmsi:${100000000 + i}`,
-          updates: [{
-            values: [
-              { path: 'navigation.position', value: { latitude: 51 + (i/1000), longitude: 0 } }
-            ]
-          }]
-        });
+          updates: [
+            {
+              values: [
+                {
+                  path: 'navigation.position',
+                  value: { latitude: 51 + i / 1000, longitude: 0 }
+                }
+              ]
+            }
+          ]
+        })
       }
 
       // Could overwhelm chart display
-      expect(floodTargets.length).to.equal(1000);
-    });
+      expect(floodTargets.length).to.equal(1000)
+    })
 
-    it('should test AIS ghost target persistence', function() {
+    it('should test AIS ghost target persistence', function () {
       /**
        * Attack: Create "ghost" targets that persist in the system
        *
@@ -311,48 +324,52 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const ghostTarget = {
         context: 'vessels.urn:mrn:imo:mmsi:888888888',
-        updates: [{
-          timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-          values: [
-            { path: 'navigation.position', value: { latitude: 51.5, longitude: 0 } }
-          ]
-        }]
-      };
+        updates: [
+          {
+            timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+            values: [
+              {
+                path: 'navigation.position',
+                value: { latitude: 51.5, longitude: 0 }
+              }
+            ]
+          }
+        ]
+      }
 
       // Old timestamps should be validated/rejected
-      expect(ghostTarget.updates[0].timestamp).to.be.a('string');
-    });
+      expect(ghostTarget.updates[0].timestamp).to.be.a('string')
+    })
 
-    it('should test MMSI validation bypass', function() {
+    it('should test MMSI validation bypass', function () {
       /**
        * MMSIs have specific format rules (9 digits, country codes)
        *
        * Attack: Invalid MMSI values
        */
       const invalidMMSIs = [
-        '000000000',        // All zeros (invalid)
-        '999999999',        // Reserved for internal use
-        '111111111',        // Invalid country code
-        '0',                // Too short
-        '1234567890123',    // Too long
-        '-123456789',       // Negative
-        'ABCDEFGHI',        // Letters
-        '123 456 789',      // Spaces
-        '123.456.789',      // Dots
-        '123456789\x00',    // Null byte
-      ];
+        '000000000', // All zeros (invalid)
+        '999999999', // Reserved for internal use
+        '111111111', // Invalid country code
+        '0', // Too short
+        '1234567890123', // Too long
+        '-123456789', // Negative
+        'ABCDEFGHI', // Letters
+        '123 456 789', // Spaces
+        '123.456.789', // Dots
+        '123456789\x00' // Null byte
+      ]
 
-      invalidMMSIs.forEach(mmsi => {
-        expect(mmsi).to.be.a('string');
-      });
-    });
-  });
+      invalidMMSIs.forEach((mmsi) => {
+        expect(mmsi).to.be.a('string')
+      })
+    })
+  })
 
   // ==================== FILE SYSTEM ACCESS ====================
 
-  describe('File System Path Access', function() {
-
-    it('should test configPath traversal', function() {
+  describe('File System Path Access', function () {
+    it('should test configPath traversal', function () {
       /**
        * File: src/config/config.ts line 46, 250-262
        *
@@ -363,17 +380,17 @@ describe('ACL & Permission Edge Cases', function() {
         '..\\..\\..\\windows\\system32\\config\\sam',
         '/etc/shadow',
         'C:\\Windows\\System32\\config\\SAM',
-        '%SYSTEMROOT%\\System32\\config\\SAM',  // Environment variable
-        '....//....//etc/passwd',  // Double encoding
-        'config\x00.json',  // Null byte
-      ];
+        '%SYSTEMROOT%\\System32\\config\\SAM', // Environment variable
+        '....//....//etc/passwd', // Double encoding
+        'config\x00.json' // Null byte
+      ]
 
-      traversalPaths.forEach(path => {
-        expect(path).to.be.a('string');
-      });
-    });
+      traversalPaths.forEach((path) => {
+        expect(path).to.be.a('string')
+      })
+    })
 
-    it('should test plugin-config-data path manipulation', function() {
+    it('should test plugin-config-data path manipulation', function () {
       /**
        * File: src/interfaces/plugins.ts line 99
        *
@@ -384,15 +401,15 @@ describe('ACL & Permission Edge Cases', function() {
         '__proto__',
         'constructor',
         'valid-plugin\x00../../etc/passwd',
-        'valid-plugin/../../secret.json',
-      ];
+        'valid-plugin/../../secret.json'
+      ]
 
-      pluginPathAttacks.forEach(path => {
-        expect(path).to.be.a('string');
-      });
-    });
+      pluginPathAttacks.forEach((path) => {
+        expect(path).to.be.a('string')
+      })
+    })
 
-    it('should test applicationData path handling', function() {
+    it('should test applicationData path handling', function () {
       /**
        * File: src/interfaces/applicationData.js lines 203, 220
        *
@@ -402,15 +419,15 @@ describe('ACL & Permission Edge Cases', function() {
         '../../../etc/passwd',
         '__proto__',
         'global/../../secret',
-        'user/../../../etc/shadow',
-      ];
+        'user/../../../etc/shadow'
+      ]
 
-      appDataPaths.forEach(path => {
-        expect(path).to.be.a('string');
-      });
-    });
+      appDataPaths.forEach((path) => {
+        expect(path).to.be.a('string')
+      })
+    })
 
-    it('should test log file access traversal', function() {
+    it('should test log file access traversal', function () {
       /**
        * File: src/interfaces/logfiles.js
        *
@@ -420,15 +437,15 @@ describe('ACL & Permission Edge Cases', function() {
         '../../../etc/passwd',
         '../security.json',
         '../ssl-key.pem',
-        '..\\..\\windows\\system32\\config\\sam',
-      ];
+        '..\\..\\windows\\system32\\config\\sam'
+      ]
 
-      logTraversals.forEach(path => {
-        expect(path).to.be.a('string');
-      });
-    });
+      logTraversals.forEach((path) => {
+        expect(path).to.be.a('string')
+      })
+    })
 
-    it('should test settings file injection', function() {
+    it('should test settings file injection', function () {
       /**
        * File: src/config/config.ts line 447
        *
@@ -436,19 +453,18 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const settingsInjection = {
         settings: {
-          configPath: '../../../tmp/malicious',
+          configPath: '../../../tmp/malicious'
         }
-      };
+      }
 
-      expect(settingsInjection.settings.configPath).to.include('..');
-    });
-  });
+      expect(settingsInjection.settings.configPath).to.include('..')
+    })
+  })
 
   // ==================== SSL CERTIFICATE SECURITY ====================
 
-  describe('SSL Certificate Handling', function() {
-
-    it('should test certificate path traversal', function() {
+  describe('SSL Certificate Handling', function () {
+    it('should test certificate path traversal', function () {
       /**
        * File: src/security.ts lines 287-295
        *
@@ -457,31 +473,31 @@ describe('ACL & Permission Edge Cases', function() {
       const certPaths = [
         '../../../etc/ssl/private/server.key',
         '../../../home/user/.ssh/id_rsa',
-        'ssl-key.pem\x00.txt',
-      ];
+        'ssl-key.pem\x00.txt'
+      ]
 
-      certPaths.forEach(path => {
-        expect(path).to.be.a('string');
-      });
-    });
+      certPaths.forEach((path) => {
+        expect(path).to.be.a('string')
+      })
+    })
 
-    it('should test certificate permission bypass on Windows', function() {
+    it('should test certificate permission bypass on Windows', function () {
       /**
        * File: src/security.ts lines 331-336
        *
        * hasStrictPermissions returns true on Windows regardless of actual perms!
        */
       const windowsBypass = {
-        platform: 'win32',
+        platform: 'win32'
         // Returns: return true  (no permission check!)
         // On Linux: checks for -r[-w][-x]------
-      };
+      }
 
       // Windows always passes permission check - potential vulnerability
-      expect(windowsBypass.platform).to.equal('win32');
-    });
+      expect(windowsBypass.platform).to.equal('win32')
+    })
 
-    it('should test certificate chain array parsing', function() {
+    it('should test certificate chain array parsing', function () {
       /**
        * File: src/security.ts lines 339-351 (getCAChainArray)
        *
@@ -489,27 +505,25 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const maliciousChainContent = [
         '-----BEGIN CERTIFICATE-----\n' +
-        'MIIC...\n' +
-        '-----END CERTIFICATE-----\n' +
-        '-----BEGIN CERTIFICATE-----\n' +
-        '../../../etc/passwd\n' +  // Injection attempt
-        '-----END CERTIFICATE-----\n',
+          'MIIC...\n' +
+          '-----END CERTIFICATE-----\n' +
+          '-----BEGIN CERTIFICATE-----\n' +
+          '../../../etc/passwd\n' + // Injection attempt
+          '-----END CERTIFICATE-----\n',
 
         // Empty certificate
-        '-----BEGIN CERTIFICATE-----\n' +
-        '-----END CERTIFICATE-----\n',
+        '-----BEGIN CERTIFICATE-----\n' + '-----END CERTIFICATE-----\n',
 
         // No END marker (could cause issues)
-        '-----BEGIN CERTIFICATE-----\n' +
-        'MIIC...\n',
-      ];
+        '-----BEGIN CERTIFICATE-----\n' + 'MIIC...\n'
+      ]
 
-      maliciousChainContent.forEach(content => {
-        expect(content).to.include('CERTIFICATE');
-      });
-    });
+      maliciousChainContent.forEach((content) => {
+        expect(content).to.include('CERTIFICATE')
+      })
+    })
 
-    it('should test auto-generated certificate weakness', function() {
+    it('should test auto-generated certificate weakness', function () {
       /**
        * File: src/security.ts lines 353-374 (createCertificateOptions)
        *
@@ -518,17 +532,17 @@ describe('ACL & Permission Edge Cases', function() {
        * - days: 3650 (10 years)
        */
       const autoGenCertIssues = {
-        commonName: 'localhost',  // Not vessel-specific
-        validity: 3650,           // Very long validity
-        keySize: 'unknown',       // Not specified in code
-        signatureAlgorithm: 'unknown', // Not specified
-      };
+        commonName: 'localhost', // Not vessel-specific
+        validity: 3650, // Very long validity
+        keySize: 'unknown', // Not specified in code
+        signatureAlgorithm: 'unknown' // Not specified
+      }
 
       // localhost CN doesn't match vessel hostname
-      expect(autoGenCertIssues.commonName).to.equal('localhost');
-    });
+      expect(autoGenCertIssues.commonName).to.equal('localhost')
+    })
 
-    it('should test certificate file creation race', function() {
+    it('should test certificate file creation race', function () {
       /**
        * File: src/security.ts lines 365-368
        *
@@ -538,18 +552,17 @@ describe('ACL & Permission Edge Cases', function() {
       const raceCondition = {
         step1: 'writeFileSync(keyFile, pems.private)',
         // Gap here - file exists with default umask (possibly 644)
-        step2: 'chmodSync(keyFile, "600")',
-      };
+        step2: 'chmodSync(keyFile, "600")'
+      }
 
-      expect(raceCondition.step1).to.include('write');
-    });
-  });
+      expect(raceCondition.step1).to.include('write')
+    })
+  })
 
   // ==================== ADVANCED ACL EDGE CASES ====================
 
-  describe('Advanced ACL Edge Cases', function() {
-
-    it('should test empty ACL list behavior', function() {
+  describe('Advanced ACL Edge Cases', function () {
+    it('should test empty ACL list behavior', function () {
       /**
        * File: src/tokensecurity.js lines 778-781
        *
@@ -559,30 +572,30 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const emptyACL = {
         acls: [],
-        result: 'ALLOW ALL'  // This is the behavior
-      };
+        result: 'ALLOW ALL' // This is the behavior
+      }
 
-      expect(emptyACL.acls.length).to.equal(0);
-    });
+      expect(emptyACL.acls.length).to.equal(0)
+    })
 
-    it('should test ACL with no matching context', function() {
+    it('should test ACL with no matching context', function () {
       /**
        * File: src/tokensecurity.js lines 783-787
        *
        * If no ACL matches context, what happens?
        */
       const noMatchTest = {
-        acls: [
-          { context: 'vessels.other', resources: [] }
-        ],
-        requestContext: 'vessels.self',
+        acls: [{ context: 'vessels.other', resources: [] }],
+        requestContext: 'vessels.self'
         // Returns: false (no match found)
-      };
+      }
 
-      expect(noMatchTest.acls[0].context).to.not.equal(noMatchTest.requestContext);
-    });
+      expect(noMatchTest.acls[0].context).to.not.equal(
+        noMatchTest.requestContext
+      )
+    })
 
-    it('should test ACL subject "any" permission', function() {
+    it('should test ACL subject "any" permission', function () {
       /**
        * File: src/tokensecurity.js lines 812-814
        *
@@ -592,19 +605,21 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const anySubjectACL = {
         context: 'vessels.self',
-        resources: [{
-          paths: ['*'],
-          permissions: [
-            { subject: 'any', permission: 'read' }
-            // This gives read to EVERYONE including attackers
-          ]
-        }]
-      };
+        resources: [
+          {
+            paths: ['*'],
+            permissions: [
+              { subject: 'any', permission: 'read' }
+              // This gives read to EVERYONE including attackers
+            ]
+          }
+        ]
+      }
 
-      expect(anySubjectACL.resources[0].permissions[0].subject).to.equal('any');
-    });
+      expect(anySubjectACL.resources[0].permissions[0].subject).to.equal('any')
+    })
 
-    it('should test ACL permission type confusion', function() {
+    it('should test ACL permission type confusion', function () {
       /**
        * File: src/tokensecurity.js lines 819-833
        *
@@ -620,15 +635,15 @@ describe('ACL & Permission Edge Cases', function() {
         { operation: 'put', permission: 'write', expected: false }, // NOT allowed!
         { operation: 'put', permission: 'admin', expected: false }, // No 'admin' permission
         { operation: 'admin', permission: 'admin', expected: false }, // Invalid operation
-        { operation: 'delete', permission: 'write', expected: false }, // Missing operation
-      ];
+        { operation: 'delete', permission: 'write', expected: false } // Missing operation
+      ]
 
-      permissionConfusion.forEach(test => {
-        expect(test.operation).to.be.a('string');
-      });
-    });
+      permissionConfusion.forEach((test) => {
+        expect(test.operation).to.be.a('string')
+      })
+    })
 
-    it('should test ACL source vs path matching', function() {
+    it('should test ACL source vs path matching', function () {
       /**
        * File: src/tokensecurity.js lines 793-805
        *
@@ -642,15 +657,15 @@ describe('ACL & Permission Edge Cases', function() {
         aclWithSources: {
           sources: ['ais.*'],
           permissions: [{ subject: 'user1', permission: 'read' }]
-        },
+        }
         // What if request matches paths but not sources?
-      };
+      }
 
-      expect(sourcePathConfusion.aclWithPaths).to.have.property('paths');
-      expect(sourcePathConfusion.aclWithSources).to.have.property('sources');
-    });
+      expect(sourcePathConfusion.aclWithPaths).to.have.property('paths')
+      expect(sourcePathConfusion.aclWithSources).to.have.property('sources')
+    })
 
-    it('should test delta filtering completeness', function() {
+    it('should test delta filtering completeness', function () {
       /**
        * File: src/tokensecurity.js lines 625-675 (filterReadDelta)
        *
@@ -659,25 +674,27 @@ describe('ACL & Permission Edge Cases', function() {
        */
       const deltaWithSensitive = {
         context: 'vessels.self',
-        updates: [{
-          values: [
-            { path: 'navigation.position', value: {} },  // Might be filtered
-            { path: 'sensors.secret.password', value: 'hunter2' }, // Should be filtered
-          ],
-          meta: [
-            { path: 'navigation.position', value: {} },  // Meta also filtered?
-          ]
-        }]
-      };
+        updates: [
+          {
+            values: [
+              { path: 'navigation.position', value: {} }, // Might be filtered
+              { path: 'sensors.secret.password', value: 'hunter2' } // Should be filtered
+            ],
+            meta: [
+              { path: 'navigation.position', value: {} } // Meta also filtered?
+            ]
+          }
+        ]
+      }
 
-      expect(deltaWithSensitive.updates[0].values.length).to.equal(2);
-    });
-  });
+      expect(deltaWithSensitive.updates[0].values.length).to.equal(2)
+    })
+  })
 
   // ==================== SUMMARY ====================
 
-  describe('Edge Case Test Summary', function() {
-    it('should document all tested edge cases', function() {
+  describe('Edge Case Test Summary', function () {
+    it('should document all tested edge cases', function () {
       const testedEdgeCases = {
         'Readonly Escalation': [
           'Admin endpoint access',
@@ -721,22 +738,22 @@ describe('ACL & Permission Edge Cases', function() {
           'Source vs path matching',
           'Delta filtering completeness'
         ]
-      };
+      }
 
-      let totalEdgeCases = 0;
-      Object.values(testedEdgeCases).forEach(cases => {
-        totalEdgeCases += cases.length;
-      });
+      let totalEdgeCases = 0
+      Object.values(testedEdgeCases).forEach((cases) => {
+        totalEdgeCases += cases.length
+      })
 
-      console.log('\n  ========================================');
-      console.log('  ACL & Permission Edge Cases Summary');
-      console.log('  ========================================');
-      console.log(`  Total Categories: ${Object.keys(testedEdgeCases).length}`);
-      console.log(`  Total Edge Cases Tested: ${totalEdgeCases}`);
-      console.log('  ========================================\n');
+      console.log('\n  ========================================')
+      console.log('  ACL & Permission Edge Cases Summary')
+      console.log('  ========================================')
+      console.log(`  Total Categories: ${Object.keys(testedEdgeCases).length}`)
+      console.log(`  Total Edge Cases Tested: ${totalEdgeCases}`)
+      console.log('  ========================================\n')
 
-      expect(Object.keys(testedEdgeCases).length).to.equal(6);
-      expect(totalEdgeCases).to.equal(31);
-    });
-  });
-});
+      expect(Object.keys(testedEdgeCases).length).to.equal(6)
+      expect(totalEdgeCases).to.equal(31)
+    })
+  })
+})

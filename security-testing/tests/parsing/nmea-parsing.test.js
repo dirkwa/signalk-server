@@ -41,10 +41,10 @@ async function request(path, options = {}) {
   return { status: response.status, body, headers: response.headers }
 }
 
-describe('NMEA0183 Parsing Security Tests', function() {
+describe('NMEA0183 Parsing Security Tests', function () {
   this.timeout(30000)
 
-  describe('NMEA TCP Interface Injection', function() {
+  describe('NMEA TCP Interface Injection', function () {
     /**
      * POTENTIAL VULNERABILITY: src/interfaces/nmea-tcp.js line 38-39
      *
@@ -57,7 +57,7 @@ describe('NMEA0183 Parsing Security Tests', function() {
      * arbitrary NMEA sentences.
      */
 
-    it('should document unauthenticated TCP NMEA input', async function() {
+    it('should document unauthenticated TCP NMEA input', async function () {
       console.log(`
       SECURITY CONCERN: NMEA TCP Interface (port ${NMEA_PORT})
 
@@ -78,7 +78,7 @@ describe('NMEA0183 Parsing Security Tests', function() {
       expect(true).to.be.true
     })
 
-    it('should test TCP connection to NMEA port', function(done) {
+    it('should test TCP connection to NMEA port', function (done) {
       const client = new net.Socket()
       let connected = false
 
@@ -87,7 +87,8 @@ describe('NMEA0183 Parsing Security Tests', function() {
         console.log(`      Connected to NMEA TCP port ${NMEA_PORT}`)
 
         // Send a valid NMEA sentence
-        const sentence = '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*47\r\n'
+        const sentence =
+          '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*47\r\n'
         client.write(sentence)
 
         // Send an invalid/malicious sentence
@@ -102,16 +103,18 @@ describe('NMEA0183 Parsing Security Tests', function() {
 
       client.on('error', (err) => {
         // Connection failure might mean port not open
-        console.log(`      Could not connect to port ${NMEA_PORT}: ${err.message}`)
-        done()  // Not a test failure - port might not be enabled
+        console.log(
+          `      Could not connect to port ${NMEA_PORT}: ${err.message}`
+        )
+        done() // Not a test failure - port might not be enabled
       })
 
       client.connect(NMEA_PORT, 'localhost')
     })
   })
 
-  describe('Malformed NMEA Sentence Handling', function() {
-    it('should handle oversized NMEA sentences', function(done) {
+  describe('Malformed NMEA Sentence Handling', function () {
+    it('should handle oversized NMEA sentences', function (done) {
       const client = new net.Socket()
 
       client.on('connect', () => {
@@ -128,21 +131,32 @@ describe('NMEA0183 Parsing Security Tests', function() {
       })
 
       client.on('error', () => {
-        done()  // Port not open
+        done() // Port not open
       })
 
       client.connect(NMEA_PORT, 'localhost')
     })
 
-    it('should handle NMEA sentence with null bytes', function(done) {
+    it('should handle NMEA sentence with null bytes', function (done) {
       const client = new net.Socket()
 
       client.on('connect', () => {
         // Sentence with embedded null bytes
         const nullSentence = Buffer.from([
-          0x24, 0x47, 0x50, 0x47, 0x47, 0x41,  // $GPGGA
-          0x00, 0x00, 0x00,  // null bytes
-          0x2A, 0x30, 0x30, 0x0D, 0x0A  // *00\r\n
+          0x24,
+          0x47,
+          0x50,
+          0x47,
+          0x47,
+          0x41, // $GPGGA
+          0x00,
+          0x00,
+          0x00, // null bytes
+          0x2a,
+          0x30,
+          0x30,
+          0x0d,
+          0x0a // *00\r\n
         ])
 
         client.write(nullSentence)
@@ -160,7 +174,7 @@ describe('NMEA0183 Parsing Security Tests', function() {
       client.connect(NMEA_PORT, 'localhost')
     })
 
-    it('should handle binary data instead of NMEA', function(done) {
+    it('should handle binary data instead of NMEA', function (done) {
       const client = new net.Socket()
 
       client.on('connect', () => {
@@ -186,8 +200,8 @@ describe('NMEA0183 Parsing Security Tests', function() {
     })
   })
 
-  describe('NMEA Field Injection', function() {
-    it('should handle NMEA with command injection in fields', function(done) {
+  describe('NMEA Field Injection', function () {
+    it('should handle NMEA with command injection in fields', function (done) {
       const client = new net.Socket()
 
       client.on('connect', () => {
@@ -205,7 +219,7 @@ describe('NMEA0183 Parsing Security Tests', function() {
 
           // Format string
           '$GPGGA,%s%s%s%s%s,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*00\r\n',
-          '$GPGGA,%n%n%n%n,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*00\r\n',
+          '$GPGGA,%n%n%n%n,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*00\r\n'
         ]
 
         for (const sentence of injectionSentences) {
@@ -225,7 +239,7 @@ describe('NMEA0183 Parsing Security Tests', function() {
       client.connect(NMEA_PORT, 'localhost')
     })
 
-    it('should handle NMEA with extreme values', function(done) {
+    it('should handle NMEA with extreme values', function (done) {
       const client = new net.Socket()
 
       client.on('connect', () => {
@@ -241,7 +255,7 @@ describe('NMEA0183 Parsing Security Tests', function() {
           '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,999999999999999999999.4,M,47.0,M,,*00\r\n',
 
           // Negative numbers where not expected
-          '$GPGGA,-123519,-4807.038,N,-01131.000,E,-1,-08,-0.9,-545.4,M,-47.0,M,,*00\r\n',
+          '$GPGGA,-123519,-4807.038,N,-01131.000,E,-1,-08,-0.9,-545.4,M,-47.0,M,,*00\r\n'
         ]
 
         for (const sentence of extremeSentences) {
@@ -262,13 +276,13 @@ describe('NMEA0183 Parsing Security Tests', function() {
     })
   })
 
-  describe('N2K Over NMEA0183 Attacks', function() {
+  describe('N2K Over NMEA0183 Attacks', function () {
     /**
      * N2K data can be sent over NMEA0183 using $PCDIN and !AIVDM sentences.
      * This is handled by @canboat/canboatjs parser.
      */
 
-    it('should handle malformed N2K over NMEA0183', function(done) {
+    it('should handle malformed N2K over NMEA0183', function (done) {
       const client = new net.Socket()
 
       client.on('connect', () => {
@@ -286,7 +300,7 @@ describe('NMEA0183 Parsing Security Tests', function() {
 
           // AIS message injection
           '!AIVDM,1,1,,A,AAAAAAAAAAAAAAAAAAAAAAAAAAAA,0*00\r\n',
-          '!AIVDM,1,1,,A,' + 'A'.repeat(1000) + ',0*00\r\n',
+          '!AIVDM,1,1,,A,' + 'A'.repeat(1000) + ',0*00\r\n'
         ]
 
         for (const sentence of n2kSentences) {
@@ -307,13 +321,14 @@ describe('NMEA0183 Parsing Security Tests', function() {
     })
   })
 
-  describe('Rapid NMEA Flooding', function() {
-    it('should handle rapid NMEA sentence flood', function(done) {
+  describe('Rapid NMEA Flooding', function () {
+    it('should handle rapid NMEA sentence flood', function (done) {
       const client = new net.Socket()
       let sentCount = 0
 
       client.on('connect', () => {
-        const sentence = '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*47\r\n'
+        const sentence =
+          '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*47\r\n'
 
         // Send 1000 sentences as fast as possible
         const interval = setInterval(() => {
@@ -342,20 +357,17 @@ describe('NMEA0183 Parsing Security Tests', function() {
   })
 })
 
-describe('NMEA HTTP API Security Tests', function() {
+describe('NMEA HTTP API Security Tests', function () {
   this.timeout(30000)
 
-  describe('NMEA Sentence Injection via API', function() {
-    it('should check if NMEA can be injected via HTTP', async function() {
+  describe('NMEA Sentence Injection via API', function () {
+    it('should check if NMEA can be injected via HTTP', async function () {
       // Some servers might have HTTP endpoints for NMEA input
-      const endpoints = [
-        '/signalk/v1/api/nmea0183',
-        '/nmea0183',
-        '/api/nmea',
-      ]
+      const endpoints = ['/signalk/v1/api/nmea0183', '/nmea0183', '/api/nmea']
 
       for (const endpoint of endpoints) {
-        const sentence = '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*47'
+        const sentence =
+          '$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,47.0,M,,*47'
 
         const response = await request(endpoint, {
           method: 'POST',

@@ -23,17 +23,13 @@ module.exports = {
     // Additional rules for Node.js security
     'no-eval': 'error',
     'no-implied-eval': 'error',
-    'no-new-func': 'error',
+    'no-new-func': 'error'
   },
   overrides: [
     {
       files: ['**/*.ts', '**/*.tsx'],
-      parser: '@typescript-eslint/parser',
-    },
+      parser: '@typescript-eslint/parser'
+    }
   ],
-  ignorePatterns: [
-    'node_modules/',
-    'dist/',
-    'packages/server-admin-ui/build/',
-  ],
+  ignorePatterns: ['node_modules/', 'dist/', 'packages/server-admin-ui/build/']
 }

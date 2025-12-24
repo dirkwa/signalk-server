@@ -13,17 +13,16 @@
  * - src/serverroutes.ts (Backup/restore, security config)
  */
 
-const { describe, it, before, after } = require('mocha');
-const { expect } = require('chai');
+const { describe, it, before, after } = require('mocha')
+const { expect } = require('chai')
 
-describe('API & Interface Security Tests', function() {
-  this.timeout(30000);
+describe('API & Interface Security Tests', function () {
+  this.timeout(30000)
 
   // ==================== PROVIDER API SECURITY ====================
 
-  describe('Provider API Injection Vulnerabilities', function() {
-
-    it('should test _.assign prototype pollution in provider options', function() {
+  describe('Provider API Injection Vulnerabilities', function () {
+    it('should test _.assign prototype pollution in provider options', function () {
       /**
        * VULNERABILITY: Prototype Pollution via Provider Options
        * File: src/interfaces/providers.js:197
@@ -42,31 +41,33 @@ describe('API & Interface Security Tests', function() {
           host: '127.0.0.1',
           port: 10110,
           // Prototype pollution attempt
-          '__proto__': {
+          __proto__: {
             isAdmin: true,
             polluted: true
           },
-          'constructor': {
-            'prototype': {
+          constructor: {
+            prototype: {
               isAdmin: true
             }
           }
         }
-      };
+      }
 
       // Test object created fresh
-      const testObj = {};
-      expect(testObj.isAdmin).to.be.undefined;
-      expect(testObj.polluted).to.be.undefined;
+      const testObj = {}
+      expect(testObj.isAdmin).to.be.undefined
+      expect(testObj.polluted).to.be.undefined
 
       // The _.assign in providers.js:197 would process this
       // If vulnerable: Object.prototype.isAdmin = true affects ALL objects
 
       // Verify payload structure is valid for exploit
-      expect(maliciousProviderUpdate.options.__proto__).to.have.property('isAdmin');
-    });
+      expect(maliciousProviderUpdate.options.__proto__).to.have.property(
+        'isAdmin'
+      )
+    })
 
-    it('should test provider ID injection for path traversal', function() {
+    it('should test provider ID injection for path traversal', function () {
       /**
        * VULNERABILITY: Provider ID used in file paths
        * File: src/interfaces/providers.js
@@ -76,29 +77,29 @@ describe('API & Interface Security Tests', function() {
       const maliciousProviderIds = [
         '../../../etc/passwd',
         '..\\..\\..\\windows\\system32\\config\\sam',
-        'provider\x00.json',        // Null byte injection
-        'provider|id',              // Pipe injection
-        'provider;id',              // Command injection attempt
-        'provider`id`',             // Backtick injection
-        'provider$(whoami)',        // Command substitution
+        'provider\x00.json', // Null byte injection
+        'provider|id', // Pipe injection
+        'provider;id', // Command injection attempt
+        'provider`id`', // Backtick injection
+        'provider$(whoami)', // Command substitution
         '<script>alert(1)</script>', // XSS in provider ID
-        'provider\nX-Injected: header', // Header injection
-      ];
+        'provider\nX-Injected: header' // Header injection
+      ]
 
-      maliciousProviderIds.forEach(id => {
+      maliciousProviderIds.forEach((id) => {
         const payload = {
           id: id,
           enabled: true,
           type: 'NMEA0183',
           options: { type: 'tcp', host: '127.0.0.1', port: 10110 }
-        };
+        }
 
         // These should be rejected or sanitized
-        expect(payload.id).to.be.a('string');
-      });
-    });
+        expect(payload.id).to.be.a('string')
+      })
+    })
 
-    it('should test provider type confusion attacks', function() {
+    it('should test provider type confusion attacks', function () {
       /**
        * Attack: Type confusion in provider pipeline
        * File: src/interfaces/providers.js:43-68
@@ -110,15 +111,15 @@ describe('API & Interface Security Tests', function() {
         { type: 'providers/simple\x00malicious' },
         { type: ['providers/simple', 'malicious'] }, // Array instead of string
         { type: { toString: () => 'providers/simple' } }, // Object with toString
-        { type: 'Unknown' }, // Should be rejected per line 181-184
-      ];
+        { type: 'Unknown' } // Should be rejected per line 181-184
+      ]
 
-      typeConfusionPayloads.forEach(payload => {
-        expect(payload.type).to.exist;
-      });
-    });
+      typeConfusionPayloads.forEach((payload) => {
+        expect(payload.type).to.exist
+      })
+    })
 
-    it('should test discovered provider originalId manipulation', function() {
+    it('should test discovered provider originalId manipulation', function () {
       /**
        * VULNERABILITY: IDOR via originalId in discovered providers
        * File: src/interfaces/providers.js:126-134
@@ -134,17 +135,16 @@ describe('API & Interface Security Tests', function() {
         options: { type: 'tcp', host: '127.0.0.1', port: 10110 },
         wasDiscovered: true,
         originalId: 'victim-provider-id' // Reference another provider
-      };
+      }
 
-      expect(idorPayload.originalId).to.not.equal(idorPayload.id);
-    });
-  });
+      expect(idorPayload.originalId).to.not.equal(idorPayload.id)
+    })
+  })
 
   // ==================== PUT HANDLER SECURITY ====================
 
-  describe('PUT Handler Prototype Pollution & Injection', function() {
-
-    it('should test _.set prototype pollution in defaults handler', function() {
+  describe('PUT Handler Prototype Pollution & Injection', function () {
+    it('should test _.set prototype pollution in defaults handler', function () {
       /**
        * CRITICAL VULNERABILITY: Prototype Pollution via _.set()
        * File: src/put.js:137
@@ -175,21 +175,24 @@ describe('API & Interface Security Tests', function() {
           path: 'compromised',
           value: true
         }
-      ];
+      ]
 
-      pollutionPayloads.forEach(payload => {
-        const pathWithContext = payload.context + '.' + payload.path;
+      pollutionPayloads.forEach((payload) => {
+        const pathWithContext = payload.context + '.' + payload.path
         // Check if payload could reach prototype
-        const isPrototypePath = pathWithContext.includes('__proto__') ||
-                               pathWithContext.includes('constructor.prototype');
-        expect(pathWithContext).to.be.a('string');
+        const isPrototypePath =
+          pathWithContext.includes('__proto__') ||
+          pathWithContext.includes('constructor.prototype')
+        expect(pathWithContext).to.be.a('string')
         if (isPrototypePath) {
-          console.log(`    [POTENTIAL VULN] Path could pollute prototype: ${pathWithContext}`);
+          console.log(
+            `    [POTENTIAL VULN] Path could pollute prototype: ${pathWithContext}`
+          )
         }
-      });
-    });
+      })
+    })
 
-    it('should test notification manipulation via PUT', function() {
+    it('should test notification manipulation via PUT', function () {
       /**
        * VULNERABILITY: Notification State Manipulation
        * File: src/put.js:486-520
@@ -218,15 +221,15 @@ describe('API & Interface Security Tests', function() {
           value: true,
           context: 'vessels.self'
         }
-      ];
+      ]
 
-      notificationPayloads.forEach(payload => {
+      notificationPayloads.forEach((payload) => {
         // Notifications are safety-critical - manipulating them is dangerous
-        expect(payload.path).to.include('notifications');
-      });
-    });
+        expect(payload.path).to.include('notifications')
+      })
+    })
 
-    it('should test action handler registration abuse', function() {
+    it('should test action handler registration abuse', function () {
       /**
        * VULNERABILITY: Action Handler Hijacking
        * File: src/put.js:460-484
@@ -254,14 +257,14 @@ describe('API & Interface Security Tests', function() {
           source: 'malicious'
           // Hijack autopilot control
         }
-      ];
+      ]
 
-      handlerHijackPayloads.forEach(payload => {
-        expect(payload.source).to.be.a('string');
-      });
-    });
+      handlerHijackPayloads.forEach((payload) => {
+        expect(payload.source).to.be.a('string')
+      })
+    })
 
-    it('should test meta handler path manipulation', function() {
+    it('should test meta handler path manipulation', function () {
       /**
        * VULNERABILITY: Meta Path Manipulation
        * File: src/put.js:79-158
@@ -281,19 +284,18 @@ describe('API & Interface Security Tests', function() {
           path: 'meta/../../secrets',
           value: 'exposed'
         }
-      ];
+      ]
 
-      metaPayloads.forEach(payload => {
-        expect(payload.path).to.be.a('string');
-      });
-    });
-  });
+      metaPayloads.forEach((payload) => {
+        expect(payload.path).to.be.a('string')
+      })
+    })
+  })
 
   // ==================== RESOURCES API SECURITY ====================
 
-  describe('Resources API Object.assign & Injection', function() {
-
-    it('should test Object.assign prototype pollution from providers', function() {
+  describe('Resources API Object.assign & Injection', function () {
+    it('should test Object.assign prototype pollution from providers', function () {
       /**
        * VULNERABILITY: Object.assign with untrusted plugin data
        * File: src/api/resources/index.ts:375, 397
@@ -307,23 +309,25 @@ describe('API & Interface Security Tests', function() {
         status: 'fulfilled',
         value: {
           'waypoint-1': { name: 'Normal Waypoint' },
-          '__proto__': {
+          __proto__: {
             isAdmin: true,
             polluted: true
           },
-          'constructor': {
-            'prototype': {
+          constructor: {
+            prototype: {
               compromised: true
             }
           }
         }
-      };
+      }
 
       // Verify attack payload structure
-      expect(maliciousPluginResponse.value.__proto__).to.have.property('isAdmin');
-    });
+      expect(maliciousPluginResponse.value.__proto__).to.have.property(
+        'isAdmin'
+      )
+    })
 
-    it('should test resource type injection', function() {
+    it('should test resource type injection', function () {
       /**
        * VULNERABILITY: Resource type used as object key
        * File: src/api/resources/index.ts
@@ -341,16 +345,16 @@ describe('API & Interface Security Tests', function() {
         '__lookupSetter__',
         'toString',
         'valueOf'
-      ];
+      ]
 
-      maliciousResourceTypes.forEach(type => {
+      maliciousResourceTypes.forEach((type) => {
         // These should be rejected as resource types
-        const url = `/signalk/v2/api/resources/${type}`;
-        expect(url).to.include(type);
-      });
-    });
+        const url = `/signalk/v2/api/resources/${type}`
+        expect(url).to.include(type)
+      })
+    })
 
-    it('should test resource ID validation bypass', function() {
+    it('should test resource ID validation bypass', function () {
       /**
        * File: src/api/resources/index.ts:203-218
        *
@@ -369,14 +373,14 @@ describe('API & Interface Security Tests', function() {
           resourceType: 'charts', // Charts use chartId validation
           resourceId: '../../../../config/security.json'
         }
-      ];
+      ]
 
-      bypassPayloads.forEach(payload => {
-        expect(payload.resourceId).to.be.a('string');
-      });
-    });
+      bypassPayloads.forEach((payload) => {
+        expect(payload.resourceId).to.be.a('string')
+      })
+    })
 
-    it('should test provider query parameter injection', function() {
+    it('should test provider query parameter injection', function () {
       /**
        * File: src/api/resources/index.ts:548-557, 601-610
        *
@@ -388,15 +392,15 @@ describe('API & Interface Security Tests', function() {
         'constructor',
         'attacker-plugin\x00legitimate-plugin',
         'provider;DROP TABLE resources;--'
-      ];
+      ]
 
-      providerInjectionPayloads.forEach(provider => {
-        const url = `/signalk/v2/api/resources/waypoints?provider=${encodeURIComponent(provider)}`;
-        expect(url).to.include('provider=');
-      });
-    });
+      providerInjectionPayloads.forEach((provider) => {
+        const url = `/signalk/v2/api/resources/waypoints?provider=${encodeURIComponent(provider)}`
+        expect(url).to.include('provider=')
+      })
+    })
 
-    it('should test default provider manipulation', function() {
+    it('should test default provider manipulation', function () {
       /**
        * VULNERABILITY: Default provider can be set to malicious plugin
        * File: src/api/resources/index.ts:491-534
@@ -409,12 +413,12 @@ describe('API & Interface Security Tests', function() {
         resourceType: 'waypoints',
         providerId: 'malicious-plugin'
         // Now all waypoint writes go to malicious plugin
-      };
+      }
 
-      expect(defaultProviderAttack.providerId).to.be.a('string');
-    });
+      expect(defaultProviderAttack.providerId).to.be.a('string')
+    })
 
-    it('should test resource property traversal', function() {
+    it('should test resource property traversal', function () {
       /**
        * File: src/api/resources/index.ts:597-599
        *
@@ -427,20 +431,19 @@ describe('API & Interface Security Tests', function() {
         'constructor/prototype/isAdmin',
         '../../credentials/password',
         'feature/geometry/coordinates/../../__proto__'
-      ];
+      ]
 
-      traversalPayloads.forEach(payload => {
-        const property = payload.split('/').join('.');
-        expect(property).to.include('.');
-      });
-    });
-  });
+      traversalPayloads.forEach((payload) => {
+        const property = payload.split('/').join('.')
+        expect(property).to.include('.')
+      })
+    })
+  })
 
   // ==================== COURSE API SECURITY ====================
 
-  describe('Course API Navigation Control Attacks', function() {
-
-    it('should test destination position manipulation', function() {
+  describe('Course API Navigation Control Attacks', function () {
+    it('should test destination position manipulation', function () {
       /**
        * SAFETY CRITICAL: Course API controls vessel navigation
        * File: src/api/course/index.ts
@@ -468,37 +471,37 @@ describe('API & Interface Security Tests', function() {
           href: '/signalk/v2/api/resources/waypoints/../../routes/hijacked',
           description: 'Path traversal in href'
         }
-      ];
+      ]
 
-      dangerousDestinations.forEach(dest => {
-        expect(dest).to.have.any.keys('position', 'href');
-      });
-    });
+      dangerousDestinations.forEach((dest) => {
+        expect(dest).to.have.any.keys('position', 'href')
+      })
+    })
 
-    it('should test route activation with invalid point indices', function() {
+    it('should test route activation with invalid point indices', function () {
       /**
        * File: src/api/course/index.ts:1006-1023
        *
        * parsePointIndex clamps values but negative indices could cause issues
        */
       const indexManipulation = [
-        { pointIndex: -1 },           // Negative index
-        { pointIndex: -999999999 },   // Large negative
-        { pointIndex: 999999999 },    // Larger than route
-        { pointIndex: NaN },          // Not a number
-        { pointIndex: Infinity },     // Infinity
-        { pointIndex: -Infinity },    // Negative infinity
-        { pointIndex: 1.5 },          // Float instead of int
+        { pointIndex: -1 }, // Negative index
+        { pointIndex: -999999999 }, // Large negative
+        { pointIndex: 999999999 }, // Larger than route
+        { pointIndex: NaN }, // Not a number
+        { pointIndex: Infinity }, // Infinity
+        { pointIndex: -Infinity }, // Negative infinity
+        { pointIndex: 1.5 }, // Float instead of int
         { pointIndex: '0; DROP TABLE' }, // SQL injection attempt
-        { pointIndex: { valueOf: () => 999 } }, // Object with valueOf
-      ];
+        { pointIndex: { valueOf: () => 999 } } // Object with valueOf
+      ]
 
-      indexManipulation.forEach(payload => {
-        expect(payload).to.have.property('pointIndex');
-      });
-    });
+      indexManipulation.forEach((payload) => {
+        expect(payload).to.have.property('pointIndex')
+      })
+    })
 
-    it('should test route href path traversal', function() {
+    it('should test route href path traversal', function () {
       /**
        * File: src/api/course/index.ts:1025-1043
        *
@@ -511,34 +514,34 @@ describe('API & Interface Security Tests', function() {
         '//malicious-server.com/signalk/v2/api/resources/routes/id',
         'file:///etc/passwd',
         'javascript:alert(1)'
-      ];
+      ]
 
-      hrefTraversals.forEach(href => {
-        expect(href).to.be.a('string');
-      });
-    });
+      hrefTraversals.forEach((href) => {
+        expect(href).to.be.a('string')
+      })
+    })
 
-    it('should test arrival circle manipulation', function() {
+    it('should test arrival circle manipulation', function () {
       /**
        * File: src/api/course/index.ts:550-566
        *
        * Arrival circle determines when vessel "arrives" at destination
        */
       const arrivalCircleAttacks = [
-        { value: 0 },           // Zero radius - never arrive
-        { value: -1 },          // Negative - behavior undefined
-        { value: 1e100 },       // Huge radius - always "arrived"
-        { value: Infinity },    // Infinity
-        { value: NaN },         // NaN
-        { value: '1000' },      // String instead of number
-      ];
+        { value: 0 }, // Zero radius - never arrive
+        { value: -1 }, // Negative - behavior undefined
+        { value: 1e100 }, // Huge radius - always "arrived"
+        { value: Infinity }, // Infinity
+        { value: NaN }, // NaN
+        { value: '1000' } // String instead of number
+      ]
 
-      arrivalCircleAttacks.forEach(payload => {
-        expect(payload).to.have.property('value');
-      });
-    });
+      arrivalCircleAttacks.forEach((payload) => {
+        expect(payload).to.have.property('value')
+      })
+    })
 
-    it('should test command source spoofing', function() {
+    it('should test command source spoofing', function () {
       /**
        * File: src/api/course/index.ts:285-300
        *
@@ -558,14 +561,14 @@ describe('API & Interface Security Tests', function() {
           source: { type: 'API' }, // Pretend to be API
           $source: 'attacker'
         }
-      ];
+      ]
 
-      sourceSpoofing.forEach(payload => {
-        expect(payload.source.type).to.be.a('string');
-      });
-    });
+      sourceSpoofing.forEach((payload) => {
+        expect(payload.source.type).to.be.a('string')
+      })
+    })
 
-    it('should test targetArrivalTime injection', function() {
+    it('should test targetArrivalTime injection', function () {
       /**
        * File: src/api/course/index.ts:611-627
        *
@@ -576,21 +579,20 @@ describe('API & Interface Security Tests', function() {
         { value: '9999-99-99T99:99:99Z' }, // Invalid date
         { value: '0000-00-00T00:00:00Z' }, // Zero date
         { value: '<script>alert(1)</script>' },
-        { value: '2024-01-01T00:00:00.0000000000000000000001Z' }, // Excessive precision
-      ];
+        { value: '2024-01-01T00:00:00.0000000000000000000001Z' } // Excessive precision
+      ]
 
-      timeInjections.forEach(payload => {
+      timeInjections.forEach((payload) => {
         // Regex: /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)((-(\d{2}):(\d{2})|Z))$/
-        expect(payload.value).to.be.a('string');
-      });
-    });
-  });
+        expect(payload.value).to.be.a('string')
+      })
+    })
+  })
 
   // ==================== SERVER ROUTES SECURITY ====================
 
-  describe('Server Routes Backup/Restore & Config Security', function() {
-
-    it('should test backup zip path traversal', function() {
+  describe('Server Routes Backup/Restore & Config Security', function () {
+    it('should test backup zip path traversal', function () {
       /**
        * File: src/serverroutes.ts
        *
@@ -601,15 +603,15 @@ describe('API & Interface Security Tests', function() {
         '../../../root/.ssh/authorized_keys',
         '..\\..\\..\\windows\\system32\\config\\sam',
         '....//....//....//etc/passwd', // Double encoding
-        'valid.json\x00.txt', // Null byte
-      ];
+        'valid.json\x00.txt' // Null byte
+      ]
 
-      zipTraversalFiles.forEach(filename => {
-        expect(filename).to.be.a('string');
-      });
-    });
+      zipTraversalFiles.forEach((filename) => {
+        expect(filename).to.be.a('string')
+      })
+    })
 
-    it('should test security config manipulation', function() {
+    it('should test security config manipulation', function () {
       /**
        * File: src/serverroutes.ts:248-276
        *
@@ -619,7 +621,7 @@ describe('API & Interface Security Tests', function() {
         {
           allowNewUserRegistration: true, // Enable open registration
           allowDeviceAccessRequests: true,
-          expiration: '9999d', // Nearly infinite token expiration
+          expiration: '9999d' // Nearly infinite token expiration
         },
         {
           users: [
@@ -634,29 +636,31 @@ describe('API & Interface Security Tests', function() {
           acls: [
             {
               context: '*',
-              resources: [{ paths: ['*'], permissions: ['read', 'write', 'admin'] }]
+              resources: [
+                { paths: ['*'], permissions: ['read', 'write', 'admin'] }
+              ]
             }
           ]
         }
-      ];
+      ]
 
-      securityConfigAttacks.forEach(config => {
-        expect(config).to.be.an('object');
-      });
-    });
+      securityConfigAttacks.forEach((config) => {
+        expect(config).to.be.an('object')
+      })
+    })
 
-    it('should test server restart privilege escalation', function() {
+    it('should test server restart privilege escalation', function () {
       /**
        * File: src/serverroutes.ts:207-216
        *
        * PUT /server/restart - could be abused for DoS
        */
-      const restartUrl = '/signalk/v1/api/server/restart';
+      const restartUrl = '/signalk/v1/api/server/restart'
       // Rapid restart requests = DoS
-      expect(restartUrl).to.include('restart');
-    });
+      expect(restartUrl).to.include('restart')
+    })
 
-    it('should test debug settings manipulation', function() {
+    it('should test debug settings manipulation', function () {
       /**
        * Debug settings could leak sensitive info or affect performance
        */
@@ -664,20 +668,19 @@ describe('API & Interface Security Tests', function() {
         'signalk-server:*', // Enable all debug - performance impact
         '../../../etc/passwd', // Path in debug string
         '*', // Wildcard all
-        'a]'.repeat(10000), // ReDoS attempt
-      ];
+        'a]'.repeat(10000) // ReDoS attempt
+      ]
 
-      debugPayloads.forEach(payload => {
-        expect(payload).to.be.a('string');
-      });
-    });
-  });
+      debugPayloads.forEach((payload) => {
+        expect(payload).to.be.a('string')
+      })
+    })
+  })
 
   // ==================== WEBSOCKET SECURITY ====================
 
-  describe('WebSocket Interface Security', function() {
-
-    it('should test delta injection via WebSocket', function() {
+  describe('WebSocket Interface Security', function () {
+    it('should test delta injection via WebSocket', function () {
       /**
        * File: src/interfaces/ws.js
        *
@@ -685,33 +688,41 @@ describe('API & Interface Security Tests', function() {
        */
       const maliciousDeltas = [
         {
-          updates: [{
-            values: [{
-              path: '__proto__.polluted',
-              value: true
-            }]
-          }]
+          updates: [
+            {
+              values: [
+                {
+                  path: '__proto__.polluted',
+                  value: true
+                }
+              ]
+            }
+          ]
         },
         {
           context: 'vessels.__proto__',
-          updates: [{
-            values: [{ path: 'compromised', value: true }]
-          }]
+          updates: [
+            {
+              values: [{ path: 'compromised', value: true }]
+            }
+          ]
         },
         {
-          updates: [{
-            source: { label: '<script>alert(1)</script>' },
-            values: [{ path: 'navigation.position', value: {} }]
-          }]
+          updates: [
+            {
+              source: { label: '<script>alert(1)</script>' },
+              values: [{ path: 'navigation.position', value: {} }]
+            }
+          ]
         }
-      ];
+      ]
 
-      maliciousDeltas.forEach(delta => {
-        expect(delta).to.have.property('updates');
-      });
-    });
+      maliciousDeltas.forEach((delta) => {
+        expect(delta).to.have.property('updates')
+      })
+    })
 
-    it('should test subscription path injection', function() {
+    it('should test subscription path injection', function () {
       /**
        * WebSocket subscriptions use paths that could be malicious
        */
@@ -719,15 +730,15 @@ describe('API & Interface Security Tests', function() {
         { path: '__proto__.*' },
         { path: 'constructor.prototype.*' },
         { path: '**.**.**.**.**.**.**.**.**.**.position' }, // Deep nesting
-        { path: '*'.repeat(10000) }, // Very long path
-      ];
+        { path: '*'.repeat(10000) } // Very long path
+      ]
 
-      subscriptionPayloads.forEach(payload => {
-        expect(payload.path).to.be.a('string');
-      });
-    });
+      subscriptionPayloads.forEach((payload) => {
+        expect(payload.path).to.be.a('string')
+      })
+    })
 
-    it('should test PUT request source validation', function() {
+    it('should test PUT request source validation', function () {
       /**
        * File: src/interfaces/ws.js
        * File: src/put.js:369-371
@@ -739,20 +750,19 @@ describe('API & Interface Security Tests', function() {
         { source: 'constructor' },
         { source: '../../malicious' },
         { source: null }, // Null source
-        { source: { toString: () => 'malicious' } }, // Object
-      ];
+        { source: { toString: () => 'malicious' } } // Object
+      ]
 
-      sourceInjections.forEach(payload => {
-        expect(payload).to.have.property('source');
-      });
-    });
-  });
+      sourceInjections.forEach((payload) => {
+        expect(payload).to.have.property('source')
+      })
+    })
+  })
 
   // ==================== PLUGIN API SECURITY ====================
 
-  describe('Plugin API Privilege Escalation', function() {
-
-    it('should test plugin resource provider registration', function() {
+  describe('Plugin API Privilege Escalation', function () {
+    it('should test plugin resource provider registration', function () {
       /**
        * File: src/api/resources/index.ts:91-117
        *
@@ -766,7 +776,7 @@ describe('API & Interface Security Tests', function() {
           methods: {
             listResources: () => {
               // Could return poisoned data
-              return { '__proto__': { polluted: true } };
+              return { __proto__: { polluted: true } }
             },
             getResource: (id) => {
               // Could redirect to dangerous location
@@ -776,24 +786,24 @@ describe('API & Interface Security Tests', function() {
                     coordinates: [0, 0] // Null Island
                   }
                 }
-              };
+              }
             },
             setResource: (id, data) => {
               // Could store data elsewhere / exfiltrate
-              return Promise.resolve();
+              return Promise.resolve()
             },
             deleteResource: (id) => {
               // Could prevent deletion / cause data loss
-              return Promise.resolve();
+              return Promise.resolve()
             }
           }
         }
-      };
+      }
 
-      expect(maliciousProvider.provider.type).to.equal('waypoints');
-    });
+      expect(maliciousProvider.provider.type).to.equal('waypoints')
+    })
 
-    it('should test plugin action handler registration', function() {
+    it('should test plugin action handler registration', function () {
       /**
        * File: src/put.js:460-474
        *
@@ -807,16 +817,16 @@ describe('API & Interface Security Tests', function() {
         'steering.rudderAngle',
         'navigation.anchor.position',
         'notifications.mob',
-        'communication.callsignVhf',
-      ];
+        'communication.callsignVhf'
+      ]
 
-      criticalPaths.forEach(path => {
+      criticalPaths.forEach((path) => {
         // Plugin could register handler for these safety-critical paths
-        expect(path).to.be.a('string');
-      });
-    });
+        expect(path).to.be.a('string')
+      })
+    })
 
-    it('should test plugin delta injection', function() {
+    it('should test plugin delta injection', function () {
       /**
        * Plugins can send deltas via app.handleMessage()
        * Could inject malicious data into Signal K data model
@@ -824,52 +834,59 @@ describe('API & Interface Security Tests', function() {
       const injectionDeltas = [
         {
           context: 'vessels.self',
-          updates: [{
-            source: { label: 'malicious-plugin' },
-            values: [{
-              path: 'navigation.position',
-              value: { latitude: 0, longitude: 0 } // False position
-            }]
-          }]
+          updates: [
+            {
+              source: { label: 'malicious-plugin' },
+              values: [
+                {
+                  path: 'navigation.position',
+                  value: { latitude: 0, longitude: 0 } // False position
+                }
+              ]
+            }
+          ]
         },
         {
           context: 'vessels.self',
-          updates: [{
-            values: [{
-              path: 'navigation.speedOverGround',
-              value: 0 // Hide that vessel is moving
-            }]
-          }]
+          updates: [
+            {
+              values: [
+                {
+                  path: 'navigation.speedOverGround',
+                  value: 0 // Hide that vessel is moving
+                }
+              ]
+            }
+          ]
         }
-      ];
+      ]
 
-      injectionDeltas.forEach(delta => {
-        expect(delta.context).to.equal('vessels.self');
-      });
-    });
-  });
+      injectionDeltas.forEach((delta) => {
+        expect(delta.context).to.equal('vessels.self')
+      })
+    })
+  })
 
   // ==================== CROSS-CUTTING VULNERABILITIES ====================
 
-  describe('Cross-Cutting Security Issues', function() {
-
-    it('should test JSON parsing bombs', function() {
+  describe('Cross-Cutting Security Issues', function () {
+    it('should test JSON parsing bombs', function () {
       /**
        * Deep/wide JSON objects can cause memory exhaustion or CPU hang
        */
       // Note: Actual payloads would be too large to include
       const jsonBombPatterns = [
-        { type: 'deep', depth: 10000 },       // Deep nesting
-        { type: 'wide', keys: 1000000 },      // Wide objects
-        { type: 'recursive', selfRef: true }, // Circular (not valid JSON but could be constructed)
-      ];
+        { type: 'deep', depth: 10000 }, // Deep nesting
+        { type: 'wide', keys: 1000000 }, // Wide objects
+        { type: 'recursive', selfRef: true } // Circular (not valid JSON but could be constructed)
+      ]
 
-      jsonBombPatterns.forEach(pattern => {
-        expect(pattern.type).to.be.a('string');
-      });
-    });
+      jsonBombPatterns.forEach((pattern) => {
+        expect(pattern.type).to.be.a('string')
+      })
+    })
 
-    it('should test Content-Type header manipulation', function() {
+    it('should test Content-Type header manipulation', function () {
       /**
        * Some endpoints might not properly validate Content-Type
        */
@@ -881,15 +898,15 @@ describe('API & Interface Security Tests', function() {
         'application/xml',
         'text/xml',
         '../../../etc/passwd', // Injection in header
-        'application/json; charset=utf-8; x=../../passwd',
-      ];
+        'application/json; charset=utf-8; x=../../passwd'
+      ]
 
-      contentTypes.forEach(ct => {
-        expect(ct).to.be.a('string');
-      });
-    });
+      contentTypes.forEach((ct) => {
+        expect(ct).to.be.a('string')
+      })
+    })
 
-    it('should test request body size limits', function() {
+    it('should test request body size limits', function () {
       /**
        * Without proper limits, large requests can cause DoS
        */
@@ -897,50 +914,50 @@ describe('API & Interface Security Tests', function() {
         { size: '1MB', expected: 'allowed' },
         { size: '10MB', expected: 'blocked' },
         { size: '100MB', expected: 'blocked' },
-        { size: '1GB', expected: 'blocked' },
-      ];
+        { size: '1GB', expected: 'blocked' }
+      ]
 
-      bodySizeTests.forEach(test => {
-        expect(test.size).to.be.a('string');
-      });
-    });
+      bodySizeTests.forEach((test) => {
+        expect(test.size).to.be.a('string')
+      })
+    })
 
-    it('should test HTTP method override', function() {
+    it('should test HTTP method override', function () {
       /**
        * X-HTTP-Method-Override header could bypass method restrictions
        */
       const overrideTests = [
         { method: 'POST', override: 'DELETE' },
         { method: 'GET', override: 'PUT' },
-        { method: 'POST', override: '__proto__' },
-      ];
+        { method: 'POST', override: '__proto__' }
+      ]
 
-      overrideTests.forEach(test => {
-        expect(test.method).to.be.a('string');
-      });
-    });
+      overrideTests.forEach((test) => {
+        expect(test.method).to.be.a('string')
+      })
+    })
 
-    it('should test header injection via user input', function() {
+    it('should test header injection via user input', function () {
       /**
        * User input reflected in headers could enable response splitting
        */
       const headerInjections = [
         'valid-value\r\nX-Injected: evil',
         'valid\r\nSet-Cookie: session=attacker',
-        'valid\r\n\r\n<script>alert(1)</script>',
-      ];
+        'valid\r\n\r\n<script>alert(1)</script>'
+      ]
 
-      headerInjections.forEach(payload => {
-        const hasInjection = payload.includes('\r\n') || payload.includes('\n');
-        expect(hasInjection).to.be.true;
-      });
-    });
-  });
+      headerInjections.forEach((payload) => {
+        const hasInjection = payload.includes('\r\n') || payload.includes('\n')
+        expect(hasInjection).to.be.true
+      })
+    })
+  })
 
   // ==================== SUMMARY ====================
 
-  describe('API Security Test Summary', function() {
-    it('should document all tested vulnerability categories', function() {
+  describe('API Security Test Summary', function () {
+    it('should document all tested vulnerability categories', function () {
       const testedCategories = {
         'Provider API Injection': [
           'Prototype pollution via _.assign',
@@ -993,22 +1010,22 @@ describe('API & Interface Security Tests', function() {
           'HTTP method override',
           'Header injection'
         ]
-      };
+      }
 
-      let totalVulnerabilities = 0;
-      Object.values(testedCategories).forEach(vulns => {
-        totalVulnerabilities += vulns.length;
-      });
+      let totalVulnerabilities = 0
+      Object.values(testedCategories).forEach((vulns) => {
+        totalVulnerabilities += vulns.length
+      })
 
-      console.log('\n  ========================================');
-      console.log('  API & Interface Security Test Summary');
-      console.log('  ========================================');
-      console.log(`  Total Categories: ${Object.keys(testedCategories).length}`);
-      console.log(`  Total Vulnerabilities Tested: ${totalVulnerabilities}`);
-      console.log('  ========================================\n');
+      console.log('\n  ========================================')
+      console.log('  API & Interface Security Test Summary')
+      console.log('  ========================================')
+      console.log(`  Total Categories: ${Object.keys(testedCategories).length}`)
+      console.log(`  Total Vulnerabilities Tested: ${totalVulnerabilities}`)
+      console.log('  ========================================\n')
 
-      expect(Object.keys(testedCategories).length).to.be.above(0);
-      expect(totalVulnerabilities).to.equal(37);
-    });
-  });
-});
+      expect(Object.keys(testedCategories).length).to.be.above(0)
+      expect(totalVulnerabilities).to.equal(37)
+    })
+  })
+})

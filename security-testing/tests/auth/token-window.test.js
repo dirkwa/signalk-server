@@ -55,13 +55,13 @@ async function getToken(username, password) {
   return null
 }
 
-describe('Token Re-verification Window Tests', function() {
-  this.timeout(90000)  // Long timeout for 60+ second tests
+describe('Token Re-verification Window Tests', function () {
+  this.timeout(90000) // Long timeout for 60+ second tests
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -77,7 +77,7 @@ describe('Token Re-verification Window Tests', function() {
     }
   })
 
-  describe('60-Second Token Verification Window', function() {
+  describe('60-Second Token Verification Window', function () {
     /**
      * VULNERABILITY: src/tokensecurity.js line 680
      *
@@ -92,13 +92,15 @@ describe('Token Re-verification Window Tests', function() {
      * continued access.
      */
 
-    it('should document token verification only happens every 60 seconds', async function() {
+    it('should document token verification only happens every 60 seconds', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
       }
 
-      const ws = new WebSocket(`${WS_URL}/signalk/v1/stream?token=${adminToken}`)
+      const ws = new WebSocket(
+        `${WS_URL}/signalk/v1/stream?token=${adminToken}`
+      )
 
       await new Promise((resolve, reject) => {
         ws.on('open', resolve)
@@ -127,13 +129,15 @@ describe('Token Re-verification Window Tests', function() {
       expect(true).to.be.true
     })
 
-    it('should test WebSocket remains connected for 60+ seconds', async function() {
+    it('should test WebSocket remains connected for 60+ seconds', async function () {
       if (!securityEnabled || !adminToken) {
         this.skip()
         return
       }
 
-      const ws = new WebSocket(`${WS_URL}/signalk/v1/stream?token=${adminToken}`)
+      const ws = new WebSocket(
+        `${WS_URL}/signalk/v1/stream?token=${adminToken}`
+      )
 
       await new Promise((resolve, reject) => {
         ws.on('open', resolve)
@@ -151,12 +155,14 @@ describe('Token Re-verification Window Tests', function() {
 
       // Wait slightly over 60 seconds
       console.log('      Waiting 65 seconds to verify token re-verification...')
-      await new Promise(resolve => setTimeout(resolve, 65000))
+      await new Promise((resolve) => setTimeout(resolve, 65000))
 
       // WebSocket should still be connected after 60+ seconds
       const isOpen = ws.readyState === WebSocket.OPEN
 
-      console.log(`      WebSocket state after 65s: ${ws.readyState === WebSocket.OPEN ? 'OPEN' : 'CLOSED'}`)
+      console.log(
+        `      WebSocket state after 65s: ${ws.readyState === WebSocket.OPEN ? 'OPEN' : 'CLOSED'}`
+      )
       console.log(`      Messages received: ${messageCount}`)
 
       ws.close()
@@ -166,40 +172,47 @@ describe('Token Re-verification Window Tests', function() {
     })
   })
 
-  describe('Token Expiration Edge Cases', function() {
-    it('should handle expired token on new WebSocket connection', async function() {
+  describe('Token Expiration Edge Cases', function () {
+    it('should handle expired token on new WebSocket connection', async function () {
       if (!securityEnabled) {
         this.skip()
         return
       }
 
       // Create a clearly fake/expired JWT
-      const expiredToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
-        'eyJpZCI6InRlc3QiLCJleHAiOjB9.' +  // exp: 0 (1970)
+      const expiredToken =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
+        'eyJpZCI6InRlc3QiLCJleHAiOjB9.' + // exp: 0 (1970)
         'invalid_signature'
 
-      const ws = new WebSocket(`${WS_URL}/signalk/v1/stream?token=${expiredToken}`)
+      const ws = new WebSocket(
+        `${WS_URL}/signalk/v1/stream?token=${expiredToken}`
+      )
 
       let connected = false
       let closed = false
       let closeCode = null
 
-      ws.on('open', () => { connected = true })
+      ws.on('open', () => {
+        connected = true
+      })
       ws.on('close', (code) => {
         closed = true
         closeCode = code
       })
 
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      await new Promise((resolve) => setTimeout(resolve, 3000))
 
       // With security enabled, expired token should be rejected
-      console.log(`      Connected: ${connected}, Closed: ${closed}, Code: ${closeCode}`)
+      console.log(
+        `      Connected: ${connected}, Closed: ${closed}, Code: ${closeCode}`
+      )
 
       ws.close()
-      expect(true).to.be.true  // Document test ran
+      expect(true).to.be.true // Document test ran
     })
 
-    it('should handle malformed token on WebSocket connection', async function() {
+    it('should handle malformed token on WebSocket connection', async function () {
       if (!securityEnabled) {
         this.skip()
         return
@@ -212,22 +225,28 @@ describe('Token Re-verification Window Tests', function() {
         'null',
         'undefined',
         '../../etc/passwd',
-        '<script>alert(1)</script>',
+        '<script>alert(1)</script>'
       ]
 
       for (const token of malformedTokens) {
-        const ws = new WebSocket(`${WS_URL}/signalk/v1/stream?token=${encodeURIComponent(token)}`)
+        const ws = new WebSocket(
+          `${WS_URL}/signalk/v1/stream?token=${encodeURIComponent(token)}`
+        )
 
         let connected = false
 
-        ws.on('open', () => { connected = true })
+        ws.on('open', () => {
+          connected = true
+        })
 
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise((resolve) => setTimeout(resolve, 1000))
 
         ws.close()
 
         // Document how each malformed token is handled
-        console.log(`      Token "${token.substring(0, 20)}..." - Connected: ${connected}`)
+        console.log(
+          `      Token "${token.substring(0, 20)}..." - Connected: ${connected}`
+        )
       }
 
       expect(true).to.be.true
@@ -235,13 +254,13 @@ describe('Token Re-verification Window Tests', function() {
   })
 })
 
-describe('PUT Handler Prototype Pollution Tests', function() {
+describe('PUT Handler Prototype Pollution Tests', function () {
   this.timeout(30000)
 
   let adminToken = null
   let securityEnabled = false
 
-  before(async function() {
+  before(async function () {
     try {
       adminToken = await getToken(ADMIN_USER, ADMIN_PASS)
       if (adminToken) {
@@ -252,7 +271,7 @@ describe('PUT Handler Prototype Pollution Tests', function() {
     }
   })
 
-  describe('Lodash _.set Prototype Pollution', function() {
+  describe('Lodash _.set Prototype Pollution', function () {
     /**
      * POTENTIAL VULNERABILITY: src/put.js line 137
      *
@@ -265,13 +284,13 @@ describe('PUT Handler Prototype Pollution Tests', function() {
      * where path comes from the URL (user controlled).
      */
 
-    it('should not allow __proto__ pollution via PUT path', async function() {
+    it('should not allow __proto__ pollution via PUT path', async function () {
       // Attempt to PUT to a path containing __proto__
       const pollutionPaths = [
         '/signalk/v1/api/vessels/self/__proto__/polluted',
         '/signalk/v1/api/vessels/self/constructor/prototype/polluted',
         '/signalk/v1/api/__proto__/polluted',
-        '/signalk/v1/api/vessels/__proto__/polluted',
+        '/signalk/v1/api/vessels/__proto__/polluted'
       ]
 
       const headers = adminToken
@@ -296,22 +315,25 @@ describe('PUT Handler Prototype Pollution Tests', function() {
       expect(Object.prototype.polluted).to.be.undefined
     })
 
-    it('should not allow nested prototype pollution', async function() {
+    it('should not allow nested prototype pollution', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
 
       // Try pollution via nested value
-      const response = await request('/signalk/v1/api/vessels/self/navigation/test', {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({
-          value: {
-            __proto__: { polluted: 'pwned' },
-            normal: 'data'
-          }
-        })
-      })
+      const response = await request(
+        '/signalk/v1/api/vessels/self/navigation/test',
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            value: {
+              __proto__: { polluted: 'pwned' },
+              normal: 'data'
+            }
+          })
+        }
+      )
 
       console.log(`      Nested pollution attempt - Status: ${response.status}`)
 
@@ -320,7 +342,7 @@ describe('PUT Handler Prototype Pollution Tests', function() {
     })
   })
 
-  describe('Meta Handler Prototype Pollution', function() {
+  describe('Meta Handler Prototype Pollution', function () {
     /**
      * src/put.js line 79-158 - putMetaHandler
      *
@@ -329,7 +351,7 @@ describe('PUT Handler Prototype Pollution Tests', function() {
      * meta path or value.
      */
 
-    it('should not allow prototype pollution via meta PUT', async function() {
+    it('should not allow prototype pollution via meta PUT', async function () {
       const headers = adminToken
         ? { Authorization: `Bearer ${adminToken}` }
         : {}
@@ -337,7 +359,7 @@ describe('PUT Handler Prototype Pollution Tests', function() {
       const metaPaths = [
         '/signalk/v1/api/vessels/self/navigation/position/meta',
         '/signalk/v1/api/vessels/self/__proto__/meta',
-        '/signalk/v1/api/vessels/self/navigation/meta/__proto__',
+        '/signalk/v1/api/vessels/self/navigation/meta/__proto__'
       ]
 
       for (const path of metaPaths) {

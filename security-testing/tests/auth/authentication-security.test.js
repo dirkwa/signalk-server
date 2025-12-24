@@ -30,8 +30,8 @@ function request(method, path, body = null, headers = {}) {
       method,
       headers: {
         'Content-Type': 'application/json',
-        ...headers,
-      },
+        ...headers
+      }
     }
 
     const req = lib.request(options, (res) => {
@@ -48,7 +48,7 @@ function request(method, path, body = null, headers = {}) {
         resolve({
           status: res.statusCode,
           headers: res.headers,
-          body: parsedBody,
+          body: parsedBody
         })
       })
     })
@@ -71,14 +71,14 @@ describe('Authentication Security Tests', function () {
 
     it('should reject login without password', async () => {
       const res = await request('POST', '/signalk/v1/auth/login', {
-        username: 'admin',
+        username: 'admin'
       })
       expect(res.status).to.be.oneOf([400, 401, 404])
     })
 
     it('should reject login without username', async () => {
       const res = await request('POST', '/signalk/v1/auth/login', {
-        password: 'password',
+        password: 'password'
       })
       expect(res.status).to.be.oneOf([400, 401, 404])
     })
@@ -89,13 +89,13 @@ describe('Authentication Security Tests', function () {
         "admin' OR '1'='1",
         "'; DROP TABLE users;--",
         'admin" OR "1"="1',
-        'admin\'; DELETE FROM users WHERE \'1\'=\'1',
+        "admin'; DELETE FROM users WHERE '1'='1"
       ]
 
       for (const payload of injectionPayloads) {
         const res = await request('POST', '/signalk/v1/auth/login', {
           username: payload,
-          password: 'test',
+          password: 'test'
         })
         // 404 = security not enabled
         expect(res.status).to.be.oneOf([400, 401, 403, 404])
@@ -106,7 +106,7 @@ describe('Authentication Security Tests', function () {
       const injectionPayloads = [
         { username: { $gt: '' }, password: { $gt: '' } },
         { username: { $ne: null }, password: { $ne: null } },
-        { username: 'admin', password: { $regex: '.*' } },
+        { username: 'admin', password: { $regex: '.*' } }
       ]
 
       for (const payload of injectionPayloads) {
@@ -120,13 +120,13 @@ describe('Authentication Security Tests', function () {
       // Login with invalid user
       const res1 = await request('POST', '/signalk/v1/auth/login', {
         username: 'definitely_not_a_user_xyz123',
-        password: 'wrongpassword',
+        password: 'wrongpassword'
       })
 
       // Login with potentially valid user, wrong password
       const res2 = await request('POST', '/signalk/v1/auth/login', {
         username: 'admin',
-        password: 'wrongpassword',
+        password: 'wrongpassword'
       })
 
       // Both should return the same status (no user enumeration)
@@ -139,7 +139,7 @@ describe('Authentication Security Tests', function () {
 
       const res = await request('POST', '/signalk/v1/auth/login', {
         username: longString,
-        password: longString,
+        password: longString
       })
 
       // Should handle gracefully, not crash (404 = security not enabled)
@@ -153,13 +153,13 @@ describe('Authentication Security Tests', function () {
         '${7*7}',
         '{{7*7}}',
         '<script>alert(1)</script>',
-        '%00%00',
+        '%00%00'
       ]
 
       for (const chars of specialChars) {
         const res = await request('POST', '/signalk/v1/auth/login', {
           username: chars,
-          password: chars,
+          password: chars
         })
         // 404 = security not enabled
         expect(res.status).to.be.oneOf([400, 401, 403, 404])
@@ -176,13 +176,16 @@ describe('Authentication Security Tests', function () {
         'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJpZCI6ImFkbWluIn0.'
 
       const res = await request('GET', '/skServer/loginStatus', null, {
-        Authorization: `Bearer ${noneToken}`,
+        Authorization: `Bearer ${noneToken}`
       })
 
       // 200 with no authentication info is acceptable if security is not enabled
       // If security IS enabled and returns 200, that's a SECURITY ISSUE
       if (res.status === 200 && res.body && res.body.username) {
-        console.log('  SECURITY ISSUE: Algorithm "none" token accepted with username:', res.body.username)
+        console.log(
+          '  SECURITY ISSUE: Algorithm "none" token accepted with username:',
+          res.body.username
+        )
       }
       expect(res.status).to.be.oneOf([200, 401, 403])
     })
@@ -201,12 +204,15 @@ describe('Authentication Security Tests', function () {
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImFkbWluIn0.fake_signature'
 
       const res = await request('GET', '/skServer/loginStatus', null, {
-        Authorization: `Bearer ${fakeToken}`,
+        Authorization: `Bearer ${fakeToken}`
       })
 
       // 200 is OK if security not enabled (no authenticated user returned)
       if (res.status === 200 && res.body && res.body.username) {
-        console.log('  SECURITY ISSUE: Fake token accepted with username:', res.body.username)
+        console.log(
+          '  SECURITY ISSUE: Fake token accepted with username:',
+          res.body.username
+        )
       }
       expect(res.status).to.be.oneOf([200, 401, 403])
     })
@@ -219,11 +225,16 @@ describe('Authentication Security Tests', function () {
         { headers: { Authorization: `JWT ${fakeToken}` } },
         { headers: { Authorization: `Bearer ${fakeToken}` } },
         { headers: { 'X-Authorization': `JWT ${fakeToken}` } },
-        { headers: { Cookie: `JAUTHENTICATION=${fakeToken}` } },
+        { headers: { Cookie: `JAUTHENTICATION=${fakeToken}` } }
       ]
 
       for (const loc of locations) {
-        const res = await request('GET', '/skServer/loginStatus', null, loc.headers)
+        const res = await request(
+          'GET',
+          '/skServer/loginStatus',
+          null,
+          loc.headers
+        )
         expect(res.status).to.be.oneOf([200, 401, 403])
       }
     })
@@ -238,7 +249,7 @@ describe('Authentication Security Tests', function () {
       for (let i = 0; i < attempts; i++) {
         const res = await request('POST', '/signalk/v1/auth/login', {
           username: 'admin',
-          password: `wrong_password_${i}`,
+          password: `wrong_password_${i}`
         })
         results.push(res.status)
       }
@@ -250,7 +261,9 @@ describe('Authentication Security Tests', function () {
         const securityEnabled = !results.every((s) => s === 404)
         if (securityEnabled) {
           console.log(
-            '  WARNING: No rate limiting detected after ' + attempts + ' rapid login attempts'
+            '  WARNING: No rate limiting detected after ' +
+              attempts +
+              ' rapid login attempts'
           )
         }
       } else {
@@ -271,12 +284,14 @@ describe('Authentication Security Tests', function () {
     it('should invalidate session on logout', async () => {
       // Would need valid credentials to test properly
       // Placeholder for manual testing
-      console.log('  [Manual test: login, get token, logout, verify token invalid]')
+      console.log(
+        '  [Manual test: login, get token, logout, verify token invalid]'
+      )
     })
 
     it('should not expose tokens in error messages', async () => {
       const res = await request('GET', '/skServer/security/config', null, {
-        Authorization: 'Bearer invalid_token_secret_data',
+        Authorization: 'Bearer invalid_token_secret_data'
       })
 
       const responseText = JSON.stringify(res.body)
@@ -291,7 +306,7 @@ describe('Authentication Security Tests', function () {
 
       if (res.body && typeof res.body === 'object') {
         const responseText = JSON.stringify(res.body)
-        expect(responseText).to.not.match(/\$2[aby]?\$\d+\$/)  // bcrypt hash pattern
+        expect(responseText).to.not.match(/\$2[aby]?\$\d+\$/) // bcrypt hash pattern
       }
     })
 
@@ -300,7 +315,7 @@ describe('Authentication Security Tests', function () {
         'PUT',
         '/skServer/security/user/admin/password',
         {
-          newPassword: 'hacked123',
+          newPassword: 'hacked123'
         }
       )
 
@@ -313,12 +328,14 @@ describe('Authentication Security Tests', function () {
       const res = await request('POST', '/signalk/v1/access/requests', {
         clientId: 'test-device-' + Date.now(),
         description: 'Malicious device',
-        permissions: 'admin',
+        permissions: 'admin'
       })
 
       // 404 = security not enabled, which is fine for this test
       if (res.status === 404) {
-        console.log('  [Security not enabled - device access requests not available]')
+        console.log(
+          '  [Security not enabled - device access requests not available]'
+        )
         return
       }
 

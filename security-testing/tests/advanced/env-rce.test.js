@@ -7,10 +7,10 @@
 
 const { expect } = require('chai')
 
-describe('Environment Variable Security Analysis', function() {
+describe('Environment Variable Security Analysis', function () {
   this.timeout(30000)
 
-  describe('Command Execution via Environment Variables', function() {
+  describe('Command Execution via Environment Variables', function () {
     /**
      * CRITICAL VULNERABILITY: src/interfaces/mfd_webapp.ts line 82-85
      *
@@ -25,7 +25,7 @@ describe('Environment Variable Security Analysis', function() {
      * env vars, it's a dangerous pattern.
      */
 
-    it('should document MFD_ADDRESS_SCRIPT RCE risk', function() {
+    it('should document MFD_ADDRESS_SCRIPT RCE risk', function () {
       console.log(`
       CRITICAL: Remote Code Execution via Environment Variable
 
@@ -55,8 +55,8 @@ describe('Environment Variable Security Analysis', function() {
     })
   })
 
-  describe('Sensitive Environment Variables', function() {
-    it('should document security-critical environment variables', function() {
+  describe('Sensitive Environment Variables', function () {
+    it('should document security-critical environment variables', function () {
       console.log(`
       SECURITY-CRITICAL ENVIRONMENT VARIABLES
 
@@ -94,7 +94,7 @@ describe('Environment Variable Security Analysis', function() {
       expect(true).to.be.true
     })
 
-    it('should verify SECRETKEY is not logged or exposed', async function() {
+    it('should verify SECRETKEY is not logged or exposed', async function () {
       // Check that secretKey from env is not exposed via API
       const fetch = (await import('node-fetch')).default
 
@@ -113,8 +113,8 @@ describe('Environment Variable Security Analysis', function() {
     })
   })
 
-  describe('Container/Docker Security', function() {
-    it('should document Docker security considerations', function() {
+  describe('Container/Docker Security', function () {
+    it('should document Docker security considerations', function () {
       console.log(`
       DOCKER SECURITY CONSIDERATIONS
 
@@ -141,16 +141,16 @@ describe('Environment Variable Security Analysis', function() {
   })
 })
 
-describe('Plugin Code Execution Security', function() {
+describe('Plugin Code Execution Security', function () {
   this.timeout(30000)
 
-  describe('Plugin Loading Risks', function() {
+  describe('Plugin Loading Risks', function () {
     /**
      * Plugins are loaded via require() and have full Node.js access.
      * This is by design but has security implications.
      */
 
-    it('should document plugin security model', function() {
+    it('should document plugin security model', function () {
       console.log(`
       PLUGIN SECURITY MODEL
 
@@ -186,10 +186,10 @@ describe('Plugin Code Execution Security', function() {
   })
 })
 
-describe('WebSocket Handler Security', function() {
+describe('WebSocket Handler Security', function () {
   this.timeout(30000)
 
-  describe('Custom Message Handlers', function() {
+  describe('Custom Message Handlers', function () {
     /**
      * src/interfaces/ws.js line 674
      *
@@ -197,7 +197,7 @@ describe('WebSocket Handler Security', function() {
      * If theFunction is not properly validated, this could be dangerous.
      */
 
-    it('should document WebSocket handler risks', function() {
+    it('should document WebSocket handler risks', function () {
       console.log(`
       WEBSOCKET HANDLER ANALYSIS
 
