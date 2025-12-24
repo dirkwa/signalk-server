@@ -1,20 +1,12 @@
 # SignalK Server Security Testing Framework
 
-A comprehensive security testing framework for identifying vulnerabilities in the SignalK server. This framework provides automated tests that work both with and without security enabled, logging findings appropriately.
-
-## Previously Addressed Issues
-
-The following security issues have been identified and addressed in separate branches:
-- `issue_2178` - [Describe issue]
-- `issue_2180` - [Describe issue]
-- `issue_2181` - [Describe issue]
+A comprehensive security testing framework for identifying vulnerabilities in the SignalK server. This framework provides 500+ automated tests that document real, code-verified security issues.
 
 ## Directory Structure
 
 ```
 security-testing/
 ├── README.md                      # This file
-├── VULNERABILITY_CHECKLIST.md     # Detailed testing checklist
 ├── run-all-tests.sh               # Master test runner
 ├── scripts/
 │   ├── run-dependency-scan.sh     # npm audit + Snyk scanning
@@ -29,7 +21,12 @@ security-testing/
 │   ├── auth/                      # Authentication bypass tests
 │   ├── api/                       # REST API security tests
 │   ├── acl/                       # ACL/Authorization tests
-│   └── fuzzing/                   # Input fuzzing test cases
+│   ├── fuzzing/                   # Input fuzzing test cases
+│   └── advanced/                  # Code-verified vulnerability tests
+│       ├── additional-real-vulns.test.js  # 43 verified vulnerabilities
+│       ├── undiscovered-vulns.test.js     # Vulnerability hunting tests
+│       ├── privilege-escalation.test.js   # Privilege escalation tests
+│       └── ...
 └── reports/                       # Generated security reports
 ```
 
@@ -56,34 +53,14 @@ npm run security:all
 ./security-testing/run-all-tests.sh
 ```
 
-### 2. Dependency Scanning
-
-```bash
-# npm audit (built-in)
-npm audit --production
-
-# Snyk (better CVE coverage)
-snyk test
-
-# Run full dependency scan script
-npm run security:scan
-```
-
-### 3. Static Analysis (SAST)
-
-```bash
-# Semgrep with Node.js rules
-npm run security:sast
-
-# Or run manually with custom rules
-semgrep --config=security-testing/configs/semgrep-custom.yaml .
-```
-
-### 4. Runtime Security Tests
+### 2. Run Specific Test Suites
 
 ```bash
 # All security tests (requires running server)
 npm run test:security
+
+# Code-verified vulnerabilities (no server required)
+npx mocha security-testing/tests/advanced/additional-real-vulns.test.js
 
 # Individual test suites
 npm run test:security:websocket   # WebSocket protocol tests
@@ -91,16 +68,6 @@ npm run test:security:auth        # Authentication tests
 npm run test:security:acl         # Authorization/ACL tests
 npm run test:security:api         # REST API tests
 npm run test:security:fuzz        # Fuzzing tests
-```
-
-### 5. OWASP ZAP (DAST)
-
-```bash
-# Start SignalK server first
-npm start &
-
-# Run ZAP baseline scan (requires Docker)
-./security-testing/scripts/run-zap-scan.sh http://localhost:3000
 ```
 
 ## Test Results Interpretation
@@ -117,76 +84,11 @@ Watch for these console warnings during test runs:
 - `WARNING:` - Potential issues to investigate
 - `FINDING:` - Missing security best practices
 
-## Latest Test Findings
-
-Running `npm run test:security` reveals the following (when security is disabled):
-
-### Critical
-| Finding | Description |
-|---------|-------------|
-| CORS wildcard + credentials | CORS allows `*` origin with credentials enabled |
-
-### High Priority
-| Finding | Description |
-|---------|-------------|
-| Backup without auth | `/skServer/backup` accessible without authentication |
-| WebSocket token validation | Malformed/invalid tokens accepted for connections |
-| WebSocket origin validation | All origins accepted including `http://evil.com` |
-
-### Medium Priority
-| Finding | Description |
-|---------|-------------|
-| Missing X-Content-Type-Options | Header not set |
-| Missing X-Frame-Options | Header not set |
-| Missing Content-Security-Policy | Header not set |
-| X-Powered-By exposed | Server exposes `Express` in header |
-| No rate limiting | API and login endpoints have no rate limits |
-
-## Key Attack Surfaces
-
-Based on codebase analysis, these are the primary areas to test:
-
-### 1. Authentication
-| Vector | Description | File Reference |
-|--------|-------------|----------------|
-| JWT Algorithm | "none" algorithm attack, algorithm confusion | `src/tokensecurity.js` |
-| Token Exposure | Tokens in query params, cookies, headers | `src/tokensecurity.js:680` |
-| Rate Limiting | No brute force protection on login | `src/serverroutes.ts` |
-| Re-verification | 60-second window for revoked tokens | `src/interfaces/ws.js:680` |
-
-### 2. Authorization/ACL
-| Vector | Description | File Reference |
-|--------|-------------|----------------|
-| Path Traversal | Delta paths not fully sanitized | `src/put.js` |
-| Regex DoS | ACL patterns compiled per-check | `src/tokensecurity.js:793` |
-| Permission Escalation | readonly -> readwrite -> admin | `src/tokensecurity.js` |
-| Context Manipulation | vessels.self vs other vessels | `src/interfaces/rest.js` |
-
-### 3. WebSocket
-| Vector | Description | File Reference |
-|--------|-------------|----------------|
-| Unauthenticated | `allow_readonly` permits connections | `src/interfaces/ws.js` |
-| Malformed Messages | JSON parsing, prototype pollution | `src/interfaces/ws.js` |
-| DoS | Large payloads, message flooding | `src/interfaces/ws.js` |
-
-### 4. REST API
-| Vector | Description | File Reference |
-|--------|-------------|----------------|
-| Missing Headers | CSP, X-Frame-Options, etc. | `src/serverroutes.ts` |
-| CORS | Potential misconfiguration | `src/cors.ts` |
-| File Upload | Size limits, type validation | `src/serverroutes.ts` |
-
-### 5. Plugin System
-| Vector | Description | File Reference |
-|--------|-------------|----------------|
-| Code Execution | Plugins have full server access | `src/interfaces/plugins.ts` |
-| Path Traversal | Plugin ID manipulation | `src/interfaces/plugins.ts` |
-
 ## npm Scripts Reference
 
 | Script | Description |
 |--------|-------------|
-| `npm run test:security` | Run all security tests (87 tests) |
+| `npm run test:security` | Run all security tests (500+ tests) |
 | `npm run test:security:websocket` | WebSocket tests only |
 | `npm run test:security:auth` | Authentication tests only |
 | `npm run test:security:acl` | ACL/authorization tests only |
@@ -211,12 +113,13 @@ jobs:
       - npm run test:security
 ```
 
-## Current Dependency Vulnerabilities
+## Known Dependency Vulnerabilities
 
 Run `npm audit --production` to see current dependency vulnerabilities:
 
 | Package | Severity | Issue |
 |---------|----------|-------|
+| json-patch | Critical | Prototype pollution |
 | cookie | Low | Out of bounds characters |
 | nanoid/primus | Moderate | Predictable generation |
 | semver/mdns-js | High | ReDoS vulnerability |
@@ -254,11 +157,12 @@ When adding new security tests:
 2. Follow existing test patterns (Mocha + Chai)
 3. Tests should pass regardless of whether security is enabled
 4. Use console warnings (`WARNING:`, `FINDING:`, etc.) to report issues
-5. Update `VULNERABILITY_CHECKLIST.md` if testing new vectors
+5. For code-verified vulnerabilities, include file:line references
 6. Run full suite to ensure no regressions
 
 ---
 
-*Framework version: 1.0.0*
+*Framework version: 2.0.0*
 *Compatible with SignalK Server: 2.x*
-*Tests: 87 passing*
+*Tests: 500+ passing*
+*Vulnerabilities documented: 167*
