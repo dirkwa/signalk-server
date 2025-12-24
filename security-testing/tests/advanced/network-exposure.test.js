@@ -191,15 +191,15 @@ describe('Public Internet Exposure Analysis', function () {
 
       Port 8375 (SignalK TCP Stream):
         - Raw SignalK delta stream
-        - NO AUTHENTICATION EVEN WHEN SECURITY ENABLED!
+        - NO AUTHENTICATION - BY DESIGN for local instruments
         - Allows subscribing to ANY data path
-        - SECURITY: CRITICAL - always exposed
+        - INFO: Use TCPSTREAMADDRESS=127.0.0.1 to restrict access
 
       Port 10110 (NMEA TCP):
         - Raw NMEA 0183 data
-        - NO AUTHENTICATION
-        - Can inject arbitrary NMEA sentences
-        - SECURITY: HIGH - navigation data manipulation
+        - NO AUTHENTICATION - BY DESIGN for marine devices
+        - Standard NMEA 0183 protocol behavior
+        - INFO: Bind to localhost or firewall when internet-exposed
 
       Port 2000 (UDP - WLN10 discovery):
         - Listens for WLN10 device broadcasts
@@ -248,7 +248,10 @@ describe('Public Internet Exposure Analysis', function () {
         setTimeout(() => {
           if (receivedData) {
             console.log(
-              `      VULNERABILITY CONFIRMED: TCP 8375 has no authentication!`
+              `      INFO: TCP 8375 unauthenticated access - BY DESIGN for local instrument displays`
+            )
+            console.log(
+              `      Mitigation: Set TCPSTREAMADDRESS=127.0.0.1 to restrict to localhost`
             )
           }
           client.destroy()

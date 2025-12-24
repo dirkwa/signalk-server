@@ -150,6 +150,21 @@ If you find a security vulnerability:
 | WebSocket testing | wscat     | `npm install -g wscat`  |
 | Secrets scanning  | gitleaks  | `brew install gitleaks` |
 
+## By Design Behaviors
+
+Some test findings are intentional design decisions for marine navigation systems. These are documented as informational rather than failures:
+
+| Issue | Reason | Mitigation |
+|-------|--------|------------|
+| NMEA TCP (port 10110) unauthenticated | Marine devices need direct NMEA 0183 data feed without authentication overhead. Standard marine protocol behavior. | Bind to localhost or use firewall rules when internet-exposed |
+| TCP Subscriptions (port 8375) unauthenticated | Local instrument displays and chart plotters need real-time data access. Performance-critical for navigation. | Use TCPSTREAMADDRESS=127.0.0.1 env var to restrict access |
+| Sudo npm for server module | Server self-update requires elevated privileges on Linux. User initiated via admin UI. | Only triggered by authenticated admin actions |
+| MFD_ADDRESS_SCRIPT env var | Intentional hook for custom MFD discovery scripts. Only executes if explicitly configured by server operator. | Don't set this env var unless needed |
+| UDP Discovery broadcasts | Marine device discovery protocol (WLN10, GoFree) requires accepting broadcasts. | Disable discovery interfaces if not needed |
+| Provider API allowing internal hosts | Admin-only endpoint. Admins need to configure connections to local network devices (chart plotters, instruments). | Requires admin authentication |
+
+Tests for these behaviors use `console.log('INFO:')` output rather than failure assertions.
+
 ## Contributing
 
 When adding new security tests:
@@ -159,7 +174,8 @@ When adding new security tests:
 3. Tests should pass regardless of whether security is enabled
 4. Use console warnings (`WARNING:`, `FINDING:`, etc.) to report issues
 5. For code-verified vulnerabilities, include file:line references
-6. Run full suite to ensure no regressions
+6. For by-design behaviors, use `console.log('INFO:')` and document in this README
+7. Run full suite to ensure no regressions
 
 ---
 

