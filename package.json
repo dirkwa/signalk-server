@@ -27,7 +27,13 @@
     "security:sast": "./security-testing/scripts/run-semgrep.sh",
     "security:all": "./security-testing/run-all-tests.sh",
     "heroku-postbuild": "npm run build:all",
-    "master-changed-files": "git diff --name-status $(git tag | tail -1)..master"
+    "master-changed-files": "git diff --name-status $(git tag | tail -1)..master",
+    "test:security": "mocha 'security-testing/tests/**/*.test.js' --timeout 120000",
+    "test:security:auth": "mocha 'security-testing/tests/auth/**/*.test.js' --timeout 120000",
+    "test:security:acl": "mocha 'security-testing/tests/acl/**/*.test.js' --timeout 60000",
+    "test:security:api": "mocha 'security-testing/tests/api/**/*.test.js' --timeout 60000",
+    "test:security:websocket": "mocha 'security-testing/tests/websocket/**/*.test.js' --timeout 60000",
+    "test:security:parsing": "mocha 'security-testing/tests/parsing/**/*.test.js' --timeout 60000"
   },
   "bin": {
     "signalk-server": "./bin/signalk-server",
