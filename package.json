@@ -18,7 +18,10 @@
     "test-only": "NODE_ENV=test mocha 'test/**/*.[jt]s' 'dist/**/*.test.js'",
     "test": "npm run build && npm run test-only && npm run ci-lint",
     "heroku-postbuild": "npm run build:all",
-    "master-changed-files": "git diff --name-status $(git tag | tail -1)..master"
+    "master-changed-files": "git diff --name-status $(git tag | tail -1)..master",
+    "tauri:check-deps": "bash scripts/check-tauri-deps.sh",
+    "tauri:dev": "bash scripts/check-tauri-deps.sh && tauri dev",
+    "tauri:build": "bash scripts/check-tauri-deps.sh && tauri build"
   },
   "bin": {
     "signalk-server": "./bin/signalk-server",

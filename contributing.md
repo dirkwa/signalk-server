@@ -50,10 +50,30 @@ You may also need to restart the server to see some changes reflected.
 
 To develop and test the Tauri desktop application:
 
-1. Install Tauri CLI as a dev dependency:
+1. Check and install Tauri prerequisites:
 
    ```shell
-   npm install -D @tauri-apps/cli
+   npm run tauri:check-deps
+   ```
+
+   This will check for required system libraries and show installation commands if anything is missing. You can also check the [Tauri prerequisites](https://tauri.app/start/prerequisites/) documentation for your platform.
+
+   **Linux (Debian/Ubuntu):**
+   ```shell
+   sudo apt-get install -y build-essential pkg-config libglib2.0-dev libgtk-3-dev \
+       libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+       libudev-dev patchelf xvfb
+   ```
+
+   **Linux (Fedora):**
+   ```shell
+   sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel \
+       librsvg2-devel systemd-devel patchelf
+   ```
+
+   **Linux (Arch):**
+   ```shell
+   sudo pacman -S webkit2gtk-4.1 gtk3 libappindicator-gtk3 librsvg libsoup3 patchelf
    ```
 
 2. Initialize Tauri (first time only):
@@ -73,13 +93,32 @@ To develop and test the Tauri desktop application:
    | Frontend dev command | `npm run watch` |
    | Frontend build command | `npm run build:all` |
 
-3. Run the desktop app in development mode:
+3. Start the SignalK server in one terminal:
+
+   ```shell
+   npm start
+   ```
+
+4. Run the desktop app in another terminal:
 
    ```shell
    npm run tauri:dev
    ```
 
-Make sure you have the [Tauri prerequisites](https://tauri.app/start/prerequisites/) installed for your platform.
+   This will automatically check dependencies before starting.
+
+   **Headless/SSH environments:** If you're running without a display (SSH, headless server), use Xvfb:
+   ```shell
+   xvfb-run npm run tauri:dev
+   ```
+
+5. To build release packages (doesn't require a display):
+
+   ```shell
+   npm run tauri:build
+   ```
+
+   This produces installer packages in `src-tauri/target/release/bundle/` (.deb, .AppImage, etc.)
 
 ### Using sample data
 
