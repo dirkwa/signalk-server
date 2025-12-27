@@ -15,3 +15,6 @@ src-tauri/target/
 
 # Logs
 *.log
+
+# Signing keys (NEVER commit these!)
+.keys/
