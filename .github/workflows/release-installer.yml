@@ -106,13 +106,25 @@ jobs:
           name: signalk-installer-${{ matrix.target }}
           path: |
             packages/installer/src-tauri/target/*/release/bundle/**/*.deb
+            packages/installer/src-tauri/target/*/release/bundle/**/*.deb.sig
             packages/installer/src-tauri/target/*/release/bundle/**/*.AppImage
+            packages/installer/src-tauri/target/*/release/bundle/**/*.AppImage.sig
             packages/installer/src-tauri/target/*/release/bundle/**/*.dmg
+            packages/installer/src-tauri/target/*/release/bundle/**/*.dmg.sig
             packages/installer/src-tauri/target/*/release/bundle/**/*.msi
+            packages/installer/src-tauri/target/*/release/bundle/**/*.msi.sig
+            packages/installer/src-tauri/target/*/release/bundle/**/*.nsis.zip
+            packages/installer/src-tauri/target/*/release/bundle/**/*.nsis.zip.sig
             packages/installer/src-tauri/target/release/bundle/**/*.deb
+            packages/installer/src-tauri/target/release/bundle/**/*.deb.sig
             packages/installer/src-tauri/target/release/bundle/**/*.AppImage
+            packages/installer/src-tauri/target/release/bundle/**/*.AppImage.sig
             packages/installer/src-tauri/target/release/bundle/**/*.dmg
+            packages/installer/src-tauri/target/release/bundle/**/*.dmg.sig
             packages/installer/src-tauri/target/release/bundle/**/*.msi
+            packages/installer/src-tauri/target/release/bundle/**/*.msi.sig
+            packages/installer/src-tauri/target/release/bundle/**/*.nsis.zip
+            packages/installer/src-tauri/target/release/bundle/**/*.nsis.zip.sig
 
       # Upload to release (only on release event)
       - name: Upload to release
@@ -121,12 +133,119 @@ jobs:
         with:
           files: |
             packages/installer/src-tauri/target/*/release/bundle/**/*.deb
+            packages/installer/src-tauri/target/*/release/bundle/**/*.deb.sig
             packages/installer/src-tauri/target/*/release/bundle/**/*.AppImage
+            packages/installer/src-tauri/target/*/release/bundle/**/*.AppImage.sig
             packages/installer/src-tauri/target/*/release/bundle/**/*.dmg
+            packages/installer/src-tauri/target/*/release/bundle/**/*.dmg.sig
             packages/installer/src-tauri/target/*/release/bundle/**/*.msi
+            packages/installer/src-tauri/target/*/release/bundle/**/*.msi.sig
+            packages/installer/src-tauri/target/*/release/bundle/**/*.nsis.zip
+            packages/installer/src-tauri/target/*/release/bundle/**/*.nsis.zip.sig
             packages/installer/src-tauri/target/release/bundle/**/*.deb
+            packages/installer/src-tauri/target/release/bundle/**/*.deb.sig
             packages/installer/src-tauri/target/release/bundle/**/*.AppImage
+            packages/installer/src-tauri/target/release/bundle/**/*.AppImage.sig
             packages/installer/src-tauri/target/release/bundle/**/*.dmg
+            packages/installer/src-tauri/target/release/bundle/**/*.dmg.sig
             packages/installer/src-tauri/target/release/bundle/**/*.msi
+            packages/installer/src-tauri/target/release/bundle/**/*.msi.sig
+            packages/installer/src-tauri/target/release/bundle/**/*.nsis.zip
+            packages/installer/src-tauri/target/release/bundle/**/*.nsis.zip.sig
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Generate latest.json for auto-updater after all builds complete
+  generate-update-manifest:
+    needs: build-installer
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate latest.json
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}"
+
+          # Find signature files and read their contents
+          find_sig() {
+            local pattern=$1
+            local sig_file=$(find artifacts -name "${pattern}.sig" 2>/dev/null | head -1)
+            if [ -f "$sig_file" ]; then
+              cat "$sig_file"
+            else
+              echo ""
+            fi
+          }
+
+          # Find artifact filename
+          find_artifact() {
+            local pattern=$1
+            find artifacts -name "$pattern" ! -name "*.sig" 2>/dev/null | head -1 | xargs -r basename
+          }
+
+          # Get signatures
+          LINUX_X64_DEB=$(find_artifact "*amd64.deb")
+          LINUX_X64_DEB_SIG=$(find_sig "*amd64.deb")
+          LINUX_X64_APPIMAGE=$(find_artifact "*amd64.AppImage")
+          LINUX_X64_APPIMAGE_SIG=$(find_sig "*amd64.AppImage")
+          LINUX_ARM64_DEB=$(find_artifact "*arm64.deb")
+          LINUX_ARM64_DEB_SIG=$(find_sig "*arm64.deb")
+          MACOS_X64_DMG=$(find_artifact "*x64.dmg")
+          MACOS_X64_DMG_SIG=$(find_sig "*x64.dmg")
+          MACOS_ARM64_DMG=$(find_artifact "*aarch64.dmg")
+          MACOS_ARM64_DMG_SIG=$(find_sig "*aarch64.dmg")
+          WINDOWS_MSI=$(find_artifact "*.msi")
+          WINDOWS_MSI_SIG=$(find_sig "*.msi")
+          WINDOWS_NSIS=$(find_artifact "*.nsis.zip")
+          WINDOWS_NSIS_SIG=$(find_sig "*.nsis.zip")
+
+          # Generate latest.json
+          cat > latest.json << EOF
+          {
+            "version": "$VERSION",
+            "notes": "SignalK Server Installer v$VERSION",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "linux-x86_64": {
+                "url": "$RELEASE_URL/$LINUX_X64_APPIMAGE",
+                "signature": "$LINUX_X64_APPIMAGE_SIG"
+              },
+              "linux-aarch64": {
+                "url": "$RELEASE_URL/$LINUX_ARM64_DEB",
+                "signature": "$LINUX_ARM64_DEB_SIG"
+              },
+              "darwin-x86_64": {
+                "url": "$RELEASE_URL/$MACOS_X64_DMG",
+                "signature": "$MACOS_X64_DMG_SIG"
+              },
+              "darwin-aarch64": {
+                "url": "$RELEASE_URL/$MACOS_ARM64_DMG",
+                "signature": "$MACOS_ARM64_DMG_SIG"
+              },
+              "windows-x86_64": {
+                "url": "$RELEASE_URL/$WINDOWS_NSIS",
+                "signature": "$WINDOWS_NSIS_SIG"
+              }
+            }
+          }
+          EOF
+
+          echo "Generated latest.json:"
+          cat latest.json
+
+      - name: Upload latest.json to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
