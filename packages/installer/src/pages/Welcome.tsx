@@ -13,7 +13,8 @@ interface ExistingInstall {
 }
 
 function Welcome({ onNext }: WelcomeProps) {
-  const [existingInstall, setExistingInstall] = useState<ExistingInstall | null>(null)
+  const [existingInstall, setExistingInstall] =
+    useState<ExistingInstall | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,9 +40,9 @@ function Welcome({ onNext }: WelcomeProps) {
         <CardBody>
           <CardTitle tag="h5">What is SignalK?</CardTitle>
           <CardText>
-            Signal K is a modern, open data format for marine use. The SignalK Server
-            collects data from your boat's instruments and makes it available to apps,
-            displays, and other devices on your network.
+            Signal K is a modern, open data format for marine use. The SignalK
+            Server collects data from your boat's instruments and makes it
+            available to apps, displays, and other devices on your network.
           </CardText>
         </CardBody>
       </Card>
@@ -60,14 +61,16 @@ function Welcome({ onNext }: WelcomeProps) {
               </>
             )}
           </p>
-          <p>Your existing configuration will be preserved during the upgrade.</p>
+          <p>
+            Your existing configuration will be preserved during the upgrade.
+          </p>
         </Alert>
       ) : (
         <Alert color="success">
           <h5>Fresh Installation</h5>
           <p>
-            This wizard will guide you through setting up SignalK Server on your system.
-            No existing installation was detected.
+            This wizard will guide you through setting up SignalK Server on your
+            system. No existing installation was detected.
           </p>
         </Alert>
       )}

@@ -7,7 +7,13 @@ const react = require('eslint-plugin-react')
 const chai = require('eslint-plugin-chai-friendly')
 
 module.exports = defineConfig([
-  globalIgnores(['**/public', '**/dist']),
+  globalIgnores([
+    '**/public',
+    '**/dist',
+    '**/src-tauri/target',
+    '**/src-tauri/resources',
+    '**/bundled-signalk'
+  ]),
 
   // TypeScript options
   {

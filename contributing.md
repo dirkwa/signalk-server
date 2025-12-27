@@ -59,6 +59,7 @@ To develop and test the Tauri desktop application:
    This will check for required system libraries and show installation commands if anything is missing. You can also check the [Tauri prerequisites](https://tauri.app/start/prerequisites/) documentation for your platform.
 
    **Linux (Debian/Ubuntu):**
+
    ```shell
    sudo apt-get install -y build-essential pkg-config libglib2.0-dev libgtk-3-dev \
        libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
@@ -66,12 +67,14 @@ To develop and test the Tauri desktop application:
    ```
 
    **Linux (Fedora):**
+
    ```shell
    sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel \
        librsvg2-devel systemd-devel patchelf
    ```
 
    **Linux (Arch):**
+
    ```shell
    sudo pacman -S webkit2gtk-4.1 gtk3 libappindicator-gtk3 librsvg libsoup3 patchelf
    ```
@@ -84,14 +87,14 @@ To develop and test the Tauri desktop application:
 
    Use these values when prompted:
 
-   | Prompt | Value |
-   |--------|-------|
-   | App name | `signalk-server` |
-   | Window title | `signalk-server` |
-   | Web assets location | `../build` |
-   | Dev server URL | `http://localhost:3000` |
-   | Frontend dev command | `npm run watch` |
-   | Frontend build command | `npm run build:all` |
+   | Prompt                 | Value                   |
+   | ---------------------- | ----------------------- |
+   | App name               | `signalk-server`        |
+   | Window title           | `signalk-server`        |
+   | Web assets location    | `../build`              |
+   | Dev server URL         | `http://localhost:3000` |
+   | Frontend dev command   | `npm run watch`         |
+   | Frontend build command | `npm run build:all`     |
 
 3. Start the SignalK server in one terminal:
 
@@ -108,6 +111,7 @@ To develop and test the Tauri desktop application:
    This will automatically check dependencies before starting.
 
    **Headless/SSH environments:** If you're running without a display (SSH, headless server), use Xvfb:
+
    ```shell
    xvfb-run npm run tauri:dev
    ```

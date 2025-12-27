@@ -9,7 +9,7 @@ import {
   Input,
   FormText,
   FormFeedback,
-  Alert,
+  Alert
 } from 'reactstrap'
 import type { InstallerConfig } from '../App'
 
@@ -29,8 +29,8 @@ function SecuritySettings({ config, updateConfig }: SecuritySettingsProps) {
       <h2 className="mb-4">Security Settings</h2>
 
       <Alert color="info">
-        <strong>Security is enabled by default.</strong> You'll need these credentials to
-        access the admin interface after installation.
+        <strong>Security is enabled by default.</strong> You'll need these
+        credentials to access the admin interface after installation.
       </Alert>
 
       <Card>
@@ -56,12 +56,18 @@ function SecuritySettings({ config, updateConfig }: SecuritySettingsProps) {
                 type="password"
                 id="adminPassword"
                 value={config.adminPassword}
-                onChange={(e) => updateConfig({ adminPassword: e.target.value })}
+                onChange={(e) =>
+                  updateConfig({ adminPassword: e.target.value })
+                }
                 invalid={config.adminPassword.length > 0 && !passwordValid}
                 valid={passwordValid}
               />
-              <FormFeedback>Password must be at least 8 characters.</FormFeedback>
-              <FormText>Choose a strong password for the admin account.</FormText>
+              <FormFeedback>
+                Password must be at least 8 characters.
+              </FormFeedback>
+              <FormText>
+                Choose a strong password for the admin account.
+              </FormText>
             </FormGroup>
 
             <FormGroup>

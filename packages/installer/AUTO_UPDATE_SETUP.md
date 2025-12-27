@@ -21,6 +21,7 @@ cd packages/installer
 ```
 
 This will:
+
 - Prompt you for a password (optional but recommended)
 - Generate a private key at `.keys/signalk-installer.key`
 - Generate a public key at `.keys/signalk-installer.key.pub`
@@ -31,9 +32,9 @@ This will:
 
 Go to your repository's Settings → Secrets and variables → Actions, and add:
 
-| Secret Name | Value |
-|-------------|-------|
-| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `.keys/signalk-installer.key` |
+| Secret Name                          | Value                                       |
+| ------------------------------------ | ------------------------------------------- |
+| `TAURI_SIGNING_PRIVATE_KEY`          | Contents of `.keys/signalk-installer.key`   |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | The password you entered (or empty if none) |
 
 ## Step 3: Update tauri.conf.json
@@ -75,15 +76,18 @@ Replace the `pubkey` value with your actual public key.
 ## Troubleshooting
 
 ### "Signature verification failed"
+
 - Ensure the public key in `tauri.conf.json` matches the private key used for signing
 - Check that `TAURI_SIGNING_PRIVATE_KEY` secret is correctly set
 
 ### "No update available" when there should be
+
 - Verify `latest.json` exists in the latest release
 - Check the version number in `latest.json` is higher than current
 - Ensure the platform key matches (e.g., `linux-x86_64`, `darwin-aarch64`)
 
 ### Build doesn't generate .sig files
+
 - Ensure `TAURI_SIGNING_PRIVATE_KEY` secret is set
 - Check workflow logs for signing errors
 

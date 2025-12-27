@@ -36,7 +36,7 @@ const defaultConfig: InstallerConfig = {
   adminUser: 'admin',
   adminPassword: '',
   enableAutoStart: true,
-  selectedBundles: ['plotter', 'dashboard'],
+  selectedBundles: ['plotter', 'dashboard']
 }
 
 const steps = [
@@ -47,7 +47,7 @@ const steps = [
   { path: '/service', name: 'Service' },
   { path: '/bundles', name: 'Bundles' },
   { path: '/install', name: 'Install' },
-  { path: '/complete', name: 'Complete' },
+  { path: '/complete', name: 'Complete' }
 ]
 
 function App() {
@@ -89,7 +89,11 @@ function App() {
             <div
               key={step.path}
               className={`step-dot ${
-                index < currentStep ? 'completed' : index === currentStep - 1 ? 'active' : ''
+                index < currentStep
+                  ? 'completed'
+                  : index === currentStep - 1
+                    ? 'active'
+                    : ''
               }`}
               title={step.name}
             />
@@ -99,53 +103,35 @@ function App() {
 
       <main className="wizard-content">
         <Routes>
-          <Route
-            path="/"
-            element={<Welcome onNext={nextStep} />}
-          />
+          <Route path="/" element={<Welcome onNext={nextStep} />} />
           <Route
             path="/vessel"
             element={
-              <VesselConfig
-                config={config}
-                updateConfig={updateConfig}
-              />
+              <VesselConfig config={config} updateConfig={updateConfig} />
             }
           />
           <Route
             path="/network"
             element={
-              <NetworkSettings
-                config={config}
-                updateConfig={updateConfig}
-              />
+              <NetworkSettings config={config} updateConfig={updateConfig} />
             }
           />
           <Route
             path="/security"
             element={
-              <SecuritySettings
-                config={config}
-                updateConfig={updateConfig}
-              />
+              <SecuritySettings config={config} updateConfig={updateConfig} />
             }
           />
           <Route
             path="/service"
             element={
-              <ServiceSettings
-                config={config}
-                updateConfig={updateConfig}
-              />
+              <ServiceSettings config={config} updateConfig={updateConfig} />
             }
           />
           <Route
             path="/bundles"
             element={
-              <BundleSelection
-                config={config}
-                updateConfig={updateConfig}
-              />
+              <BundleSelection config={config} updateConfig={updateConfig} />
             }
           />
           <Route

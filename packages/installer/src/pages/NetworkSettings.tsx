@@ -1,4 +1,15 @@
-import { Card, CardBody, CardTitle, Form, FormGroup, Label, Input, FormText, Row, Col } from 'reactstrap'
+import {
+  Card,
+  CardBody,
+  CardTitle,
+  Form,
+  FormGroup,
+  Label,
+  Input,
+  FormText,
+  Row,
+  Col
+} from 'reactstrap'
 import type { InstallerConfig } from '../App'
 
 interface NetworkSettingsProps {
@@ -24,7 +35,11 @@ function NetworkSettings({ config, updateConfig }: NetworkSettingsProps) {
                     type="number"
                     id="httpPort"
                     value={config.httpPort}
-                    onChange={(e) => updateConfig({ httpPort: parseInt(e.target.value) || 3000 })}
+                    onChange={(e) =>
+                      updateConfig({
+                        httpPort: parseInt(e.target.value) || 3000
+                      })
+                    }
                     min={1}
                     max={65535}
                   />
@@ -54,8 +69,8 @@ function NetworkSettings({ config, updateConfig }: NetworkSettingsProps) {
                 Enable HTTPS (SSL/TLS)
               </Label>
               <FormText className="d-block">
-                Encrypts connections to the server. Recommended if accessing from outside
-                your local network.
+                Encrypts connections to the server. Recommended if accessing
+                from outside your local network.
               </FormText>
             </FormGroup>
 
@@ -68,7 +83,11 @@ function NetworkSettings({ config, updateConfig }: NetworkSettingsProps) {
                       type="number"
                       id="sslPort"
                       value={config.sslPort}
-                      onChange={(e) => updateConfig({ sslPort: parseInt(e.target.value) || 3443 })}
+                      onChange={(e) =>
+                        updateConfig({
+                          sslPort: parseInt(e.target.value) || 3443
+                        })
+                      }
                       min={1}
                       max={65535}
                     />

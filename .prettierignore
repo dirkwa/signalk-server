@@ -3,3 +3,9 @@ public
 
 **/*.mbtiles
 **/*.pmtiles
+
+# Tauri build artifacts
+src-tauri/target/
+packages/installer/src-tauri/target/
+packages/installer/src-tauri/resources/
+packages/installer/bundled-signalk/
