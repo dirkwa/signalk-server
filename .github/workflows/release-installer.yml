@@ -1,0 +1,116 @@
+name: 'Build Installer'
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 2.19.0)'
+        required: false
+        default: ''
+
+jobs:
+  build-installer:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'ubuntu-22.04'
+            target: 'x86_64-unknown-linux-gnu'
+            args: ''
+          - platform: 'ubuntu-22.04'
+            target: 'aarch64-unknown-linux-gnu'
+            args: ''
+          - platform: 'macos-latest'
+            target: 'x86_64-apple-darwin'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'macos-latest'
+            target: 'aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Linux ARM64 cross-compilation setup
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      # Linux dependencies
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
+
+      - name: Install npm dependencies
+        working-directory: packages/installer
+        run: npm install
+
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli@2
+
+      - name: Build the app
+        working-directory: packages/installer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            export PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          npm run tauri:build -- ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signalk-installer-${{ matrix.target }}
+          path: |
+            packages/installer/src-tauri/target/*/release/bundle/**/*.deb
+            packages/installer/src-tauri/target/*/release/bundle/**/*.AppImage
+            packages/installer/src-tauri/target/*/release/bundle/**/*.dmg
+            packages/installer/src-tauri/target/*/release/bundle/**/*.msi
+            packages/installer/src-tauri/target/release/bundle/**/*.deb
+            packages/installer/src-tauri/target/release/bundle/**/*.AppImage
+            packages/installer/src-tauri/target/release/bundle/**/*.dmg
+            packages/installer/src-tauri/target/release/bundle/**/*.msi
+
+      # Upload to release (only on release event)
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            packages/installer/src-tauri/target/*/release/bundle/**/*.deb
+            packages/installer/src-tauri/target/*/release/bundle/**/*.AppImage
+            packages/installer/src-tauri/target/*/release/bundle/**/*.dmg
+            packages/installer/src-tauri/target/*/release/bundle/**/*.msi
+            packages/installer/src-tauri/target/release/bundle/**/*.deb
+            packages/installer/src-tauri/target/release/bundle/**/*.AppImage
+            packages/installer/src-tauri/target/release/bundle/**/*.dmg
+            packages/installer/src-tauri/target/release/bundle/**/*.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
