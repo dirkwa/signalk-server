@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Bundled files (generated during build)
+bundled-node/
+bundled-signalk/
+bundled-native/
+src-tauri/resources/
+
+# Tauri build output
+src-tauri/target/
+
+# Logs
+*.log
