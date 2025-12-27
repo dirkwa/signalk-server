@@ -46,6 +46,41 @@ As you work on your changes, you may need to re-build changes. To continuously w
 
 You may also need to restart the server to see some changes reflected.
 
+### Running as a desktop app (Tauri)
+
+To develop and test the Tauri desktop application:
+
+1. Install Tauri CLI as a dev dependency:
+
+   ```shell
+   npm install -D @tauri-apps/cli
+   ```
+
+2. Initialize Tauri (first time only):
+
+   ```shell
+   npx tauri init
+   ```
+
+   Use these values when prompted:
+
+   | Prompt | Value |
+   |--------|-------|
+   | App name | `signalk-server` |
+   | Window title | `signalk-server` |
+   | Web assets location | `../build` |
+   | Dev server URL | `http://localhost:3000` |
+   | Frontend dev command | `npm run watch` |
+   | Frontend build command | `npm run build:all` |
+
+3. Run the desktop app in development mode:
+
+   ```shell
+   npm run tauri:dev
+   ```
+
+Make sure you have the [Tauri prerequisites](https://tauri.app/start/prerequisites/) installed for your platform.
+
 ### Using sample data
 
 Start the server with sample data by running:
