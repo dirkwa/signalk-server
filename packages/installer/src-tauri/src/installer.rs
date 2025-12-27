@@ -239,6 +239,44 @@ pub async fn run_installation(app: AppHandle, config: InstallerConfig) -> Result
             .map_err(|e| format!("Failed to write .npmrc: {}", e))?;
     }
 
+    // Create security.json with admin user (only if admin credentials provided)
+    if !config.admin_user.is_empty() && !config.admin_password.is_empty() {
+        emit_progress(&app, "config", "in_progress", Some("Setting up admin account..."));
+
+        let password_hash = bcrypt::hash(&config.admin_password, bcrypt::DEFAULT_COST)
+            .map_err(|e| format!("Failed to hash password: {}", e))?;
+
+        let security_config = json!({
+            "users": [
+                {
+                    "username": config.admin_user,
+                    "type": "admin",
+                    "password": password_hash
+                }
+            ],
+            "immutableConfig": false,
+            "allowDeviceAccessRequests": true,
+            "allowNewUserRegistration": true,
+            "expiration": "NEVER"
+        });
+
+        let security_path = config_dir.join("security.json");
+        fs::write(&security_path, serde_json::to_string_pretty(&security_config).unwrap())
+            .map_err(|e| format!("Failed to write security.json: {}", e))?;
+
+        // Set restrictive permissions on security.json (Unix only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&security_path)
+                .map_err(|e| format!("Failed to get security.json permissions: {}", e))?
+                .permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(&security_path, perms)
+                .map_err(|e| format!("Failed to set security.json permissions: {}", e))?;
+        }
+    }
+
     emit_progress(&app, "config", "completed", None);
 
     // Step 3: Set up service
