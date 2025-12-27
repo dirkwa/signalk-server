@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bash ../scripts/bundle-all.sh && npm run build",
+    "beforeBuildCommand": "bash scripts/bundle-all.sh && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -44,7 +44,7 @@
         "bundleMediaFramework": false
       },
       "deb": {
-        "depends": [],
+        "depends": ["xdg-utils"],
         "section": "utils"
       }
     },

@@ -29,9 +29,9 @@ pub fn list_ports() -> Vec<SerialPortInfo> {
                         manufacturer,
                     }
                 })
-                .collect()
+                .collect(),
+            Err(_) => Vec::new(),
         }
-        Err(_) => Vec::new(),
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
