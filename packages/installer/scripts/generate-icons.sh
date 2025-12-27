@@ -92,31 +92,29 @@ fi
 echo "Using source: ${SOURCE_PNG}"
 
 # Generate PNG icons with square canvas and proper padding
+# Tauri requires RGBA format for icons - use composite to ensure RGBA output
 # 32x32 icon
 echo "Generating 32x32.png..."
-convert "${SOURCE_PNG}" \
-    -resize 28x28 \
-    -gravity center \
-    -background transparent \
-    -extent 32x32 \
+convert -size 32x32 xc:transparent \
+    \( "${SOURCE_PNG}" -resize 28x28 \) \
+    -gravity center -composite \
+    -type TrueColorAlpha \
     "${ICONS_DIR}/32x32.png"
 
 # 128x128 icon
 echo "Generating 128x128.png..."
-convert "${SOURCE_PNG}" \
-    -resize 112x112 \
-    -gravity center \
-    -background transparent \
-    -extent 128x128 \
+convert -size 128x128 xc:transparent \
+    \( "${SOURCE_PNG}" -resize 112x112 \) \
+    -gravity center -composite \
+    -type TrueColorAlpha \
     "${ICONS_DIR}/128x128.png"
 
 # 128x128@2x icon (256x256)
 echo "Generating 128x128@2x.png..."
-convert "${SOURCE_PNG}" \
-    -resize 224x224 \
-    -gravity center \
-    -background transparent \
-    -extent 256x256 \
+convert -size 256x256 xc:transparent \
+    \( "${SOURCE_PNG}" -resize 224x224 \) \
+    -gravity center -composite \
+    -type TrueColorAlpha \
     "${ICONS_DIR}/128x128@2x.png"
 
 # Generate Windows .ico file (multiple sizes embedded)
