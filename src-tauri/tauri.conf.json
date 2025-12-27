@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "org.signalk.server",
   "build": {
-    "frontendDist": "../build",
+    "frontendDist": "../packages/server-admin-ui/public",
     "devUrl": "http://192.168.0.122:3000",
     "beforeDevCommand": "npm run watch",
     "beforeBuildCommand": "npm run build:all"

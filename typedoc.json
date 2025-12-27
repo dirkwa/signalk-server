@@ -52,7 +52,8 @@
     "packages/server-admin-ui",
     "packages/server-admin-ui-dependencies",
     "packages/streams",
-    "packages/typedoc-theme"
+    "packages/typedoc-theme",
+    "packages/installer"
   ],
   "alwaysCreateEntryPointModule": true,
   "theme": "signalk",
