@@ -5,7 +5,7 @@
   "description": "SignalK Server GUI Installer - Cross-platform installer with web-based setup wizard",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc -b && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
