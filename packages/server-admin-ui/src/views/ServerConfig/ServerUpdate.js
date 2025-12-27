@@ -98,6 +98,35 @@ class ServerUpdate extends Component {
             </CardBody>
           </Card>
         )}
+        {this.props.appStore.isManagedInstall && (
+          <Card className="border-info">
+            <CardHeader>Managed Installation</CardHeader>
+            <CardBody>
+              <p>
+                This Signal K Server installation is managed by the SignalK
+                Installer application.
+              </p>
+              <p>
+                To update the server, please use the SignalK Installer app which
+                handles updates automatically. The installer ensures all
+                components (Node.js, native modules, and the server) are updated
+                together for compatibility.
+              </p>
+              <p>
+                If you don't have the installer running, you can download the
+                latest version from{' '}
+                <a
+                  href="https://github.com/SignalK/signalk-server/releases"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  SignalK Releases
+                </a>
+                .
+              </p>
+            </CardBody>
+          </Card>
+        )}
         {this.props.appStore.canUpdateServer &&
           this.props.appStore.serverUpdate &&
           !isInstalling &&

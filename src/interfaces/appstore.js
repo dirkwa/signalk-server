@@ -185,7 +185,8 @@ module.exports = function (app) {
       installing: [],
       categories: getAvailableCategories(),
       storeAvailable: storeAvailable,
-      isInDocker: process.env.IS_IN_DOCKER === 'true'
+      isInDocker: process.env.IS_IN_DOCKER === 'true',
+      isManagedInstall: process.env.SIGNALK_MANAGED_INSTALL === 'true'
     }
   }
 
@@ -196,7 +197,8 @@ module.exports = function (app) {
       process.argv.length > 1 &&
       (npmServerInstallLocations.includes(process.argv[1]) ||
         process.env.SIGNALK_SERVER_IS_UPDATABLE) &&
-      !process.env.SIGNALK_DISABLE_SERVER_UPDATES
+      !process.env.SIGNALK_DISABLE_SERVER_UPDATES &&
+      !all.isManagedInstall
     ) {
       all.canUpdateServer = !all.isInDocker && true
       if (gt(serverVersion, app.config.version)) {

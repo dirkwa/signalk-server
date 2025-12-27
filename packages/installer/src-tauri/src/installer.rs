@@ -272,6 +272,7 @@ fn setup_service(config_dir: &PathBuf, install_dir: &PathBuf) -> Result<(), Stri
     #[cfg(target_os = "linux")]
     {
         use crate::platform::create_systemd_service;
+        use std::process::Command;
 
         let service_content = create_systemd_service(&config_path, &node_path, &server_path)?;
 
@@ -287,13 +288,33 @@ fn setup_service(config_dir: &PathBuf, install_dir: &PathBuf) -> Result<(), Stri
         fs::write(&service_path, service_content)
             .map_err(|e| format!("Failed to write systemd service: {}", e))?;
 
-        // Enable the service (user would need to run systemctl --user daemon-reload && systemctl --user enable signalk)
-        // We'll document this or run it via a shell command
+        // Reload systemd user daemon
+        let _ = Command::new("systemctl")
+            .args(["--user", "daemon-reload"])
+            .output();
+
+        // Enable the service
+        let _ = Command::new("systemctl")
+            .args(["--user", "enable", "signalk.service"])
+            .output();
+
+        // Start the service
+        let _ = Command::new("systemctl")
+            .args(["--user", "start", "signalk.service"])
+            .output();
+
+        // Enable lingering so service runs without user login
+        if let Ok(user) = std::env::var("USER") {
+            let _ = Command::new("loginctl")
+                .args(["enable-linger", &user])
+                .output();
+        }
     }
 
     #[cfg(target_os = "macos")]
     {
         use crate::platform::create_launchd_plist;
+        use std::process::Command;
 
         let plist_content = create_launchd_plist(&config_path, &node_path, &server_path)?;
 
@@ -305,13 +326,24 @@ fn setup_service(config_dir: &PathBuf, install_dir: &PathBuf) -> Result<(), Stri
             .map_err(|e| format!("Failed to create LaunchAgents directory: {}", e))?;
 
         let plist_path = launch_agents_dir.join("org.signalk.server.plist");
-        fs::write(&plist_path, plist_content)
+        fs::write(&plist_path, &plist_content)
             .map_err(|e| format!("Failed to write launchd plist: {}", e))?;
+
+        // Unload existing service if running (ignore errors)
+        let _ = Command::new("launchctl")
+            .args(["unload", &plist_path.to_string_lossy()])
+            .output();
+
+        // Load and start the service
+        let _ = Command::new("launchctl")
+            .args(["load", &plist_path.to_string_lossy()])
+            .output();
     }
 
     #[cfg(target_os = "windows")]
     {
         use crate::platform::create_task_xml;
+        use std::process::Command;
 
         let user = std::env::var("USERNAME").unwrap_or_else(|_| "User".to_string());
         let task_content = create_task_xml(&config_path, &node_path, &server_path, &user)?;
@@ -319,10 +351,32 @@ fn setup_service(config_dir: &PathBuf, install_dir: &PathBuf) -> Result<(), Stri
         // Write task XML to temp and register it
         let temp_dir = std::env::temp_dir();
         let task_path = temp_dir.join("signalk-task.xml");
-        fs::write(&task_path, task_content)
+        fs::write(&task_path, &task_content)
             .map_err(|e| format!("Failed to write task XML: {}", e))?;
 
-        // Task would be registered via: schtasks /create /xml task_path /tn "SignalK Server"
+        // Delete existing task if present (ignore errors)
+        let _ = Command::new("schtasks")
+            .args(["/delete", "/tn", "SignalK Server", "/f"])
+            .output();
+
+        // Register the scheduled task
+        let _ = Command::new("schtasks")
+            .args([
+                "/create",
+                "/xml",
+                &task_path.to_string_lossy(),
+                "/tn",
+                "SignalK Server",
+            ])
+            .output();
+
+        // Run the task immediately
+        let _ = Command::new("schtasks")
+            .args(["/run", "/tn", "SignalK Server"])
+            .output();
+
+        // Clean up temp file
+        let _ = fs::remove_file(&task_path);
     }
 
     Ok(())
