@@ -2,8 +2,30 @@ use crate::{ExistingInstall, InstallerConfig};
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
+
+/// Recursively copy a directory
+fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+
+    Ok(())
+}
 
 /// Get the SignalK configuration directory
 fn get_config_dir() -> PathBuf {
@@ -91,8 +113,47 @@ pub async fn run_installation(app: AppHandle, config: InstallerConfig) -> Result
     fs::create_dir_all(&config_dir).map_err(|e| format!("Failed to create config directory: {}", e))?;
     fs::create_dir_all(&install_dir).map_err(|e| format!("Failed to create install directory: {}", e))?;
 
-    // In a real implementation, we would extract bundled Node.js and signalk-server here
-    // For now, we'll create the directory structure
+    // Extract bundled Node.js and signalk-server from resources
+    emit_progress(&app, "extract", "in_progress", Some("Extracting Node.js and SignalK Server..."));
+
+    // Get the resource directory from Tauri
+    let resource_path = app.path().resource_dir()
+        .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+
+    // Copy Node.js binary
+    #[cfg(target_os = "windows")]
+    let node_binary = "node.exe";
+    #[cfg(not(target_os = "windows"))]
+    let node_binary = "node";
+
+    let bundled_node = resource_path.join(node_binary);
+    let target_node = install_dir.join(node_binary);
+
+    if bundled_node.exists() {
+        fs::copy(&bundled_node, &target_node)
+            .map_err(|e| format!("Failed to copy Node.js: {}", e))?;
+
+        // Make executable on Unix
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&target_node)
+                .map_err(|e| format!("Failed to get node permissions: {}", e))?
+                .permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&target_node, perms)
+                .map_err(|e| format!("Failed to set node permissions: {}", e))?;
+        }
+    }
+
+    // Copy signalk-server directory
+    let bundled_server = resource_path.join("signalk-server");
+    let target_server = install_dir.join("signalk-server");
+
+    if bundled_server.exists() {
+        copy_dir_recursive(&bundled_server, &target_server)
+            .map_err(|e| format!("Failed to copy SignalK Server: {}", e))?;
+    }
 
     emit_progress(&app, "extract", "completed", None);
 
