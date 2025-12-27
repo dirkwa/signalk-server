@@ -26,8 +26,8 @@ pub struct InstallerConfig {
     admin_password: String,
     #[serde(rename = "enableAutoStart")]
     enable_auto_start: bool,
-    #[serde(rename = "serialPorts")]
-    serial_ports: Vec<String>,
+    #[serde(rename = "selectedBundles")]
+    selected_bundles: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
