@@ -1,10 +1,7 @@
 {
   "common": {
     "description": "Included in all bundles except minimal",
-    "plugins": [
-      "signalk-logviewer",
-      "signalk-charts-provider-simple"
-    ]
+    "plugins": ["signalk-logviewer", "signalk-charts-provider-simple"]
   },
   "bundles": {
     "minimal": {
@@ -54,10 +51,7 @@
       "name": "Instrument Displays",
       "description": "KIP and InstrumentPanel for data visualization",
       "icon": "gauge",
-      "plugins": [
-        "@mxtommy/kip",
-        "@signalk/instrumentpanel"
-      ]
+      "plugins": ["@mxtommy/kip", "@signalk/instrumentpanel"]
     },
     "wilhelmsk": {
       "name": "WilhelmSK Mobile",
@@ -115,9 +109,7 @@
       "name": "MaYaRa Radar",
       "description": "Marine radar integration",
       "icon": "radar",
-      "plugins": [
-        "@marineyachtradar/signalk-plugin"
-      ]
+      "plugins": ["@marineyachtradar/signalk-plugin"]
     },
     "logging": {
       "name": "Data Logging",

@@ -50,7 +50,11 @@ function Complete() {
           <p>
             The SignalK admin interface is available at:
             <br />
-            <a href="http://localhost:3000" target="_blank" rel="noopener noreferrer">
+            <a
+              href="http://localhost:3000"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               http://localhost:3000
             </a>
           </p>

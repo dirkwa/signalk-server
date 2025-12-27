@@ -1,4 +1,13 @@
-import { Card, CardBody, Row, Col, FormGroup, Label, Input, Badge } from 'reactstrap'
+import {
+  Card,
+  CardBody,
+  Row,
+  Col,
+  FormGroup,
+  Label,
+  Input,
+  Badge
+} from 'reactstrap'
 import type { InstallerConfig } from '../App'
 import bundlesData from '../bundles.json'
 
@@ -36,7 +45,7 @@ const iconMap: Record<string, string> = {
   flag: '🏁',
   radar: '📡',
   database: '💾',
-  workflow: '⚙️',
+  workflow: '⚙️'
 }
 
 function BundleSelection({ config, updateConfig }: BundleSelectionProps) {
@@ -92,8 +101,8 @@ function BundleSelection({ config, updateConfig }: BundleSelectionProps) {
     <div>
       <h2 className="mb-4">Plugin Bundles</h2>
       <p className="text-muted mb-4">
-        Select the features you want to install. You can add more plugins later through the
-        AppStore in the admin interface.
+        Select the features you want to install. You can add more plugins later
+        through the AppStore in the admin interface.
       </p>
 
       <Row>
@@ -117,9 +126,13 @@ function BundleSelection({ config, updateConfig }: BundleSelectionProps) {
                     <strong>{bundle.name}</strong>
                   </Label>
                 </FormGroup>
-                <small className="text-muted d-block mb-2">{bundle.description}</small>
+                <small className="text-muted d-block mb-2">
+                  {bundle.description}
+                </small>
                 {bundle.plugins.length > 0 && (
-                  <Badge color="secondary">{bundle.plugins.length} plugins</Badge>
+                  <Badge color="secondary">
+                    {bundle.plugins.length} plugins
+                  </Badge>
                 )}
               </CardBody>
             </Card>
@@ -130,12 +143,18 @@ function BundleSelection({ config, updateConfig }: BundleSelectionProps) {
       <div className="mt-3 p-3 bg-light rounded">
         <strong>Selected:</strong>{' '}
         {(config.selectedBundles || []).length === 0 ? (
-          <span className="text-muted">None selected (will install minimal)</span>
+          <span className="text-muted">
+            None selected (will install minimal)
+          </span>
         ) : (
           <>
-            {(config.selectedBundles || []).map((id) => bundles[id]?.name).join(', ')}
+            {(config.selectedBundles || [])
+              .map((id) => bundles[id]?.name)
+              .join(', ')}
             {!isSelected('minimal') && (
-              <span className="ms-2 text-muted">({getTotalPlugins()} plugins total)</span>
+              <span className="ms-2 text-muted">
+                ({getTotalPlugins()} plugins total)
+              </span>
             )}
           </>
         )}

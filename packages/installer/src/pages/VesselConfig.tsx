@@ -1,4 +1,13 @@
-import { Card, CardBody, CardTitle, Form, FormGroup, Label, Input, FormText } from 'reactstrap'
+import {
+  Card,
+  CardBody,
+  CardTitle,
+  Form,
+  FormGroup,
+  Label,
+  Input,
+  FormText
+} from 'reactstrap'
 import type { InstallerConfig } from '../App'
 
 interface VesselConfigProps {
@@ -41,8 +50,9 @@ function VesselConfig({ config, updateConfig }: VesselConfigProps) {
                 maxLength={9}
               />
               <FormText>
-                The Maritime Mobile Service Identity is a unique 9-digit number for your vessel.
-                If you don't have an MMSI, leave this blank and a unique ID will be generated.
+                The Maritime Mobile Service Identity is a unique 9-digit number
+                for your vessel. If you don't have an MMSI, leave this blank and
+                a unique ID will be generated.
               </FormText>
             </FormGroup>
           </Form>

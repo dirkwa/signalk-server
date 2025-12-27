@@ -27,13 +27,13 @@ The easiest way to install Signal K Server is using the **[SignalK Installer](in
 
 For advanced users, developers, or specific use cases:
 
-| Method | Best For | Prerequisites |
-|--------|----------|---------------|
-| [GUI Installer](installer.md) | End users, easiest setup | None |
-| [Raspberry Pi](raspberry_pi_installation.md) | Dedicated Pi setup | Raspberry Pi OS |
-| [NPM](npm.md) | Developers | Node.js 20+ |
-| [Docker](docker.md) | Container environments | Docker |
-| [Source](source.md) | Contributors | Node.js, Git |
+| Method                                       | Best For                 | Prerequisites   |
+| -------------------------------------------- | ------------------------ | --------------- |
+| [GUI Installer](installer.md)                | End users, easiest setup | None            |
+| [Raspberry Pi](raspberry_pi_installation.md) | Dedicated Pi setup       | Raspberry Pi OS |
+| [NPM](npm.md)                                | Developers               | Node.js 20+     |
+| [Docker](docker.md)                          | Container environments   | Docker          |
+| [Source](source.md)                          | Contributors             | Node.js, Git    |
 
 ## Getting Started
 
