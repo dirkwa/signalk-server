@@ -4,9 +4,10 @@
 mod installer;
 mod platform;
 mod serial;
+mod updater;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::AppHandle;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InstallerConfig {
@@ -84,9 +85,20 @@ fn close_installer(app: AppHandle) {
     app.exit(0);
 }
 
+#[tauri::command]
+async fn check_for_updates(app: AppHandle) -> Result<updater::UpdateInfo, String> {
+    updater::check_for_updates(app).await
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    updater::install_update(app).await
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             check_existing_install,
             list_serial_ports,
@@ -94,6 +106,8 @@ fn main() {
             run_installation,
             open_admin_ui,
             close_installer,
+            check_for_updates,
+            install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

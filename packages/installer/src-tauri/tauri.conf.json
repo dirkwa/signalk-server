@@ -61,6 +61,12 @@
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/SignalK/signalk-server/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
     }
   }
 }
