@@ -19,6 +19,7 @@ interface InstallStep {
 const initialSteps: InstallStep[] = [
   { id: 'extract', name: 'Extracting files', status: 'pending' },
   { id: 'config', name: 'Creating configuration', status: 'pending' },
+  { id: 'bundles', name: 'Installing plugin bundles', status: 'pending' },
   { id: 'service', name: 'Setting up service', status: 'pending' },
   { id: 'verify', name: 'Verifying installation', status: 'pending' },
 ]

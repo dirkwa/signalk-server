@@ -3,10 +3,10 @@ import { Routes, Route, useNavigate } from 'react-router-dom'
 import { Button } from 'reactstrap'
 import Welcome from './pages/Welcome'
 import VesselConfig from './pages/VesselConfig'
-import ConnectionSetup from './pages/ConnectionSetup'
 import NetworkSettings from './pages/NetworkSettings'
 import SecuritySettings from './pages/SecuritySettings'
 import ServiceSettings from './pages/ServiceSettings'
+import BundleSelection from './pages/BundleSelection'
 import InstallProgress from './pages/InstallProgress'
 import Complete from './pages/Complete'
 
@@ -23,8 +23,8 @@ export interface InstallerConfig {
   adminPassword: string
   // Service
   enableAutoStart: boolean
-  // Connections
-  serialPorts: string[]
+  // Bundles
+  selectedBundles: string[]
 }
 
 const defaultConfig: InstallerConfig = {
@@ -36,16 +36,16 @@ const defaultConfig: InstallerConfig = {
   adminUser: 'admin',
   adminPassword: '',
   enableAutoStart: true,
-  serialPorts: [],
+  selectedBundles: ['plotter', 'dashboard'],
 }
 
 const steps = [
   { path: '/', name: 'Welcome' },
   { path: '/vessel', name: 'Vessel' },
-  { path: '/connections', name: 'Connections' },
   { path: '/network', name: 'Network' },
   { path: '/security', name: 'Security' },
   { path: '/service', name: 'Service' },
+  { path: '/bundles', name: 'Bundles' },
   { path: '/install', name: 'Install' },
   { path: '/complete', name: 'Complete' },
 ]
@@ -113,15 +113,6 @@ function App() {
             }
           />
           <Route
-            path="/connections"
-            element={
-              <ConnectionSetup
-                config={config}
-                updateConfig={updateConfig}
-              />
-            }
-          />
-          <Route
             path="/network"
             element={
               <NetworkSettings
@@ -143,6 +134,15 @@ function App() {
             path="/service"
             element={
               <ServiceSettings
+                config={config}
+                updateConfig={updateConfig}
+              />
+            }
+          />
+          <Route
+            path="/bundles"
+            element={
+              <BundleSelection
                 config={config}
                 updateConfig={updateConfig}
               />

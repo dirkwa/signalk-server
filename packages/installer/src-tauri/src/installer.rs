@@ -279,7 +279,20 @@ pub async fn run_installation(app: AppHandle, config: InstallerConfig) -> Result
 
     emit_progress(&app, "config", "completed", None);
 
-    // Step 3: Set up service
+    // Step 3: Install plugin bundles
+    if !config.selected_bundles.is_empty() && !config.selected_bundles.contains(&"minimal".to_string()) {
+        emit_progress(&app, "bundles", "in_progress", Some("Installing plugin bundles..."));
+
+        let plugins = resolve_plugins(&config.selected_bundles);
+
+        if !plugins.is_empty() {
+            install_plugins(&app, &config_dir, &install_dir, &plugins)?;
+        }
+
+        emit_progress(&app, "bundles", "completed", None);
+    }
+
+    // Step 4: Set up service
     emit_progress(&app, "service", "in_progress", Some("Configuring auto-start..."));
 
     if config.enable_auto_start {
@@ -288,7 +301,7 @@ pub async fn run_installation(app: AppHandle, config: InstallerConfig) -> Result
 
     emit_progress(&app, "service", "completed", None);
 
-    // Step 4: Verify installation
+    // Step 5: Verify installation
     emit_progress(&app, "verify", "in_progress", Some("Verifying installation..."));
 
     // Check that configuration files exist
@@ -297,6 +310,157 @@ pub async fn run_installation(app: AppHandle, config: InstallerConfig) -> Result
     }
 
     emit_progress(&app, "verify", "completed", None);
+
+    Ok(())
+}
+
+/// Bundle definitions - maps bundle IDs to plugin lists
+fn get_bundle_plugins(bundle_id: &str) -> Vec<&'static str> {
+    match bundle_id {
+        "nmea2000" => vec![
+            "signalk-to-nmea2000",
+            "signalk-n2kais-to-nmea0183",
+            "@signalk/signalk-autopilot",
+            "signalk-n2k-switching",
+        ],
+        "nmea0183" => vec![
+            "@signalk/signalk-to-nmea0183",
+            "@signalk/udp-nmea-plugin",
+            "signalk-ais-navionics-converter",
+        ],
+        "plotter" => vec![
+            "@signalk/freeboard-sk",
+            "@signalk/charts-plugin",
+            "@signalk/resources-provider",
+            "@signalk/vesselpositions",
+            "signalk-anchoralarm-plugin",
+            "signalk-flags",
+            "signalk-activecaptain-resources",
+            "signalk-buddylist-plugin",
+        ],
+        "dashboard" => vec![
+            "@mxtommy/kip",
+            "@signalk/instrumentpanel",
+        ],
+        "wilhelmsk" => vec![
+            "signalk-push-notifications",
+            "@signalk/course-provider",
+            "signalk-anchoralarm-plugin",
+        ],
+        "ble-sensors" => vec![
+            "bt-sensors-plugin-sk",
+            "signalk-victron-ble",
+            "signalk-ruuvitag-plugin",
+        ],
+        "victron" => vec![
+            "signalk-venus-plugin",
+            "signalk-victron-ble",
+            "signalk-rec-bms",
+        ],
+        "weather" => vec![
+            "@signalk/open-meteo-provider",
+            "signalk-barometer-trend",
+            "signalk-weatherflow",
+        ],
+        "racing" => vec![
+            "signalk-racer",
+            "polar-recorder",
+            "signalk-polar",
+            "signalk-derived-data",
+            "advancedwind",
+        ],
+        "radar" => vec![
+            "@marineyachtradar/signalk-plugin",
+        ],
+        "logging" => vec![
+            "signalk-to-influxdb2",
+            "signalk-parquet",
+            "signalk-daily-gpx-plugin",
+        ],
+        "automation" => vec![
+            "@signalk/signalk-node-red",
+            "signalk-mqtt-home-assistant",
+            "signalk-shelly2",
+        ],
+        _ => vec![],
+    }
+}
+
+/// Common plugins included in all non-minimal installs
+fn get_common_plugins() -> Vec<&'static str> {
+    vec![
+        "signalk-logviewer",
+        "signalk-charts-provider-simple",
+    ]
+}
+
+/// Resolve selected bundles to a deduplicated list of plugins
+fn resolve_plugins(selected_bundles: &[String]) -> Vec<String> {
+    let mut plugins = std::collections::HashSet::new();
+
+    // Add common plugins
+    for plugin in get_common_plugins() {
+        plugins.insert(plugin.to_string());
+    }
+
+    // Add plugins from each selected bundle
+    for bundle_id in selected_bundles {
+        for plugin in get_bundle_plugins(bundle_id) {
+            plugins.insert(plugin.to_string());
+        }
+    }
+
+    plugins.into_iter().collect()
+}
+
+/// Install plugins using npm
+fn install_plugins(
+    app: &AppHandle,
+    config_dir: &PathBuf,
+    install_dir: &PathBuf,
+    plugins: &[String],
+) -> Result<(), String> {
+    use std::process::Command;
+
+    // Get the path to node binary
+    #[cfg(target_os = "windows")]
+    let node_binary = "node.exe";
+    #[cfg(not(target_os = "windows"))]
+    let node_binary = "node";
+
+    let node_path = install_dir.join(node_binary);
+    let npm_path = install_dir.join("signalk-server").join("node_modules").join("npm").join("bin").join("npm-cli.js");
+
+    // Install each plugin
+    for (i, plugin) in plugins.iter().enumerate() {
+        emit_progress(
+            app,
+            "bundles",
+            "in_progress",
+            Some(&format!("Installing {} ({}/{})", plugin, i + 1, plugins.len())),
+        );
+
+        let result = Command::new(&node_path)
+            .arg(&npm_path)
+            .arg("install")
+            .arg("--save")
+            .arg(plugin)
+            .current_dir(config_dir)
+            .output();
+
+        match result {
+            Ok(output) => {
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    // Log but don't fail - some plugins might not exist or have issues
+                    eprintln!("Warning: Failed to install {}: {}", plugin, stderr);
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to run npm for {}: {}", plugin, e);
+            }
+        }
+    }
 
     Ok(())
 }

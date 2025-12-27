@@ -1,0 +1,143 @@
+{
+  "common": {
+    "description": "Included in all bundles except minimal",
+    "plugins": [
+      "signalk-logviewer",
+      "signalk-charts-provider-simple"
+    ]
+  },
+  "bundles": {
+    "minimal": {
+      "name": "Minimal",
+      "description": "Core server only - no plugins",
+      "icon": "box",
+      "plugins": []
+    },
+    "nmea2000": {
+      "name": "NMEA 2000",
+      "description": "Modern N2K network support with bidirectional conversion",
+      "icon": "plug",
+      "plugins": [
+        "signalk-to-nmea2000",
+        "signalk-n2kais-to-nmea0183",
+        "@signalk/signalk-autopilot",
+        "signalk-n2k-switching"
+      ]
+    },
+    "nmea0183": {
+      "name": "NMEA 0183",
+      "description": "Classic 0183 instrument support",
+      "icon": "serial",
+      "plugins": [
+        "@signalk/signalk-to-nmea0183",
+        "@signalk/udp-nmea-plugin",
+        "signalk-ais-navionics-converter"
+      ],
+      "optionalDependencies": ["serialport"]
+    },
+    "plotter": {
+      "name": "Chart Plotter",
+      "description": "Freeboard-SK with chart and resource management",
+      "icon": "map",
+      "plugins": [
+        "@signalk/freeboard-sk",
+        "@signalk/charts-plugin",
+        "@signalk/resources-provider",
+        "@signalk/vesselpositions",
+        "signalk-anchoralarm-plugin",
+        "signalk-flags",
+        "signalk-activecaptain-resources",
+        "signalk-buddylist-plugin"
+      ]
+    },
+    "dashboard": {
+      "name": "Instrument Displays",
+      "description": "KIP and InstrumentPanel for data visualization",
+      "icon": "gauge",
+      "plugins": [
+        "@mxtommy/kip",
+        "@signalk/instrumentpanel"
+      ]
+    },
+    "wilhelmsk": {
+      "name": "WilhelmSK Mobile",
+      "description": "iOS/mobile app integration with push notifications",
+      "icon": "mobile",
+      "plugins": [
+        "signalk-push-notifications",
+        "@signalk/course-provider",
+        "signalk-anchoralarm-plugin"
+      ]
+    },
+    "ble-sensors": {
+      "name": "Bluetooth Sensors",
+      "description": "Wireless BLE environmental and Victron sensors",
+      "icon": "bluetooth",
+      "plugins": [
+        "bt-sensors-plugin-sk",
+        "signalk-victron-ble",
+        "signalk-ruuvitag-plugin"
+      ]
+    },
+    "victron": {
+      "name": "Victron Energy",
+      "description": "Victron Venus OS and BLE integration",
+      "icon": "battery",
+      "plugins": [
+        "signalk-venus-plugin",
+        "signalk-victron-ble",
+        "signalk-rec-bms"
+      ]
+    },
+    "weather": {
+      "name": "Weather",
+      "description": "Weather data, forecasts, and barometer analysis",
+      "icon": "cloud",
+      "plugins": [
+        "@signalk/open-meteo-provider",
+        "signalk-barometer-trend",
+        "signalk-weatherflow"
+      ]
+    },
+    "racing": {
+      "name": "Sailboat Racing",
+      "description": "Polars, performance analysis, and race timing",
+      "icon": "flag",
+      "plugins": [
+        "signalk-racer",
+        "polar-recorder",
+        "signalk-polar",
+        "signalk-derived-data",
+        "advancedwind"
+      ]
+    },
+    "radar": {
+      "name": "MaYaRa Radar",
+      "description": "Marine radar integration",
+      "icon": "radar",
+      "plugins": [
+        "@marineyachtradar/signalk-plugin"
+      ]
+    },
+    "logging": {
+      "name": "Data Logging",
+      "description": "Historical data storage to InfluxDB, Parquet, or cloud",
+      "icon": "database",
+      "plugins": [
+        "signalk-to-influxdb2",
+        "signalk-parquet",
+        "signalk-daily-gpx-plugin"
+      ]
+    },
+    "automation": {
+      "name": "Home Automation",
+      "description": "Node-RED, MQTT, and smart home integration",
+      "icon": "workflow",
+      "plugins": [
+        "@signalk/signalk-node-red",
+        "signalk-mqtt-home-assistant",
+        "signalk-shelly2"
+      ]
+    }
+  }
+}
