@@ -62,7 +62,23 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev imagemagick
+
+      # macOS dependencies (for icon generation)
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install imagemagick
+
+      # Windows dependencies (for icon generation)
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
+        run: choco install imagemagick
+
+      # Generate app icons
+      - name: Generate app icons
+        working-directory: packages/installer
+        shell: bash
+        run: bash scripts/generate-icons.sh
 
       - name: Install npm dependencies
         working-directory: packages/installer
