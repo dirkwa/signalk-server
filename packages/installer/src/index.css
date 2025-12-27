@@ -1,0 +1,73 @@
+:root {
+  --signalk-blue: #1a73e8;
+  --signalk-dark: #202124;
+  --signalk-light: #f8f9fa;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--signalk-light);
+}
+
+.installer-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard-header {
+  background-color: var(--signalk-dark);
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.wizard-header img {
+  height: 40px;
+}
+
+.wizard-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.wizard-footer {
+  padding: 1rem 2rem;
+  background-color: white;
+  border-top: 1px solid #dee2e6;
+  display: flex;
+  justify-content: space-between;
+}
+
+.step-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background-color: white;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.step-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #dee2e6;
+}
+
+.step-dot.active {
+  background-color: var(--signalk-blue);
+}
+
+.step-dot.completed {
+  background-color: #28a745;
+}
