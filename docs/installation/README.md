@@ -23,6 +23,13 @@ The easiest way to install Signal K Server is using the **[SignalK Installer](in
 
 [Download the latest installer](https://github.com/SignalK/signalk-server/releases) for Windows, macOS, or Linux.
 
+## Prerequisites
+
+For manual installation methods (NPM, source), you need:
+- **Node.js 20 or later** with npm
+
+The [GUI Installer](installer.md) bundles Node.js and requires no prerequisites.
+
 ## Other Installation Methods
 
 For advanced users, developers, or specific use cases:
