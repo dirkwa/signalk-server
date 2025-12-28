@@ -79,36 +79,13 @@ To develop and test the Tauri desktop application:
    sudo pacman -S webkit2gtk-4.1 gtk3 libappindicator-gtk3 librsvg libsoup3 patchelf
    ```
 
-2. Install the Tauri CLI:
-
-   ```shell
-   npm install -D @tauri-apps/cli
-   ```
-
-3. Initialize Tauri (first time only):
-
-   ```shell
-   npx tauri init
-   ```
-
-   Use these values when prompted:
-
-   | Prompt                 | Value                   |
-   | ---------------------- | ----------------------- |
-   | App name               | `signalk-server`        |
-   | Window title           | `signalk-server`        |
-   | Web assets location    | `../build`              |
-   | Dev server URL         | `http://localhost:3000` |
-   | Frontend dev command   | `npm run watch`         |
-   | Frontend build command | `npm run build:all`     |
-
-4. Start the SignalK server in one terminal:
+2. Start the SignalK server in one terminal:
 
    ```shell
    npm start
    ```
 
-5. Run the desktop app in another terminal:
+3. Run the desktop app in another terminal:
 
    ```shell
    npm run tauri:dev
@@ -122,7 +99,7 @@ To develop and test the Tauri desktop application:
    xvfb-run npm run tauri:dev
    ```
 
-6. To build release packages (doesn't require a display):
+4. To build release packages (doesn't require a display):
 
    ```shell
    npm run tauri:build
