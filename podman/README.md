@@ -184,6 +184,22 @@ podman rmi ghcr.io/signalk/signalk-server:latest
 
 Your data in `%USERPROFILE%\.signalk\` is preserved unless you delete it manually.
 
+## Hardware Access
+
+### Linux: D-Bus and SocketCAN
+
+On Linux, the container has access to:
+
+- **D-Bus** (`/run/dbus/system_bus_socket`) - Enables Bluetooth/BLE device support for sensors like Ruuvi tags
+- **SocketCAN** (`NET_ADMIN` capability) - Allows configuration and use of CAN bus interfaces (e.g., for NMEA 2000 via can-utils)
+- **Host networking** - Direct access to all network interfaces
+
+These are configured automatically by the installer.
+
+### Windows/macOS: Bluetooth
+
+Bluetooth passthrough to containers is not reliably supported on Windows or macOS. For BLE sensor support (e.g., Ruuvi tags), we recommend using a dedicated USB Bluetooth dongle that can be passed through to the container, or running a separate BLE gateway that forwards data via MQTT or HTTP.
+
 ## Data Directory
 
 Your Signal K configuration and plugins are stored in:
