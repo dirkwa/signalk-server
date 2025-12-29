@@ -700,37 +700,27 @@ function Start-SignalK {
 # Create systemd service inside Podman Machine to supervise the container
 # This enables the restart button in Signal K to work properly
 function Enable-ContainerSupervision {
-    Write-Info "Enabling container supervision (for restart button support)..."
-
-    # Create the systemd user directory and fix ownership
-    podman machine ssh "mkdir -p ~/.config/systemd/user" 2>&1 | Out-Null
-    podman machine ssh "sudo chown -R user:user ~/.config/systemd" 2>&1 | Out-Null
-
-    # Write the service file using printf (single command, faster)
-    $serviceContent = "[Unit]\nDescription=Signal K Server Container\nAfter=network-online.target\n\n[Service]\nType=simple\nRestart=always\nRestartSec=3\nExecStart=/usr/bin/podman start -a signalk\nExecStop=/usr/bin/podman stop signalk\n\n[Install]\nWantedBy=default.target\n"
-    podman machine ssh "printf '$serviceContent' > ~/.config/systemd/user/signalk-supervisor.service" 2>&1 | Out-Null
-
-    # Verify the file was created
-    $fileCheck = podman machine ssh "cat ~/.config/systemd/user/signalk-supervisor.service 2>&1" 2>&1
-    if (-not ($fileCheck -match "\[Service\]")) {
-        Write-Warn "Could not create systemd service file"
-        podman start signalk 2>&1 | Out-Null
-        return $false
+    # Check if supervision is already active (skip if so - much faster)
+    $status = podman machine ssh "systemctl --user is-active signalk-supervisor.service 2>/dev/null" 2>&1
+    if ($status -match "^active") {
+        Write-Success "Container supervision already enabled"
+        return $true
     }
 
-    # Reload systemd
-    podman machine ssh "systemctl --user daemon-reload" 2>&1 | Out-Null
+    Write-Info "Enabling container supervision (for restart button support)..."
 
-    # Stop container if running (systemd will manage it now)
+    # Stop container first (systemd will manage it)
     $ErrorActionPreference = "SilentlyContinue"
     podman stop signalk 2>&1 | Out-Null
     $ErrorActionPreference = "Stop"
 
-    # Enable and start the supervisor service
-    podman machine ssh "systemctl --user enable --now signalk-supervisor.service" 2>&1 | Out-Null
+    # Create service file and enable it in a single SSH call
+    $serviceContent = "[Unit]\nDescription=Signal K Server Container\nAfter=network-online.target\n\n[Service]\nType=simple\nRestart=always\nRestartSec=3\nExecStart=/usr/bin/podman start -a signalk\nExecStop=/usr/bin/podman stop signalk\n\n[Install]\nWantedBy=default.target\n"
+    $setupCmd = "mkdir -p ~/.config/systemd/user && sudo chown -R user:user ~/.config/systemd && printf '$serviceContent' > ~/.config/systemd/user/signalk-supervisor.service && systemctl --user daemon-reload && systemctl --user enable --now signalk-supervisor.service"
+    podman machine ssh $setupCmd 2>&1 | Out-Null
 
-    # Check if it worked
-    Start-Sleep -Seconds 3
+    # Verify it worked
+    Start-Sleep -Seconds 2
     $status = podman machine ssh "systemctl --user is-active signalk-supervisor.service" 2>&1
     if ($status -match "active") {
         Write-Success "Container supervision enabled (restart button will work)"
