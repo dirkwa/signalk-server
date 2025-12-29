@@ -563,6 +563,7 @@ Write-Host "Starting Signal K Server..."
 podman run -d --name signalk ``
     -p ${SIGNALK_PORT}:3000 ``
     -v "`${SIGNALK_DATA_DIR}:/home/node/.signalk" ``
+    -e "SIGNALK_NODE_CONFIG_DIR=/home/node/.signalk" ``
     --user root ``
     --entrypoint /bin/bash ``
     `$SIGNALK_IMAGE ``
@@ -629,10 +630,12 @@ function Start-SignalK {
     # 1. Volume mounts from Windows don't have the same UID mapping as Linux
     # 2. The node user in the container may not have write access to mounted volumes
     # 3. We still need to remove cap_net_raw from node binary
+    # We set SIGNALK_NODE_CONFIG_DIR to point to the mounted volume since root's home is /root
     $runArgs = @(
         "run", "-d", "--name", "signalk",
         "-p", "${SIGNALK_PORT}:3000",
         "-v", "${dataVolume}:/home/node/.signalk",
+        "-e", "SIGNALK_NODE_CONFIG_DIR=/home/node/.signalk",
         "--user", "root",
         "--entrypoint", "/bin/bash"
     )
