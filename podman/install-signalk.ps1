@@ -149,7 +149,9 @@ function Initialize-PodmanMachine {
         Write-Info "Initializing Podman Machine (this may take a few minutes)..."
 
         # Initialize with reasonable defaults for Signal K
-        podman machine init --cpus 2 --memory 2048 --disk-size 20
+        # Mount user profile directory so volume mounts work correctly
+        $userProfile = $env:USERPROFILE -replace '\\', '/'
+        podman machine init --cpus 2 --memory 2048 --disk-size 20 -v "${userProfile}:${userProfile}"
 
         if ($LASTEXITCODE -ne 0) {
             Write-Error "Failed to initialize Podman Machine"
@@ -159,6 +161,19 @@ function Initialize-PodmanMachine {
     }
     else {
         Write-Success "Podman Machine already exists"
+    }
+
+    # Verify the user profile mount exists (for existing machines)
+    $userProfile = $env:USERPROFILE -replace '\\', '/'
+    $mounts = podman machine inspect podman-machine-default 2>&1 | ConvertFrom-Json | Select-Object -ExpandProperty Mounts -ErrorAction SilentlyContinue
+    $hasUserMount = $mounts | Where-Object { $_.Source -eq $userProfile }
+
+    if (-not $hasUserMount -and $machineExists) {
+        Write-Warn "Podman Machine is missing user profile mount."
+        Write-Warn "For data persistence, you may need to recreate the machine:"
+        Write-Warn "  podman machine stop"
+        Write-Warn "  podman machine rm podman-machine-default"
+        Write-Warn "  Then run this installer again."
     }
 
     # Check if machine is running
@@ -267,7 +282,39 @@ function Setup-UsbPassthrough {
     $serialDevices = @(Find-SerialDevices)
 
     if ($serialDevices.Count -eq 0) {
-        # No devices found, ask if they plan to use one
+        # No Windows COM ports found - check if devices are already attached to WSL
+        # (when attached to WSL, they don't show as COM ports in Windows)
+        if (Test-Usbipd) {
+            $usbipdOutput = usbipd list 2>&1
+            $attachedDevices = @($usbipdOutput | Where-Object {
+                $_ -match "Attached" -and ($_ -match "Actisense|NGT|NMEA|Serial|FTDI|0403:")
+            })
+
+            if ($attachedDevices.Count -gt 0) {
+                Write-Host ""
+                Write-Success "USB device already attached to WSL:"
+                foreach ($line in $attachedDevices) {
+                    if ($line -match "^(\d+-\d+)\s+\S+\s+(.+?)\s+Attached") {
+                        $busId = $Matches[1]
+                        $deviceName = $Matches[2].Trim()
+                        Write-Host "  $deviceName (BUSID: $busId)" -ForegroundColor Cyan
+
+                        # Store for later use
+                        $script:SELECTED_DEVICES += [PSCustomObject]@{
+                            BusId = $busId
+                            Name = $deviceName
+                            ComPort = "N/A"
+                        }
+                    }
+                }
+
+                # Ensure scheduled task exists for auto-attach
+                New-UsbAutoAttachTask
+                return
+            }
+        }
+
+        # No devices found at all
         Write-Host ""
         $response = Read-Host "Do you have a USB device for NMEA 2000 / NMEA 0183 (e.g., Actisense NGT-1)? (y/n)"
         if ($response -eq "y") {
@@ -431,17 +478,33 @@ foreach (`$busId in `$busIds) {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false 2>&1 | Out-Null
     $ErrorActionPreference = "Stop"
 
+    # Scheduled task creation requires admin privileges
+    # Create a helper script to register the task, then run it elevated
+    $registerScript = @"
+`$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-WindowStyle Hidden -ExecutionPolicy Bypass -File "$attachScriptPath"'
+`$trigger = New-ScheduledTaskTrigger -AtLogon
+`$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+Unregister-ScheduledTask -TaskName '$taskName' -Confirm:`$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName '$taskName' -Action `$action -Trigger `$trigger -Settings `$settings -Description 'Attach USB devices to WSL for Signal K' | Out-Null
+"@
+
+    $registerScriptPath = "$env:TEMP\register-signalk-task.ps1"
+    $registerScript | Out-File -FilePath $registerScriptPath -Encoding UTF8
+
     try {
-        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$attachScriptPath`""
-        $trigger = New-ScheduledTaskTrigger -AtLogon -User $env:USERNAME
-        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+        Write-Info "Creating scheduled task (requires Admin)..."
+        $process = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$registerScriptPath`"" -Verb RunAs -Wait -PassThru
+        Remove-Item $registerScriptPath -Force -ErrorAction SilentlyContinue
 
-        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Description "Attach USB devices to WSL for Signal K" | Out-Null
-
-        Write-Success "Created scheduled task: $taskName"
-        Write-Info "USB devices will auto-attach when you log in to Windows"
+        if ($process.ExitCode -eq 0) {
+            Write-Success "Created scheduled task: $taskName"
+            Write-Info "USB devices will auto-attach when you log in to Windows"
+        } else {
+            throw "Task registration failed"
+        }
     }
     catch {
+        Remove-Item $registerScriptPath -Force -ErrorAction SilentlyContinue
         Write-Warn "Could not create scheduled task. You'll need to manually re-attach USB devices after restart."
         Write-Warn "Run: usbipd attach --wsl --busid <BUSID>"
     }
