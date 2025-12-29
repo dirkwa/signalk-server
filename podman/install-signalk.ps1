@@ -123,8 +123,8 @@ function Install-Podman {
         Write-Error "winget is not available. Please install Podman manually from https://podman.io/getting-started/installation#windows"
     }
 
-    # Install Podman
-    winget install -e --id RedHat.Podman --accept-package-agreements --accept-source-agreements
+    # Install Podman (silent install)
+    winget install -e --id RedHat.Podman --accept-package-agreements --accept-source-agreements --silent
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to install Podman. Please install manually from https://podman.io"
@@ -142,8 +142,9 @@ function Initialize-PodmanMachine {
 
     # Check if machine exists
     $machines = podman machine list --format "{{.Name}}" 2>&1
+    $machineExists = $machines -match "podman-machine-default"
 
-    if ($machines -notcontains "podman-machine-default") {
+    if (-not $machineExists) {
         Write-Info "Initializing Podman Machine (this may take a few minutes)..."
 
         # Initialize with reasonable defaults for Signal K
@@ -188,7 +189,8 @@ function New-DataDirectory {
 
 # Pull Signal K image
 function Get-SignalKImage {
-    Write-Info "Pulling Signal K Server image..."
+    Write-Info "Pulling Signal K Server image (~500MB, this may take several minutes)..."
+    Write-Host "         Downloading container image - please wait..." -ForegroundColor Gray
     podman pull $SIGNALK_IMAGE
 
     if ($LASTEXITCODE -ne 0) {
@@ -223,15 +225,21 @@ if (`$machineState -ne "running") {
 podman stop signalk 2>`$null
 podman rm signalk 2>`$null
 
+# Convert path for Podman Machine
+`$dataVolume = `$SIGNALK_DATA_DIR -replace '\\', '/'
+if (`$dataVolume -match '^([A-Za-z]):(.*)$') {
+    `$dataVolume = "/mnt/`$(`$Matches[1].ToLower())`$(`$Matches[2])"
+}
+
 # Run Signal K Server
 Write-Host "Starting Signal K Server..."
 podman run -d --name signalk ``
     -p ${SIGNALK_PORT}:3000 ``
-    -v "`${SIGNALK_DATA_DIR}:/home/node/.signalk" ``
+    -v "`${dataVolume}:/home/node/.signalk" ``
     --user root ``
     --entrypoint /bin/bash ``
     `$SIGNALK_IMAGE ``
-    -c "setcap -r /usr/bin/node 2>/dev/null; exec su node -c '/home/node/signalk/startup.sh'"
+    -c "setcap -r /usr/bin/node 2>/dev/null; exec /home/node/signalk/startup.sh"
 
 Write-Host ""
 Write-Host "Signal K Server is starting..."
@@ -264,21 +272,30 @@ Write-Host "Signal K Server stopped"
 function Start-SignalK {
     Write-Info "Starting Signal K Server..."
 
-    # Stop existing container if any
-    podman stop signalk 2>$null
-    podman rm signalk 2>$null
+    # Stop existing container if any (ignore errors if doesn't exist)
+    $ErrorActionPreference = "SilentlyContinue"
+    podman stop signalk 2>&1 | Out-Null
+    podman rm signalk 2>&1 | Out-Null
+    $ErrorActionPreference = "Stop"
 
-    # Convert Windows path to a format Podman can use
-    $dataVolume = $SIGNALK_DATA_DIR -replace '\\', '/' -replace '^([A-Za-z]):', '/mnt/$1'.ToLower()
+    # Convert Windows path to a format Podman can use (e.g., C:\Users\... -> /mnt/c/Users/...)
+    $dataVolume = $SIGNALK_DATA_DIR -replace '\\', '/'
+    if ($dataVolume -match '^([A-Za-z]):(.*)$') {
+        $dataVolume = "/mnt/$($Matches[1].ToLower())$($Matches[2])"
+    }
 
     # Run the container
+    # On Windows/Podman Machine, we run as root because:
+    # 1. Volume mounts from Windows don't have the same UID mapping as Linux
+    # 2. The node user in the container may not have write access to mounted volumes
+    # 3. We still need to remove cap_net_raw from node binary
     podman run -d --name signalk `
         -p ${SIGNALK_PORT}:3000 `
         -v "${dataVolume}:/home/node/.signalk" `
         --user root `
         --entrypoint /bin/bash `
         $SIGNALK_IMAGE `
-        -c "setcap -r /usr/bin/node 2>/dev/null; exec su node -c '/home/node/signalk/startup.sh'"
+        -c "setcap -r /usr/bin/node 2>/dev/null; exec /home/node/signalk/startup.sh"
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to start Signal K Server"
