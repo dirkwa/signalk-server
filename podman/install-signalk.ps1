@@ -571,11 +571,9 @@ podman stop signalk 2>`$null
 podman rm signalk 2>`$null
 
 # Check if USB devices are available in WSL
-`$hasUsbDevices = `$false
+# Note: Don't check `$LASTEXITCODE - ls returns non-zero if one glob pattern has no matches
 `$wslDevices = podman machine ssh "ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null" 2>&1
-if (`$wslDevices -and `$LASTEXITCODE -eq 0) {
-    `$hasUsbDevices = (`$wslDevices -split "``n" | Where-Object { `$_ -match "^/dev/tty" }).Count -gt 0
-}
+`$hasUsbDevices = `$wslDevices -and (`$wslDevices -split "``n" | Where-Object { `$_ -match "^/dev/tty" }).Count -gt 0
 
 # Build run arguments
 # Use --privileged when USB devices are present (--device doesn't work with Podman Machine)
@@ -646,11 +644,9 @@ function Start-SignalK {
     $dataVolume = $SIGNALK_DATA_DIR
 
     # Check if USB devices are available in WSL (for --privileged flag)
-    $hasUsbDevices = $false
+    # Note: Don't check $LASTEXITCODE - ls returns non-zero if one glob pattern has no matches
     $wslDevices = podman machine ssh "ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null" 2>&1
-    if ($wslDevices -and $LASTEXITCODE -eq 0) {
-        $hasUsbDevices = ($wslDevices -split "`n" | Where-Object { $_ -match "^/dev/tty" }).Count -gt 0
-    }
+    $hasUsbDevices = $wslDevices -and ($wslDevices -split "`n" | Where-Object { $_ -match "^/dev/tty" }).Count -gt 0
 
     # Run the container
     # On Windows/Podman Machine, we run as root because:
