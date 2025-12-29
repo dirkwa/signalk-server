@@ -99,7 +99,60 @@ podman machine stop         # Stop Podman VM (saves resources)
 
 ### Serial ports on Windows
 
-Serial port access on Windows requires additional setup using `usbipd-win` to attach USB devices to the WSL2/Podman environment. See: https://learn.microsoft.com/en-us/windows/wsl/connect-usb
+The installer will detect USB serial devices and offer to configure them automatically using `usbipd-win`.
+
+**Automatic re-attach:** The installer creates a scheduled task (`SignalK-USB-Attach`) that automatically re-attaches your USB devices when you log in to Windows. No manual action required!
+
+To check the scheduled task:
+```powershell
+Get-ScheduledTask -TaskName "SignalK-USB-Attach"
+```
+
+**Manual re-attach** (if automatic fails):
+```powershell
+usbipd attach --wsl --busid <BUSID>
+```
+
+The BUSID for your devices is shown at the end of installation and can also be found with:
+```powershell
+usbipd list
+```
+
+#### Manual USB setup
+
+If you skipped USB setup during installation or want to add more devices:
+
+1. Install usbipd-win:
+   ```powershell
+   winget install usbipd
+   ```
+
+2. List USB devices to find the BUSID:
+   ```powershell
+   usbipd list
+   ```
+
+3. Bind the device (requires Admin, only needed once):
+   ```powershell
+   usbipd bind --busid <BUSID>
+   ```
+
+4. Attach to WSL (needed after each Windows restart):
+   ```powershell
+   usbipd attach --wsl --busid <BUSID>
+   ```
+
+5. Find the device path in WSL:
+   ```powershell
+   podman machine ssh "ls /dev/ttyUSB* /dev/ttyACM*"
+   ```
+
+6. Restart Signal K with the device:
+   ```powershell
+   podman stop signalk
+   podman rm signalk
+   # Then run start-signalk.ps1 or manually with --device /dev/ttyUSB0
+   ```
 
 ## Data Directory
 
