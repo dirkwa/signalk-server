@@ -84,9 +84,11 @@ powershell -ExecutionPolicy Bypass -File .\install-signalk.ps1
 2. Installs WSL2 (kernel only, no full Linux distro)
 3. Installs Podman via winget
 4. Initializes Podman Machine (uses WSL2 backend)
-5. Pulls the Signal K Server container image
-6. Creates start/stop scripts in `~\.signalk\`
-7. Starts Signal K Server
+5. Detects USB serial devices (e.g., Actisense NGT-1) and configures passthrough
+6. Creates scheduled task for automatic USB re-attach on login
+7. Pulls the Signal K Server container image
+8. Creates start/stop scripts in `~\.signalk\`
+9. Starts Signal K Server
 
 ### Managing the server
 
@@ -154,6 +156,24 @@ If you skipped USB setup during installation or want to add more devices:
    # Then run start-signalk.ps1 or manually with --device /dev/ttyUSB0
    ```
 
+### Uninstall (Windows)
+
+```powershell
+# Stop and remove the container
+podman stop signalk
+podman rm signalk
+
+# Remove the scheduled task (if USB devices were configured)
+Unregister-ScheduledTask -TaskName "SignalK-USB-Attach" -Confirm:$false
+
+# Optional: Remove Podman Machine and image
+podman machine stop
+podman machine rm podman-machine-default
+podman rmi ghcr.io/signalk/signalk-server:latest
+```
+
+Your data in `%USERPROFILE%\.signalk\` is preserved unless you delete it manually.
+
 ## Data Directory
 
 Your Signal K configuration and plugins are stored in:
@@ -197,3 +217,31 @@ Run as Administrator:
 wsl --install --no-distribution
 ```
 Then restart your computer.
+
+### Windows: USB device not detected during install
+
+Make sure your device is plugged in before running the installer. If it still doesn't appear:
+
+1. Check Windows Device Manager for the COM port
+2. Run manually:
+   ```powershell
+   usbipd list
+   ```
+3. Follow the "Manual USB setup" section above
+
+### Windows: USB device not working after restart
+
+Check if the scheduled task ran:
+```powershell
+Get-ScheduledTask -TaskName "SignalK-USB-Attach" | Select-Object State, LastRunTime
+```
+
+Manually attach the device:
+```powershell
+usbipd attach --wsl --busid <BUSID>
+```
+
+Then restart Signal K:
+```powershell
+~\.signalk\start-signalk.ps1
+```
