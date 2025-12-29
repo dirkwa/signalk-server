@@ -103,6 +103,11 @@ podman machine stop         # Stop Podman VM (saves resources)
 
 The installer will detect USB serial devices and offer to configure them automatically using `usbipd-win`.
 
+**Device paths:** After USB setup, the installer shows the Linux device path (e.g., `/dev/ttyUSB0`). Use this path when configuring Signal K connections. You can also find it with:
+```powershell
+podman machine ssh "ls /dev/ttyUSB* /dev/ttyACM*"
+```
+
 **Automatic re-attach:** The installer creates a scheduled task (`SignalK-USB-Attach`) that automatically re-attaches your USB devices when you log in to Windows. No manual action required!
 
 To check the scheduled task:

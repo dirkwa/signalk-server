@@ -434,6 +434,19 @@ function Setup-UsbPassthrough {
             }
             Write-Success "USB devices attached to WSL"
 
+            # Show the Linux device paths
+            Start-Sleep -Seconds 2  # Give WSL a moment to recognize devices
+            $wslDevices = podman machine ssh "ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null" 2>&1
+            if ($wslDevices -and $LASTEXITCODE -eq 0) {
+                Write-Host ""
+                Write-Host "Device paths in Signal K (use these when configuring connections):" -ForegroundColor Cyan
+                foreach ($dev in ($wslDevices -split "`n")) {
+                    if ($dev -match "^/dev/tty") {
+                        Write-Host "  $($dev.Trim())" -ForegroundColor Green
+                    }
+                }
+            }
+
             # Create auto-attach script and scheduled task
             New-UsbAutoAttachTask
         }
@@ -557,17 +570,39 @@ if (`$machineState -ne "running") {
 podman stop signalk 2>`$null
 podman rm signalk 2>`$null
 
-# Run Signal K Server
-# Podman Machine on Windows supports Windows paths directly
+# Check if USB devices are available in WSL
+`$hasUsbDevices = `$false
+`$wslDevices = podman machine ssh "ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null" 2>&1
+if (`$wslDevices -and `$LASTEXITCODE -eq 0) {
+    `$hasUsbDevices = (`$wslDevices -split "``n" | Where-Object { `$_ -match "^/dev/tty" }).Count -gt 0
+}
+
+# Build run arguments
+# Use --privileged when USB devices are present (--device doesn't work with Podman Machine)
+`$runArgs = @(
+    "run", "-d", "--name", "signalk",
+    "-p", "`${SIGNALK_PORT}:3000",
+    "-v", "`${SIGNALK_DATA_DIR}:/home/node/.signalk",
+    "-e", "SIGNALK_NODE_CONFIG_DIR=/home/node/.signalk",
+    "--user", "root",
+    "--entrypoint", "/bin/bash"
+)
+
+if (`$hasUsbDevices) {
+    `$runArgs += "--privileged"
+    Write-Host "USB devices detected - running with --privileged for device access"
+}
+
+`$runArgs += @(`$SIGNALK_IMAGE, "-c", "setcap -r /usr/bin/node 2>/dev/null; exec /home/node/signalk/startup.sh")
+
 Write-Host "Starting Signal K Server..."
-podman run -d --name signalk ``
-    -p ${SIGNALK_PORT}:3000 ``
-    -v "`${SIGNALK_DATA_DIR}:/home/node/.signalk" ``
-    -e "SIGNALK_NODE_CONFIG_DIR=/home/node/.signalk" ``
-    --user root ``
-    --entrypoint /bin/bash ``
-    `$SIGNALK_IMAGE ``
-    -c "setcap -r /usr/bin/node 2>/dev/null; exec /home/node/signalk/startup.sh"
+& podman @runArgs
+
+# Fix device permissions on WSL2 host (must be done after container starts)
+if (`$hasUsbDevices) {
+    Write-Host "Setting device permissions..."
+    podman machine ssh "sudo chmod 666 /dev/ttyUSB* /dev/ttyACM* 2>/dev/null" 2>&1 | Out-Null
+}
 
 Write-Host ""
 Write-Host "Signal K Server is starting..."
@@ -610,19 +645,11 @@ function Start-SignalK {
     # No conversion needed - just use the Windows path as-is
     $dataVolume = $SIGNALK_DATA_DIR
 
-    # Build device arguments if USB devices were attached
-    $deviceArgs = @()
-    if ($script:SELECTED_DEVICES.Count -gt 0) {
-        # Check what devices are available in WSL
-        $wslDevices = podman machine ssh "ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null" 2>&1
-        if ($wslDevices -and $LASTEXITCODE -eq 0) {
-            foreach ($dev in ($wslDevices -split "`n")) {
-                if ($dev -match "^/dev/tty") {
-                    $deviceArgs += "--device"
-                    $deviceArgs += $dev.Trim()
-                }
-            }
-        }
+    # Check if USB devices are available in WSL (for --privileged flag)
+    $hasUsbDevices = $false
+    $wslDevices = podman machine ssh "ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null" 2>&1
+    if ($wslDevices -and $LASTEXITCODE -eq 0) {
+        $hasUsbDevices = ($wslDevices -split "`n" | Where-Object { $_ -match "^/dev/tty" }).Count -gt 0
     }
 
     # Run the container
@@ -631,6 +658,7 @@ function Start-SignalK {
     # 2. The node user in the container may not have write access to mounted volumes
     # 3. We still need to remove cap_net_raw from node binary
     # We set SIGNALK_NODE_CONFIG_DIR to point to the mounted volume since root's home is /root
+    # We use --privileged when USB devices are present because --device doesn't work reliably with Podman Machine
     $runArgs = @(
         "run", "-d", "--name", "signalk",
         "-p", "${SIGNALK_PORT}:3000",
@@ -639,13 +667,23 @@ function Start-SignalK {
         "--user", "root",
         "--entrypoint", "/bin/bash"
     )
-    $runArgs += $deviceArgs
+
+    if ($hasUsbDevices) {
+        $runArgs += "--privileged"
+        Write-Info "USB devices detected - running with --privileged for device access"
+    }
     $runArgs += @($SIGNALK_IMAGE, "-c", "setcap -r /usr/bin/node 2>/dev/null; exec /home/node/signalk/startup.sh")
 
     & podman @runArgs
 
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to start Signal K Server"
+    }
+
+    # Fix device permissions on WSL2 host (must be done after container starts)
+    if ($hasUsbDevices) {
+        Write-Info "Setting device permissions..."
+        podman machine ssh "sudo chmod 666 /dev/ttyUSB* /dev/ttyACM* 2>/dev/null" 2>&1 | Out-Null
     }
 
     # Wait for startup
