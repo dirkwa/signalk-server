@@ -88,16 +88,21 @@ powershell -ExecutionPolicy Bypass -File .\install-signalk.ps1
 6. Creates scheduled task for automatic USB re-attach on login
 7. Pulls the Signal K Server container image
 8. Creates start/stop scripts in `~\.signalk\`
-9. Starts Signal K Server
+9. Creates scheduled task for auto-start on login
+10. Starts Signal K Server with systemd supervision (enables restart button)
 
 ### Managing the server
 
 ```powershell
-podman logs -f signalk      # View logs
-podman stop signalk         # Stop server
-podman start signalk        # Start server
-podman machine stop         # Stop Podman VM (saves resources)
+podman logs -f signalk                                        # View logs
+podman machine ssh "systemctl --user stop signalk-supervisor" # Stop server
+podman machine ssh "systemctl --user start signalk-supervisor" # Start server
+podman machine stop                                           # Stop Podman VM (saves resources)
 ```
+
+**Auto-restart:** The installer creates a systemd supervisor service inside Podman Machine. This means the "Restart" button in Signal K's web interface works as expected - the server will automatically restart after a few seconds.
+
+**Note:** Using `podman stop signalk` alone won't work because the supervisor service will immediately restart the container. Use the `systemctl` commands above to properly stop/start the server.
 
 ### Serial ports on Windows
 

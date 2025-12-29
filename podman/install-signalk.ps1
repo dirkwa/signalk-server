@@ -579,6 +579,7 @@ podman rm signalk 2>`$null
 # Use --privileged when USB devices are present (--device doesn't work with Podman Machine)
 `$runArgs = @(
     "run", "-d", "--name", "signalk",
+    "--restart", "always",
     "-p", "`${SIGNALK_PORT}:3000",
     "-v", "`${SIGNALK_DATA_DIR}:/home/node/.signalk",
     "-e", "SIGNALK_NODE_CONFIG_DIR=/home/node/.signalk",
@@ -655,8 +656,10 @@ function Start-SignalK {
     # 3. We still need to remove cap_net_raw from node binary
     # We set SIGNALK_NODE_CONFIG_DIR to point to the mounted volume since root's home is /root
     # We use --privileged when USB devices are present because --device doesn't work reliably with Podman Machine
+    # We use --restart=always so the container restarts when Signal K GUI restart is clicked
     $runArgs = @(
         "run", "-d", "--name", "signalk",
+        "--restart", "always",
         "-p", "${SIGNALK_PORT}:3000",
         "-v", "${dataVolume}:/home/node/.signalk",
         "-e", "SIGNALK_NODE_CONFIG_DIR=/home/node/.signalk",
@@ -694,6 +697,54 @@ function Start-SignalK {
     }
 }
 
+# Create systemd service inside Podman Machine to supervise the container
+# This enables the restart button in Signal K to work properly
+function Enable-ContainerSupervision {
+    Write-Info "Enabling container supervision (for restart button support)..."
+
+    # Create the systemd user directory and fix ownership
+    podman machine ssh "mkdir -p ~/.config/systemd/user" 2>&1 | Out-Null
+    podman machine ssh "sudo chown -R user:user ~/.config/systemd" 2>&1 | Out-Null
+
+    # Write the service file using printf (single command, faster)
+    $serviceContent = "[Unit]\nDescription=Signal K Server Container\nAfter=network-online.target\n\n[Service]\nType=simple\nRestart=always\nRestartSec=3\nExecStart=/usr/bin/podman start -a signalk\nExecStop=/usr/bin/podman stop signalk\n\n[Install]\nWantedBy=default.target\n"
+    podman machine ssh "printf '$serviceContent' > ~/.config/systemd/user/signalk-supervisor.service" 2>&1 | Out-Null
+
+    # Verify the file was created
+    $fileCheck = podman machine ssh "cat ~/.config/systemd/user/signalk-supervisor.service 2>&1" 2>&1
+    if (-not ($fileCheck -match "\[Service\]")) {
+        Write-Warn "Could not create systemd service file"
+        podman start signalk 2>&1 | Out-Null
+        return $false
+    }
+
+    # Reload systemd
+    podman machine ssh "systemctl --user daemon-reload" 2>&1 | Out-Null
+
+    # Stop container if running (systemd will manage it now)
+    $ErrorActionPreference = "SilentlyContinue"
+    podman stop signalk 2>&1 | Out-Null
+    $ErrorActionPreference = "Stop"
+
+    # Enable and start the supervisor service
+    podman machine ssh "systemctl --user enable --now signalk-supervisor.service" 2>&1 | Out-Null
+
+    # Check if it worked
+    Start-Sleep -Seconds 3
+    $status = podman machine ssh "systemctl --user is-active signalk-supervisor.service" 2>&1
+    if ($status -match "active") {
+        Write-Success "Container supervision enabled (restart button will work)"
+        return $true
+    }
+    else {
+        Write-Warn "Could not enable container supervision. Restart button may not work as expected."
+        Write-Warn "You can manually restart with: podman start signalk"
+        # Start container directly as fallback
+        podman start signalk 2>&1 | Out-Null
+        return $false
+    }
+}
+
 # Print summary
 function Write-Summary {
     Write-Host ""
@@ -710,11 +761,16 @@ function Write-Summary {
     Write-Host "  podman start signalk         # Start server"
     Write-Host "  podman machine stop          # Stop Podman VM (saves resources)"
     Write-Host ""
+    Write-Host "Auto-start: Enabled (Signal K starts when you log in)" -ForegroundColor Green
+    Write-Host ""
     Write-Host "Startup scripts:"
     Write-Host "  $SIGNALK_DATA_DIR\start-signalk.ps1"
     Write-Host "  $SIGNALK_DATA_DIR\stop-signalk.ps1"
     Write-Host ""
     Write-Host "Data directory: $SIGNALK_DATA_DIR"
+    Write-Host ""
+    Write-Host "Uninstall:"
+    Write-Host "  .\install-signalk.ps1 --uninstall"
     Write-Host ""
 
     if ($script:SELECTED_DEVICES.Count -gt 0) {
@@ -763,9 +819,137 @@ function Main {
     Get-SignalKImage
     New-StartupScript
     New-StopScript
+    New-AutoStartTask
     Start-SignalK
+    Enable-ContainerSupervision
     Write-Summary
 }
 
-# Run main
+# Create scheduled task to auto-start Signal K on login
+function New-AutoStartTask {
+    Write-Info "Setting up Signal K auto-start on login..."
+
+    $taskName = "SignalK-Server-Start"
+    $startScript = "$SIGNALK_DATA_DIR\start-signalk.ps1"
+
+    # Create a helper script to register the task (requires admin)
+    $registerScript = @"
+`$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-WindowStyle Hidden -ExecutionPolicy Bypass -File "$startScript"'
+`$trigger = New-ScheduledTaskTrigger -AtLogon
+`$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+Unregister-ScheduledTask -TaskName '$taskName' -Confirm:`$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName '$taskName' -Action `$action -Trigger `$trigger -Settings `$settings -Description 'Start Signal K Server on login' | Out-Null
+"@
+
+    $registerScriptPath = "$env:TEMP\register-signalk-autostart.ps1"
+    $registerScript | Out-File -FilePath $registerScriptPath -Encoding UTF8
+
+    try {
+        Write-Info "Creating scheduled task (requires Admin)..."
+        $process = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$registerScriptPath`"" -Verb RunAs -Wait -PassThru
+        Remove-Item $registerScriptPath -Force -ErrorAction SilentlyContinue
+
+        if ($process.ExitCode -eq 0) {
+            Write-Success "Auto-start enabled (scheduled task: $taskName)"
+        } else {
+            throw "Task registration failed"
+        }
+    }
+    catch {
+        Remove-Item $registerScriptPath -Force -ErrorAction SilentlyContinue
+        Write-Warn "Could not create auto-start task. You can start manually with: ~\.signalk\start-signalk.ps1"
+    }
+}
+
+# Uninstall Signal K
+function Uninstall-SignalK {
+    Write-Host ""
+    Write-Host "=========================================" -ForegroundColor Yellow
+    Write-Host "  Signal K Server Uninstaller (Windows)" -ForegroundColor Yellow
+    Write-Host "=========================================" -ForegroundColor Yellow
+    Write-Host ""
+
+    # Stop and remove container
+    Write-Info "Stopping Signal K Server..."
+    $ErrorActionPreference = "SilentlyContinue"
+    podman stop signalk 2>&1 | Out-Null
+    podman rm signalk 2>&1 | Out-Null
+    $ErrorActionPreference = "Stop"
+    Write-Success "Container stopped and removed"
+
+    # Remove scheduled tasks
+    Write-Info "Removing scheduled tasks..."
+    $ErrorActionPreference = "SilentlyContinue"
+    Unregister-ScheduledTask -TaskName "SignalK-Server-Start" -Confirm:$false 2>&1 | Out-Null
+    Unregister-ScheduledTask -TaskName "SignalK-USB-Attach" -Confirm:$false 2>&1 | Out-Null
+    $ErrorActionPreference = "Stop"
+    Write-Success "Scheduled tasks removed"
+
+    # Ask about image removal
+    Write-Host ""
+    $removeImage = Read-Host "Remove Signal K container image? [Y/n]"
+    if ($removeImage -eq "" -or $removeImage -eq "y" -or $removeImage -eq "Y") {
+        Write-Info "Removing container image..."
+        $ErrorActionPreference = "SilentlyContinue"
+        podman rmi $SIGNALK_IMAGE 2>&1 | Out-Null
+        $ErrorActionPreference = "Stop"
+        Write-Success "Image removed"
+    }
+
+    # Ask about data directory
+    Write-Host ""
+    Write-Warn "Data directory: $SIGNALK_DATA_DIR"
+    $removeData = Read-Host "Remove data directory? This will DELETE all your Signal K data! [y/N]"
+    if ($removeData -eq "y" -or $removeData -eq "Y") {
+        $confirm = Read-Host "Are you SURE? Type 'yes' to confirm"
+        if ($confirm -eq "yes") {
+            Write-Info "Removing data directory..."
+            Remove-Item -Recurse -Force $SIGNALK_DATA_DIR -ErrorAction SilentlyContinue
+            Write-Success "Data directory removed"
+        }
+        else {
+            Write-Info "Data directory preserved"
+        }
+    }
+    else {
+        Write-Info "Data directory preserved at: $SIGNALK_DATA_DIR"
+    }
+
+    Write-Host ""
+    Write-Host "==============================================" -ForegroundColor Green
+    Write-Host "Signal K Server Uninstalled" -ForegroundColor Green
+    Write-Host "==============================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Podman was NOT removed (you may have other containers)."
+    Write-Host "To remove Podman: winget uninstall RedHat.Podman"
+    Write-Host ""
+}
+
+# Parse arguments
+if ($args.Count -gt 0) {
+    switch ($args[0]) {
+        "--uninstall" { Uninstall-SignalK; exit 0 }
+        "-u" { Uninstall-SignalK; exit 0 }
+        "--help" {
+            Write-Host "Signal K Server Installer (Windows)"
+            Write-Host ""
+            Write-Host "Usage:"
+            Write-Host "  .\install-signalk.ps1              Install Signal K Server"
+            Write-Host "  .\install-signalk.ps1 --uninstall  Uninstall Signal K Server"
+            Write-Host "  .\install-signalk.ps1 --help       Show this help"
+            exit 0
+        }
+        "-h" {
+            Write-Host "Signal K Server Installer (Windows)"
+            Write-Host ""
+            Write-Host "Usage:"
+            Write-Host "  .\install-signalk.ps1              Install Signal K Server"
+            Write-Host "  .\install-signalk.ps1 --uninstall  Uninstall Signal K Server"
+            Write-Host "  .\install-signalk.ps1 --help       Show this help"
+            exit 0
+        }
+    }
+}
+
+# Run main installation
 Main
