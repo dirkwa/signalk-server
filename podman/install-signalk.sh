@@ -203,6 +203,12 @@ PublishPort=$SIGNALK_PORT:3000
 Volume=$SIGNALK_DATA_DIR:/home/node/.signalk:Z
 Network=host
 
+# D-Bus access (for Bluetooth/BLE support)
+Volume=/run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+
+# SocketCAN support (requires NET_ADMIN for interface setup)
+AddCapability=NET_ADMIN
+
 # Map host UID to container UID (fixes permission issues for npm installs)
 UserNS=keep-id:uid=1000,gid=1000
 
