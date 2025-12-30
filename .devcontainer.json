@@ -1,0 +1,36 @@
+{
+  "name": "signalk-server",
+  "image": "ubuntu:24.04",
+  "runArgs": [
+    "--name", "signalk-server",
+    "--network", "host",
+    "--cap-add", "NET_ADMIN",
+    "--cap-add", "SYS_RAWIO",
+    "--volume", "/run/dbus/system_bus_socket:/run/dbus/system_bus_socket",
+    "--volume", "/dev:/dev",
+    "--group-add", "dialout",
+    "--userns", "keep-id:uid=1000,gid=1000"
+  ],
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "SignalK Server",
+      "onAutoForward": "notify"
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/python:1": {}
+  },
+  "postCreateCommand": "apt-get update && apt-get install -y build-essential git sudo && npm install",
+  "remoteUser": "root",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "workbench.colorTheme": "Default Dark Modern"
+      }
+    }
+  }
+}

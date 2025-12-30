@@ -1,0 +1,13 @@
+node_modules
+work
+.git
+.github
+docs
+test
+test-server-as-include
+*.md
+*.tgz
+fly_io
+kubernetes
+samples
+docker
