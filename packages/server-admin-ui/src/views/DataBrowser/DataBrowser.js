@@ -218,12 +218,12 @@ class DataBrowser extends Component {
         this.state.didSubscribe === false)
     ) {
       // Subscribe with viewport - server filters to only send visible paths
+      // No period throttle - real-time updates enabled by viewport filtering + client virtualization
       const sub = {
         context: '*',
         subscribe: [
           {
             path: '*',
-            period: 2000,
             viewport: {
               start: this.state.viewportStart,
               count: VIEWPORT_COUNT,
