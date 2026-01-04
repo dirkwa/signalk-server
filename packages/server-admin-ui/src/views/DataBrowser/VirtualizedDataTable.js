@@ -15,8 +15,7 @@ function VirtualizedDataTable({
   onToggleSource,
   selectedSources,
   onToggleSourceFilter,
-  sourceFilterActive,
-  webSocket
+  sourceFilterActive
 }) {
   const containerRef = useRef(null)
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
@@ -82,12 +81,6 @@ function VirtualizedDataTable({
     }
   }, [updateVisibleRange])
 
-  // Granular subscriptions disabled - causes WebSocket instability during scroll
-  // Keep the wildcard subscription approach for now
-  useEffect(() => {
-    // No-op: subscriptions managed by DataBrowser wildcard subscription
-  }, [visibleRange, pathKeys, context, isPaused, webSocket])
-
   // Cleanup subscriptions on unmount
   useEffect(() => {
     return () => {
@@ -114,7 +107,10 @@ function VirtualizedDataTable({
 
   // Calculate spacer heights for rows before/after visible range
   const spacerBeforeHeight = visibleRange.start * rowHeight
-  const spacerAfterHeight = Math.max(0, (pathKeys.length - visibleRange.end - 1) * rowHeight)
+  const spacerAfterHeight = Math.max(
+    0,
+    (pathKeys.length - visibleRange.end - 1) * rowHeight
+  )
 
   const visibleItems = []
   for (
@@ -136,7 +132,14 @@ function VirtualizedDataTable({
         <div className="virtual-table-header-cell">Value</div>
         <div className="virtual-table-header-cell">Timestamp</div>
         <div className="virtual-table-header-cell">
-          <label style={{ display: 'inline-flex', alignItems: 'center', margin: 0, cursor: 'pointer' }}>
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              margin: 0,
+              cursor: 'pointer'
+            }}
+          >
             <input
               type="checkbox"
               onChange={onToggleSourceFilter}
@@ -181,9 +184,7 @@ function VirtualizedDataTable({
         ))}
 
         {/* Spacer for rows below visible range */}
-        {spacerAfterHeight > 0 && (
-          <div style={{ height: spacerAfterHeight }} />
-        )}
+        {spacerAfterHeight > 0 && <div style={{ height: spacerAfterHeight }} />}
       </div>
 
       {/* Info footer */}
