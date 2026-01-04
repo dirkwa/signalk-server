@@ -30,6 +30,10 @@ const searchStorageKey = 'admin.v1.dataBrowser.search'
 const selectedSourcesStorageKey = 'admin.v1.dataBrowser.selectedSources'
 const sourceFilterActiveStorageKey = 'admin.v1.dataBrowser.sourceFilterActive'
 
+// Viewport subscription constants
+const VIEWPORT_COUNT = 80 // Number of paths to request from server
+const VIEWPORT_OVERSCAN = 20 // Extra paths above/below visible range
+
 function fetchSources() {
   fetch(`/signalk/v1/api/sources`, {
     credentials: 'include'
@@ -74,9 +78,13 @@ class DataBrowser extends Component {
         localStorage.getItem(sourceFilterActiveStorageKey) === 'true',
       // For forcing re-renders when store updates
       storeVersion: 0,
-      pathKeys: []
+      pathKeys: [],
+      // Viewport state for server-side filtering
+      viewportStart: 0,
+      serverPathCount: 0
     }
 
+    this.lastSentViewport = 0
     this.fetchSources = fetchSources.bind(this)
     this.handlePause = this.handlePause.bind(this)
     this.handleMessage = this.handleMessage.bind(this)
@@ -87,11 +95,19 @@ class DataBrowser extends Component {
     this.toggleSourceSelection = this.toggleSourceSelection.bind(this)
     this.toggleSourceFilter = this.toggleSourceFilter.bind(this)
     this.updatePathKeys = this.updatePathKeys.bind(this)
+    this.handleViewportChange = this.handleViewportChange.bind(this)
   }
 
   handleMessage(msg) {
     if (this.state.pause) {
       return
+    }
+
+    // Handle viewport metadata from server
+    if (msg.viewport) {
+      if (msg.viewport.pathCount !== this.state.serverPathCount) {
+        this.setState({ serverPathCount: msg.viewport.pathCount })
+      }
     }
 
     if (msg.context && msg.updates) {
@@ -201,14 +217,18 @@ class DataBrowser extends Component {
       (this.props.webSocket !== this.state.webSocket ||
         this.state.didSubscribe === false)
     ) {
-      // Subscribe to all paths - virtualization handles DOM reduction
-      // Granular subscriptions were unstable, so using wildcard for now
+      // Subscribe with viewport - server filters to only send visible paths
       const sub = {
         context: '*',
         subscribe: [
           {
             path: '*',
-            period: 2000
+            period: 2000,
+            viewport: {
+              start: this.state.viewportStart,
+              count: VIEWPORT_COUNT,
+              sort: 'path'
+            }
           }
         ]
       }
@@ -217,6 +237,35 @@ class DataBrowser extends Component {
       this.state.webSocket = this.props.webSocket
       this.state.didSubscribe = true
       this.state.webSocket.messageHandler = this.handleMessage
+      this.lastSentViewport = this.state.viewportStart
+    }
+  }
+
+  // Called by VirtualizedDataTable when scroll position changes
+  handleViewportChange(newStart) {
+    // Only send update if changed significantly
+    if (
+      this.props.webSocket &&
+      this.state.didSubscribe &&
+      Math.abs(newStart - this.lastSentViewport) >= 10
+    ) {
+      const viewportUpdate = {
+        context:
+          this.state.context === 'self' ? 'vessels.self' : this.state.context,
+        viewport: {
+          start: Math.max(0, newStart - VIEWPORT_OVERSCAN),
+          count: VIEWPORT_COUNT,
+          sort: 'path'
+        }
+      }
+
+      try {
+        this.props.webSocket.send(JSON.stringify(viewportUpdate))
+        this.lastSentViewport = newStart
+        this.setState({ viewportStart: newStart })
+      } catch (e) {
+        // Viewport update failed, will retry on next scroll
+      }
     }
   }
 
@@ -516,6 +565,8 @@ class DataBrowser extends Component {
                     selectedSources={this.state.selectedSources}
                     onToggleSourceFilter={this.toggleSourceFilter}
                     sourceFilterActive={this.state.sourceFilterActive}
+                    onViewportChange={this.handleViewportChange}
+                    serverPathCount={this.state.serverPathCount}
                   />
                 )}
 
