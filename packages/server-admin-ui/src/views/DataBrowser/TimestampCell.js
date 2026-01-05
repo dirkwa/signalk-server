@@ -46,11 +46,7 @@ function TimestampCell({ timestamp, isPaused, className }) {
     isUpdated && !isPaused ? 'timestamp-updated' : ''
   }`
 
-  return (
-    <div className={cellClass}>
-      {timestamp}
-    </div>
-  )
+  return <div className={cellClass}>{timestamp}</div>
 }
 
 export default React.memo(TimestampCell)
