@@ -190,6 +190,10 @@ module.exports = function (app) {
         spark.sendMetaDeltas = spark.query.sendMeta === 'all'
         spark.sentMetaData = {}
 
+        // Track announced paths for "announce once" discovery policy
+        // Allows clients to discover new paths even when using granular subscriptions
+        spark.announcedPaths = new Set()
+
         // Initialize backpressure state for graceful degradation on slow connections
         spark.backpressure = {
           active: false,
@@ -371,10 +375,71 @@ module.exports = function (app) {
 
       return primus
     })
+
+    // Global "announce once" listener - sends first occurrence of each path to all clients
+    // This allows clients using granular subscriptions to discover new paths that appear later
+    const announceOnceListener = (delta) => {
+      if (!delta.updates) return
+
+      primuses.forEach((primus) => {
+        primus.forEach((spark) => {
+          // Skip if spark doesn't have announcedPaths (e.g., playback connections)
+          if (!spark.announcedPaths) return
+
+          // Check each path value in the delta
+          for (const update of delta.updates) {
+            if (!update.values) continue
+            for (const pv of update.values) {
+              const pathKey = `${delta.context}:${pv.path}:${update.$source || 'unknown'}`
+
+              if (!spark.announcedPaths.has(pathKey)) {
+                spark.announcedPaths.add(pathKey)
+                debug(
+                  'Announcing new path to spark %s: %s',
+                  spark.id,
+                  pathKey
+                )
+
+                // Build a minimal delta with just this one path for announcement
+                const announceDelta = {
+                  context: delta.context,
+                  updates: [
+                    {
+                      $source: update.$source,
+                      timestamp: update.timestamp,
+                      values: [{ path: pv.path, value: pv.value }]
+                    }
+                  ]
+                }
+
+                // Security filter before sending
+                const filtered = app.securityStrategy.filterReadDelta(
+                  spark.request.skPrincipal,
+                  announceDelta
+                )
+                if (filtered) {
+                  sendMetaData(app, spark, filtered)
+                  spark.write(filtered)
+                }
+              }
+            }
+          }
+        })
+      })
+    }
+    app.signalk.on('delta', announceOnceListener)
+
+    // Store reference for cleanup
+    api.announceOnceListener = announceOnceListener
   }
 
   api.stop = function () {
     debug('Destroying primuses...')
+    // Remove announce-once listener
+    if (api.announceOnceListener) {
+      app.signalk.removeListener('delta', api.announceOnceListener)
+      api.announceOnceListener = null
+    }
     primuses.forEach((primus) =>
       primus.destroy({
         close: false,

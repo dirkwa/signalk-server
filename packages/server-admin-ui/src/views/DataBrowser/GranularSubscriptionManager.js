@@ -18,7 +18,7 @@ const STATE = {
 }
 
 // Debug logging - can be disabled by setting to false
-const DEBUG = true
+const DEBUG = false
 const log = (...args) => DEBUG && console.log('[GranularSub]', ...args)
 
 class GranularSubscriptionManager {
