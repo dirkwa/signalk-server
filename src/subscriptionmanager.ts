@@ -93,6 +93,52 @@ class SubscriptionManager implements ISubscriptionManager {
         })
       )
     }
+
+    // Handle announceNewPaths: announce all paths matching context (once each)
+    // This allows clients with granular subscriptions to discover available paths
+    // without subscribing to everything continuously
+    if (command.announceNewPaths) {
+      const announcedPaths = new Set<string>()
+
+      // 1. Announce ALL existing paths matching context (send cached deltas once)
+      const existingDeltas = this.app.deltaCache.getCachedDeltas(
+        contextFilter,
+        user
+      )
+      if (existingDeltas) {
+        existingDeltas.forEach((delta: any) => {
+          // Track which paths we've announced
+          delta.updates?.forEach((update: any) => {
+            update.values?.forEach((vp: any) => {
+              if (vp.path) {
+                announcedPaths.add(vp.path)
+              }
+            })
+          })
+          callback(delta)
+        })
+      }
+
+      // 2. Listen for NEW paths appearing later and announce once
+      unsubscribes.push(
+        this.streambundle.keys.onValue((path: string) => {
+          if (announcedPaths.has(path)) {
+            return // Already announced this path
+          }
+          announcedPaths.add(path)
+
+          // Get cached delta for this new path and send once for discovery
+          const cached = this.app.deltaCache.getCachedDeltas(
+            contextFilter,
+            user,
+            path
+          )
+          if (cached && cached.length > 0) {
+            cached.forEach(callback)
+          }
+        })
+      )
+    }
   }
 
   unsubscribe(msg: UnsubscribeMessage, unsubscribes: Unsubscribes) {

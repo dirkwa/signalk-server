@@ -2,17 +2,18 @@
  * GranularSubscriptionManager - Manages visible-only WebSocket subscriptions
  *
  * Strategy:
- * 1. Discovery phase: Subscribe to all paths briefly to populate path list
- * 2. Switch to selective subscription for only visible paths + overscan
+ * 1. Subscribe to visible paths with announceNewPaths: true
+ *    - Server announces ALL existing paths matching context (once each)
+ *    - Server announces NEW paths as they appear (once each)
+ * 2. Only receive continuous updates for explicitly subscribed (visible) paths
  * 3. Debounce subscription changes during scroll (350ms)
  * 4. Handle "unsubscribe all, resubscribe new set" atomically
  *
- * State machine: IDLE -> DISCOVERING -> SUBSCRIBED <-> RESUBSCRIBING
+ * State machine: IDLE -> SUBSCRIBED <-> RESUBSCRIBING
  */
 
 const STATE = {
   IDLE: 'idle',
-  DISCOVERING: 'discovering',
   SUBSCRIBED: 'subscribed',
   RESUBSCRIBING: 'resubscribing'
 }
@@ -28,12 +29,10 @@ class GranularSubscriptionManager {
     this.currentPaths = new Set()
     this.pendingPaths = null
     this.debounceTimer = null
-    this.discoveryTimer = null
     this.messageHandler = null
 
     // Configuration
     this.DEBOUNCE_MS = 350
-    this.DISCOVERY_DURATION_MS = 2000
     this.OVERSCAN = 20
     this.SIMILARITY_THRESHOLD = 0.8
   }
@@ -47,34 +46,31 @@ class GranularSubscriptionManager {
   }
 
   /**
-   * Start the discovery phase - subscribe to everything briefly
-   * to learn what paths exist, then switch to selective mode
+   * Start subscription - immediately subscribe with announceNewPaths
+   * The server will announce all existing paths (once) and any new paths as they appear
    */
   startDiscovery() {
     if (!this.webSocket) return
 
-    this.state = STATE.DISCOVERING
-    log('Starting discovery phase (2s)')
+    log('Starting subscription with announceNewPaths')
 
-    // Subscribe to all paths for discovery
+    // Subscribe with announceNewPaths to discover all paths
+    // Server will send cached values for ALL paths matching context (once each)
+    // and announce any new paths that appear later
     this._send({
       context: '*',
-      subscribe: [{ path: '*' }]
+      announceNewPaths: true,
+      subscribe: [] // Empty initially, will be populated by requestPaths
     })
 
-    // After discovery period, switch to selective mode if we have pending paths
-    this.discoveryTimer = setTimeout(() => {
-      this.discoveryTimer = null
-      log('Discovery complete, pendingPaths:', this.pendingPaths?.size || 0)
-      if (this.pendingPaths && this.pendingPaths.size > 0) {
-        this._executeResubscription(this.pendingPaths)
-        this.pendingPaths = null
-      } else {
-        // Stay subscribed to all until first scroll triggers path request
-        this.state = STATE.SUBSCRIBED
-        log('No pending paths, staying subscribed to all')
-      }
-    }, this.DISCOVERY_DURATION_MS)
+    this.state = STATE.SUBSCRIBED
+
+    // If there are pending paths from before WebSocket was ready, apply them now
+    if (this.pendingPaths && this.pendingPaths.size > 0) {
+      const pending = this.pendingPaths
+      this.pendingPaths = null
+      this._executeResubscription(pending)
+    }
   }
 
   /**
@@ -89,10 +85,10 @@ class GranularSubscriptionManager {
     // Calculate paths with overscan
     const targetPaths = this._expandWithOverscan(visiblePathKeys, allPathKeys)
 
-    // During discovery, just queue the request
-    if (this.state === STATE.DISCOVERING) {
+    // If not yet connected, queue the request
+    if (this.state === STATE.IDLE) {
       this.pendingPaths = targetPaths
-      log('Queued paths during discovery:', targetPaths.size)
+      log('Queued paths (not yet connected):', targetPaths.size)
       return
     }
 
@@ -101,7 +97,12 @@ class GranularSubscriptionManager {
       return
     }
 
-    log('Paths changed, scheduling resubscription. Target:', targetPaths.size, 'Current:', this.currentPaths.size)
+    log(
+      'Paths changed, scheduling resubscription. Target:',
+      targetPaths.size,
+      'Current:',
+      this.currentPaths.size
+    )
 
     // Clear existing debounce timer
     if (this.debounceTimer) {
@@ -200,6 +201,7 @@ class GranularSubscriptionManager {
 
       const subMsg = {
         context: '*',
+        announceNewPaths: true, // Continue discovering new paths
         subscribe: uniquePaths.map((path) => ({ path }))
       }
 
@@ -252,10 +254,6 @@ class GranularSubscriptionManager {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer)
       this.debounceTimer = null
-    }
-    if (this.discoveryTimer) {
-      clearTimeout(this.discoveryTimer)
-      this.discoveryTimer = null
     }
 
     if (this.webSocket) {

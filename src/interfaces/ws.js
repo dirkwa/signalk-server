@@ -44,8 +44,11 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
 module.exports = function (app) {
   'use strict'
 
-  debug('Backpressure thresholds: enter=%d, exit=%d',
-    BACKPRESSURE_ENTER_THRESHOLD, BACKPRESSURE_EXIT_THRESHOLD)
+  debug(
+    'Backpressure thresholds: enter=%d, exit=%d',
+    BACKPRESSURE_ENTER_THRESHOLD,
+    BACKPRESSURE_EXIT_THRESHOLD
+  )
 
   const api = {}
   let primuses = []
@@ -189,10 +192,6 @@ module.exports = function (app) {
 
         spark.sendMetaDeltas = spark.query.sendMeta === 'all'
         spark.sentMetaData = {}
-
-        // Track announced paths for "announce once" discovery policy
-        // Allows clients to discover new paths even when using granular subscriptions
-        spark.announcedPaths = new Set()
 
         // Initialize backpressure state for graceful degradation on slow connections
         spark.backpressure = {
@@ -375,71 +374,10 @@ module.exports = function (app) {
 
       return primus
     })
-
-    // Global "announce once" listener - sends first occurrence of each path to all clients
-    // This allows clients using granular subscriptions to discover new paths that appear later
-    const announceOnceListener = (delta) => {
-      if (!delta.updates) return
-
-      primuses.forEach((primus) => {
-        primus.forEach((spark) => {
-          // Skip if spark doesn't have announcedPaths (e.g., playback connections)
-          if (!spark.announcedPaths) return
-
-          // Check each path value in the delta
-          for (const update of delta.updates) {
-            if (!update.values) continue
-            for (const pv of update.values) {
-              const pathKey = `${delta.context}:${pv.path}:${update.$source || 'unknown'}`
-
-              if (!spark.announcedPaths.has(pathKey)) {
-                spark.announcedPaths.add(pathKey)
-                debug(
-                  'Announcing new path to spark %s: %s',
-                  spark.id,
-                  pathKey
-                )
-
-                // Build a minimal delta with just this one path for announcement
-                const announceDelta = {
-                  context: delta.context,
-                  updates: [
-                    {
-                      $source: update.$source,
-                      timestamp: update.timestamp,
-                      values: [{ path: pv.path, value: pv.value }]
-                    }
-                  ]
-                }
-
-                // Security filter before sending
-                const filtered = app.securityStrategy.filterReadDelta(
-                  spark.request.skPrincipal,
-                  announceDelta
-                )
-                if (filtered) {
-                  sendMetaData(app, spark, filtered)
-                  spark.write(filtered)
-                }
-              }
-            }
-          }
-        })
-      })
-    }
-    app.signalk.on('delta', announceOnceListener)
-
-    // Store reference for cleanup
-    api.announceOnceListener = announceOnceListener
   }
 
   api.stop = function () {
     debug('Destroying primuses...')
-    // Remove announce-once listener
-    if (api.announceOnceListener) {
-      app.signalk.removeListener('delta', api.announceOnceListener)
-      api.announceOnceListener = null
-    }
     primuses.forEach((primus) =>
       primus.destroy({
         close: false,
@@ -970,6 +908,9 @@ function flushAccumulator(app, spark) {
   if (map.size === 0) return
 
   const countBefore = map.size
+  const duration = spark.backpressure.since
+    ? Date.now() - spark.backpressure.since
+    : 0
 
   // Group by context
   const byContext = new Map()
@@ -993,11 +934,15 @@ function flushAccumulator(app, spark) {
     })
   }
 
-  // Send one delta per context
+  // Send one delta per context with backpressure indicator
   for (const [context, bySourceTime] of byContext) {
     const delta = {
       context,
-      updates: Array.from(bySourceTime.values())
+      updates: Array.from(bySourceTime.values()),
+      $backpressure: {
+        accumulated: countBefore,
+        duration
+      }
     }
     sendMetaData(app, spark, delta)
     spark.write(delta)
