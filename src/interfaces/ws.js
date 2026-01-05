@@ -31,14 +31,15 @@ const debug = createDebug('signalk-server:interfaces:ws')
 const debugConnection = createDebug('signalk-server:interfaces:ws:connections')
 const Primus = require('primus')
 
-// Backpressure thresholds - enter at 512KB, exit at 256KB (hysteresis)
+// Backpressure thresholds - enter at 512KB, exit at ~0 (near-empty buffer)
+// Draining fully before flush ensures user sees near-real-time data periodically
 // Can override via env vars for testing: BACKPRESSURE_ENTER=1 BACKPRESSURE_EXIT=0
 const BACKPRESSURE_ENTER_THRESHOLD = process.env.BACKPRESSURE_ENTER
   ? parseInt(process.env.BACKPRESSURE_ENTER, 10)
   : 512 * 1024
 const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
   ? parseInt(process.env.BACKPRESSURE_EXIT, 10)
-  : 256 * 1024
+  : 1024
 
 module.exports = function (app) {
   'use strict'
