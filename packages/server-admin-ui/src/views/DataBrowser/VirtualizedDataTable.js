@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import DataRow from './DataRow'
 import subscriptionManager from './SubscriptionManager'
 import './VirtualTable.css'
@@ -111,16 +111,6 @@ function VirtualizedDataTable({
     }
   }, [isPaused])
 
-  if (pathKeys.length === 0) {
-    return (
-      <div className="virtual-table">
-        <div className="virtual-table-info">
-          No data available. Waiting for data...
-        </div>
-      </div>
-    )
-  }
-
   // Calculate spacer heights for rows before/after visible range
   // Use totalRowCount to create proper scroll height even for paths not yet received
   const spacerBeforeHeight = visibleRange.start * rowHeight
@@ -129,21 +119,35 @@ function VirtualizedDataTable({
     (totalRowCount - visibleRange.end - 1) * rowHeight
   )
 
-  // Build visible items - only include items we have data for
-  // For server-side viewport filtering, pathKeys contains only received paths
-  const visibleItems = []
-  for (
-    let i = visibleRange.start;
-    i <= visibleRange.end && i < totalRowCount;
-    i++
-  ) {
-    // Only render if we have the path data
-    if (pathKeys[i]) {
-      visibleItems.push({
-        index: i,
-        pathKey: pathKeys[i]
-      })
+  // Build visible items - memoized to prevent unnecessary re-renders
+  // Only recalculates when visible range or path data changes
+  // Note: Must be called before any early returns to maintain hook order
+  const visibleItems = useMemo(() => {
+    const items = []
+    for (
+      let i = visibleRange.start;
+      i <= visibleRange.end && i < totalRowCount;
+      i++
+    ) {
+      // Only render if we have the path data
+      if (pathKeys[i]) {
+        items.push({
+          index: i,
+          pathKey: pathKeys[i]
+        })
+      }
     }
+    return items
+  }, [visibleRange.start, visibleRange.end, totalRowCount, pathKeys])
+
+  if (pathKeys.length === 0) {
+    return (
+      <div className="virtual-table">
+        <div className="virtual-table-info">
+          No data available. Waiting for data...
+        </div>
+      </div>
+    )
   }
 
   return (
