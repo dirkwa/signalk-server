@@ -29,97 +29,7 @@ import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken'
 import { startEvents, startServerEvents } from '../events'
 const debug = createDebug('signalk-server:interfaces:ws')
 const debugConnection = createDebug('signalk-server:interfaces:ws:connections')
-const debugViewport = createDebug('signalk-server:interfaces:ws:viewport')
 const Primus = require('primus')
-
-/**
- * ViewportState - Tracks viewport state for paginated subscriptions.
- * Filters deltas to only include paths within the viewport range.
- * Uses binary insertion to maintain sorted order efficiently.
- */
-class ViewportState {
-  constructor(viewport) {
-    this.start = viewport.start || 0
-    this.count = viewport.count || 50
-    this.sort = viewport.sort || 'path'
-    this.allPaths = new Set()
-    this.sortedPaths = []
-    this.pathToIndex = new Map()
-    this.lastSentPathCount = 0
-  }
-
-  updateViewport(viewport) {
-    this.start = viewport.start
-    this.count = viewport.count
-    debugViewport(`Viewport updated: start=${this.start}, count=${this.count}`)
-  }
-
-  /**
-   * Add a path using binary insertion to maintain sorted order.
-   * Returns true if the path was newly added.
-   */
-  addPath(path) {
-    if (this.allPaths.has(path)) {
-      return false
-    }
-
-    this.allPaths.add(path)
-
-    // Binary search for insertion point
-    let low = 0
-    let high = this.sortedPaths.length
-
-    while (low < high) {
-      const mid = (low + high) >>> 1
-      if (this.sortedPaths[mid] < path) {
-        low = mid + 1
-      } else {
-        high = mid
-      }
-    }
-
-    // Insert at the found position
-    this.sortedPaths.splice(low, 0, path)
-
-    // Update indices for affected paths (from insertion point onwards)
-    for (let i = low; i < this.sortedPaths.length; i++) {
-      this.pathToIndex.set(this.sortedPaths[i], i)
-    }
-
-    return true
-  }
-
-  isInViewport(path) {
-    const index = this.pathToIndex.get(path)
-    if (index === undefined) return false
-    return index >= this.start && index < this.start + this.count
-  }
-
-  getPathCount() {
-    return this.allPaths.size
-  }
-
-  getViewportMetadata() {
-    return {
-      pathCount: this.allPaths.size,
-      start: this.start,
-      count: this.count
-    }
-  }
-
-  getViewportPaths() {
-    return this.sortedPaths.slice(this.start, this.start + this.count)
-  }
-
-  shouldSendPathCountUpdate() {
-    const current = this.allPaths.size
-    if (current !== this.lastSentPathCount) {
-      this.lastSentPathCount = current
-      return true
-    }
-    return false
-  }
-}
 
 module.exports = function (app) {
   'use strict'
@@ -311,11 +221,6 @@ module.exports = function (app) {
 
               if (msg.unsubscribe) {
                 processUnsubscribe(app, unsubscribes, msg, onChange, spark)
-              }
-
-              if (msg.viewport && !msg.subscribe) {
-                // Viewport update without subscribe - just update scroll position
-                processViewportUpdate(spark, msg, app)
               }
 
               if (msg.accessRequest) {
@@ -715,18 +620,6 @@ function processSubscribe(app, unsubscribes, spark, assertBufferSize, msg) {
       spark.logUnsubscribe = startServerLog(app, spark)
     }
   } else {
-    // Check if any subscription has a viewport option
-    const viewportSubscription =
-      Array.isArray(msg.subscribe) && msg.subscribe.find((sub) => sub.viewport)
-
-    if (viewportSubscription) {
-      // Initialize viewport state for this spark
-      spark.viewportState = new ViewportState(viewportSubscription.viewport)
-      debugViewport(
-        `Viewport subscription: start=${viewportSubscription.viewport.start}, count=${viewportSubscription.viewport.count}`
-      )
-    }
-
     app.subscriptionmanager.subscribe(
       msg,
       unsubscribes,
@@ -737,160 +630,13 @@ function processSubscribe(app, unsubscribes, spark, assertBufferSize, msg) {
           message
         )
         if (filtered) {
-          // If viewport is active, filter updates to only include visible paths
-          if (spark.viewportState) {
-            const viewportFiltered = filterDeltaByViewport(
-              filtered,
-              spark.viewportState
-            )
-            if (viewportFiltered) {
-              sendMetaData(app, spark, viewportFiltered)
-              spark.write(viewportFiltered)
-              assertBufferSize(spark)
-            }
-          } else {
-            sendMetaData(app, spark, filtered)
-            spark.write(filtered)
-            assertBufferSize(spark)
-          }
+          sendMetaData(app, spark, filtered)
+          spark.write(filtered)
+          assertBufferSize(spark)
         }
       },
       spark.request.skPrincipal
     )
-  }
-}
-
-/**
- * Filter a delta to only include paths within the viewport.
- * Also adds viewport metadata to the delta.
- */
-function filterDeltaByViewport(delta, viewportState) {
-  if (!delta.updates || delta.updates.length === 0) {
-    return null
-  }
-
-  let hasVisibleUpdates = false
-  const filteredUpdates = []
-
-  for (const update of delta.updates) {
-    if (update.values) {
-      const filteredValues = []
-      for (const pathValue of update.values) {
-        // Track all paths we see
-        viewportState.addPath(pathValue.path)
-
-        // Only include if in viewport
-        if (viewportState.isInViewport(pathValue.path)) {
-          filteredValues.push(pathValue)
-          hasVisibleUpdates = true
-        }
-      }
-      if (filteredValues.length > 0) {
-        filteredUpdates.push({
-          ...update,
-          values: filteredValues
-        })
-      }
-    } else if (update.meta) {
-      // Pass through meta updates
-      filteredUpdates.push(update)
-      hasVisibleUpdates = true
-    }
-  }
-
-  if (!hasVisibleUpdates) {
-    // If pathCount changed, send a metadata-only update
-    if (viewportState.shouldSendPathCountUpdate()) {
-      return {
-        context: delta.context,
-        viewport: viewportState.getViewportMetadata(),
-        updates: []
-      }
-    }
-    return null
-  }
-
-  return {
-    ...delta,
-    viewport: viewportState.getViewportMetadata(),
-    updates: filteredUpdates
-  }
-}
-
-/**
- * Process viewport update messages (scroll position changes)
- */
-function processViewportUpdate(spark, msg, app) {
-  debugViewport('processViewportUpdate called:', JSON.stringify(msg.viewport))
-  if (spark.viewportState && msg.viewport) {
-    const oldStart = spark.viewportState.start
-    const oldEnd = oldStart + spark.viewportState.count
-
-    spark.viewportState.updateViewport(msg.viewport)
-    debugViewport(
-      'Viewport updated to: start=%d, count=%d',
-      spark.viewportState.start,
-      spark.viewportState.count
-    )
-
-    // Send current viewport metadata back to confirm the update
-    spark.write({
-      viewport: spark.viewportState.getViewportMetadata()
-    })
-
-    // Send cached data for newly visible paths
-    if (app && app.deltaCache) {
-      const newStart = spark.viewportState.start
-      const newEnd = newStart + spark.viewportState.count
-      const viewportPaths = spark.viewportState.getViewportPaths()
-
-      debugViewport(
-        'Sending cached data for %d viewport paths (old range: %d-%d, new range: %d-%d)',
-        viewportPaths.length,
-        oldStart,
-        oldEnd,
-        newStart,
-        newEnd
-      )
-
-      // Get cached deltas and filter to only paths in the new viewport
-      const deltaFilter = () => true
-      const cachedDeltas = app.deltaCache.getCachedDeltas(
-        deltaFilter,
-        spark.request.skPrincipal
-      )
-
-      debugViewport('Got %d cached deltas, viewport paths: %s', cachedDeltas.length, viewportPaths.slice(0, 5).join(', '))
-
-      let sentCount = 0
-      cachedDeltas.forEach((delta) => {
-        if (delta.updates) {
-          const filteredUpdates = delta.updates
-            .map((update) => {
-              if (!update.values) return null
-              const filteredValues = update.values.filter((v) =>
-                viewportPaths.includes(v.path)
-              )
-              if (filteredValues.length === 0) return null
-              return { ...update, values: filteredValues }
-            })
-            .filter(Boolean)
-
-          if (filteredUpdates.length > 0) {
-            sentCount++
-            const filteredDelta = {
-              ...delta,
-              updates: filteredUpdates,
-              viewport: spark.viewportState.getViewportMetadata()
-            }
-            spark.write(filteredDelta)
-          }
-        }
-      })
-      debugViewport('Sent %d filtered deltas to client', sentCount)
-    }
-  } else {
-    debugViewport('No viewportState on spark or no viewport in msg')
   }
 }
 

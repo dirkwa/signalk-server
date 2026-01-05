@@ -15,21 +15,12 @@ function VirtualizedDataTable({
   onToggleSource,
   selectedSources,
   onToggleSourceFilter,
-  sourceFilterActive,
-  onViewportChange,
-  serverPathCount
+  sourceFilterActive
 }) {
   const containerRef = useRef(null)
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
   const rowHeight = 40 // Base row height in pixels (content can overflow)
   const overscan = 15 // Extra rows above/below viewport (increased for variable content)
-
-  // Track last sent viewport to avoid duplicate calls
-  const lastSentViewportRef = useRef(0)
-
-  // Use serverPathCount when available for total row count (server-side viewport filtering)
-  // Fall back to pathKeys.length for client-only mode
-  const totalRowCount = serverPathCount > 0 ? serverPathCount : pathKeys.length
 
   // Calculate visible range based on scroll position
   const updateVisibleRange = useCallback(() => {
@@ -39,7 +30,7 @@ function VirtualizedDataTable({
     const containerTop = rect.top
     const viewportHeight = window.innerHeight
 
-    // Calculate which rows are visible based on total row count (not just received paths)
+    // Calculate which rows are visible
     let startOffset = 0
     if (containerTop < 0) {
       startOffset = Math.abs(containerTop)
@@ -50,14 +41,7 @@ function VirtualizedDataTable({
       Math.floor(startOffset / rowHeight) - overscan
     )
     const visibleCount = Math.ceil(viewportHeight / rowHeight) + overscan * 2
-    // Use totalRowCount to allow scrolling to paths not yet received
-    const endIndex = Math.min(totalRowCount - 1, startIndex + visibleCount)
-
-    // Notify parent of viewport change for server-side filtering (separate from render updates)
-    if (onViewportChange && Math.abs(startIndex - lastSentViewportRef.current) > 5) {
-      lastSentViewportRef.current = startIndex
-      onViewportChange(startIndex)
-    }
+    const endIndex = Math.min(pathKeys.length - 1, startIndex + visibleCount)
 
     setVisibleRange((prev) => {
       // Only update if range changed significantly to avoid excessive re-renders
@@ -71,7 +55,7 @@ function VirtualizedDataTable({
       }
       return prev
     })
-  }, [totalRowCount, rowHeight, overscan, onViewportChange])
+  }, [pathKeys.length, rowHeight, overscan])
 
   // Set up scroll listener
   useEffect(() => {
@@ -112,11 +96,10 @@ function VirtualizedDataTable({
   }, [isPaused])
 
   // Calculate spacer heights for rows before/after visible range
-  // Use totalRowCount to create proper scroll height even for paths not yet received
   const spacerBeforeHeight = visibleRange.start * rowHeight
   const spacerAfterHeight = Math.max(
     0,
-    (totalRowCount - visibleRange.end - 1) * rowHeight
+    (pathKeys.length - visibleRange.end - 1) * rowHeight
   )
 
   // Build visible items - memoized to prevent unnecessary re-renders
@@ -126,10 +109,9 @@ function VirtualizedDataTable({
     const items = []
     for (
       let i = visibleRange.start;
-      i <= visibleRange.end && i < totalRowCount;
+      i <= visibleRange.end && i < pathKeys.length;
       i++
     ) {
-      // Only render if we have the path data
       if (pathKeys[i]) {
         items.push({
           index: i,
@@ -138,7 +120,7 @@ function VirtualizedDataTable({
       }
     }
     return items
-  }, [visibleRange.start, visibleRange.end, totalRowCount, pathKeys])
+  }, [visibleRange.start, visibleRange.end, pathKeys])
 
   if (pathKeys.length === 0) {
     return (
@@ -215,11 +197,9 @@ function VirtualizedDataTable({
 
       {/* Info footer */}
       <div className="virtual-table-info">
-        Showing {visibleItems.length} of {totalRowCount} paths
-        {serverPathCount > 0 && serverPathCount !== pathKeys.length &&
-          ` (${pathKeys.length} loaded)`} (rows{' '}
+        Showing {visibleItems.length} of {pathKeys.length} paths (rows{' '}
         {visibleRange.start + 1}-
-        {Math.min(visibleRange.end + 1, totalRowCount)})
+        {Math.min(visibleRange.end + 1, pathKeys.length)})
       </div>
     </div>
   )

@@ -67,67 +67,6 @@ type InstantPolicyOptions = {
 }
 
 /**
- * Viewport options for paginated subscriptions.
- * When specified, only paths within the viewport range will be sent to the client.
- * This is useful for UI virtualization where only visible rows need data updates.
- * @category Server API
- */
-export interface ViewportOptions {
-  /**
-   * The starting index of paths to include (0-based)
-   */
-  start: number
-
-  /**
-   * The number of paths to include from the start index
-   */
-  count: number
-
-  /**
-   * Sort order for paths. Defaults to 'path' (alphabetical by path name)
-   */
-  sort?: 'path' | 'timestamp' | 'source'
-}
-
-/**
- * Message to update viewport without full resubscribe.
- * Sent by client when user scrolls to a new position.
- * @category Server API
- */
-export interface ViewportUpdateMessage {
-  /**
-   * The context this viewport update applies to
-   */
-  context: Context
-
-  /**
-   * The new viewport range
-   */
-  viewport: ViewportOptions
-}
-
-/**
- * Viewport metadata included in delta responses when viewport subscriptions are active
- * @category Server API
- */
-export interface ViewportMetadata {
-  /**
-   * Total number of paths matching the subscription (before viewport filtering)
-   */
-  pathCount: number
-
-  /**
-   * Current viewport start index
-   */
-  start: number
-
-  /**
-   * Current viewport count
-   */
-  count: number
-}
-
-/**
  * A path object with optional criteria to control output
  * @inline
  * @category Server API
@@ -145,13 +84,6 @@ export type SubscriptionOptions = (
    * The signal K format to use for the message. Only `delta` is currently supported. See [Signal K Data Model](https://signalk.org/specification/1.7.0/doc/data_model.html)
    */
   format?: 'delta'
-
-  /**
-   * Optional viewport for paginated subscriptions. When specified, only paths
-   * within the viewport range will be sent to the client. The server will also
-   * include viewport metadata (pathCount) in responses.
-   */
-  viewport?: ViewportOptions
 }
 
 /**
