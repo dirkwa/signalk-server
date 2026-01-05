@@ -958,7 +958,6 @@ function getAssertBufferSize(config) {
   }
 
   return (spark) => {
-    debug(spark.id + ' ' + spark.request.socket.bufferSize)
     if (spark.request.socket.bufferSize > MAXSENDBUFFERSIZE) {
       if (!spark.bufferSizeExceeded) {
         console.warn(

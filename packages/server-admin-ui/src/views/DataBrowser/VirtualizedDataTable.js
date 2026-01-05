@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import DataRow from './DataRow'
 import subscriptionManager from './SubscriptionManager'
+import granularSubscriptionManager from './GranularSubscriptionManager'
 import './VirtualTable.css'
 
 /**
@@ -121,6 +122,16 @@ function VirtualizedDataTable({
     }
     return items
   }, [visibleRange.start, visibleRange.end, pathKeys])
+
+  // Report visible paths to granular subscription manager
+  // Must be after visibleItems useMemo since it depends on it
+  useEffect(() => {
+    if (isPaused) return
+    if (visibleItems.length === 0) return
+
+    const visiblePathKeys = visibleItems.map((item) => item.pathKey)
+    granularSubscriptionManager.requestPaths(visiblePathKeys, pathKeys)
+  }, [visibleRange.start, visibleRange.end, pathKeys, isPaused, visibleItems])
 
   if (pathKeys.length === 0) {
     return (

@@ -1,11 +1,10 @@
 /**
- * SubscriptionManager - Minimal subscription cleanup utility
+ * SubscriptionManager - Delegates to GranularSubscriptionManager
  *
- * Note: Granular per-path subscriptions were attempted but caused WebSocket
- * instability during scroll (too many subscribe/unsubscribe messages).
- * Currently using wildcard subscriptions instead. This module only provides
- * the unsubscribeAll() cleanup function.
+ * This is a thin wrapper that delegates to GranularSubscriptionManager
+ * for backward compatibility with existing cleanup calls.
  */
+import granularSubscriptionManager from './GranularSubscriptionManager'
 
 class SubscriptionManager {
   constructor() {
@@ -17,20 +16,10 @@ class SubscriptionManager {
   }
 
   /**
-   * Unsubscribe from all paths - used during cleanup
+   * Unsubscribe from all paths - delegates to granular manager
    */
   unsubscribeAll() {
-    if (this.webSocket) {
-      try {
-        const unsubMsg = {
-          context: '*',
-          unsubscribe: [{ path: '*' }]
-        }
-        this.webSocket.send(JSON.stringify(unsubMsg))
-      } catch (_e) {
-        // WebSocket may already be closed
-      }
-    }
+    granularSubscriptionManager.unsubscribeAll()
   }
 }
 

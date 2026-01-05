@@ -18,6 +18,7 @@ import Meta from './Meta'
 import store from './DataBrowserStore'
 import VirtualizedDataTable from './VirtualizedDataTable'
 import subscriptionManager from './SubscriptionManager'
+import granularSubscriptionManager from './GranularSubscriptionManager'
 
 const TIMESTAMP_FORMAT = 'MM/DD HH:mm:ss'
 const TIME_ONLY_FORMAT = 'HH:mm:ss'
@@ -201,17 +202,11 @@ class DataBrowser extends Component {
       (this.props.webSocket !== this.state.webSocket ||
         this.state.didSubscribe === false)
     ) {
-      // Subscribe to all paths - client-side virtualization + throttling handles performance
-      const sub = {
-        context: '*',
-        subscribe: [
-          {
-            path: '*'
-          }
-        ]
-      }
+      // Initialize granular subscription manager
+      granularSubscriptionManager.setWebSocket(this.props.webSocket)
+      granularSubscriptionManager.setMessageHandler(this.handleMessage)
+      granularSubscriptionManager.startDiscovery()
 
-      this.props.webSocket.send(JSON.stringify(sub))
       this.state.webSocket = this.props.webSocket
       this.state.didSubscribe = true
       this.state.webSocket.messageHandler = this.handleMessage
@@ -219,17 +214,9 @@ class DataBrowser extends Component {
   }
 
   unsubscribeToData() {
+    granularSubscriptionManager.unsubscribeAll()
+    this.state.didSubscribe = false
     if (this.props.webSocket) {
-      const sub = {
-        context: '*',
-        unsubscribe: [
-          {
-            path: '*'
-          }
-        ]
-      }
-      this.props.webSocket.send(JSON.stringify(sub))
-      this.state.didSubscribe = false
       this.props.webSocket.messageHandler = null
     }
   }
@@ -270,6 +257,10 @@ class DataBrowser extends Component {
 
     localStorage.setItem(selectedSourcesStorageKey, JSON.stringify([]))
     localStorage.setItem(sourceFilterActiveStorageKey, false)
+
+    // Restart discovery for new context
+    granularSubscriptionManager.cancelPending()
+    granularSubscriptionManager.startDiscovery()
 
     this.setState(
       {
