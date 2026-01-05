@@ -127,15 +127,20 @@ class SubscriptionManager implements ISubscriptionManager {
           }
           announcedPaths.add(path)
 
-          // Get cached delta for this new path and send once for discovery
-          const cached = this.app.deltaCache.getCachedDeltas(
-            contextFilter,
-            user,
-            path
-          )
-          if (cached && cached.length > 0) {
-            cached.forEach(callback)
-          }
+          // Subscribe to the bus to get the first value for this new path
+          // We can't rely on deltaCache here because it might not have
+          // received the value yet (race condition with keys.onValue)
+          const bus = this.streambundle.getBus(path as Path)
+          const unsubscribeBus = bus
+            .filter(contextFilter)
+            .take(1) // Only take the first value
+            .map(toDelta)
+            .onValue((delta: any) => {
+              callback(delta)
+            })
+
+          // Add to unsubscribes so it gets cleaned up
+          unsubscribes.push(unsubscribeBus)
         })
       )
     }
