@@ -20,8 +20,8 @@ function VirtualizedDataTable({
 }) {
   const containerRef = useRef(null)
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
-  const rowHeight = 40 // Base row height in pixels (content can overflow)
-  const overscan = 15 // Extra rows above/below viewport (increased for variable content)
+  const rowHeight = 40
+  const overscan = 15 // Extra rows above/below viewport
 
   // Calculate visible range based on scroll position
   const updateVisibleRange = useCallback(() => {
@@ -58,8 +58,11 @@ function VirtualizedDataTable({
     })
   }, [pathKeys.length, rowHeight, overscan])
 
-  // Set up scroll listener
+  // Set up scroll listener (only when not in RAW mode)
+  // RAW mode disables virtualization due to highly variable row heights
   useEffect(() => {
+    if (raw) return // Skip scroll tracking in RAW mode
+
     updateVisibleRange()
 
     let ticking = false
@@ -80,7 +83,7 @@ function VirtualizedDataTable({
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', handleScroll)
     }
-  }, [updateVisibleRange])
+  }, [updateVisibleRange, raw])
 
   // Cleanup subscriptions on unmount
   useEffect(() => {
@@ -97,31 +100,44 @@ function VirtualizedDataTable({
   }, [isPaused])
 
   // Calculate spacer heights for rows before/after visible range
-  const spacerBeforeHeight = visibleRange.start * rowHeight
-  const spacerAfterHeight = Math.max(
-    0,
-    (pathKeys.length - visibleRange.end - 1) * rowHeight
-  )
+  // In RAW mode, no spacers needed since we render all rows
+  const spacerBeforeHeight = raw ? 0 : visibleRange.start * rowHeight
+  const spacerAfterHeight = raw
+    ? 0
+    : Math.max(0, (pathKeys.length - visibleRange.end - 1) * rowHeight)
 
   // Build visible items - memoized to prevent unnecessary re-renders
-  // Only recalculates when visible range or path data changes
+  // In RAW mode, render ALL items (no virtualization) to avoid flicker from variable heights
   // Note: Must be called before any early returns to maintain hook order
   const visibleItems = useMemo(() => {
     const items = []
-    for (
-      let i = visibleRange.start;
-      i <= visibleRange.end && i < pathKeys.length;
-      i++
-    ) {
-      if (pathKeys[i]) {
-        items.push({
-          index: i,
-          pathKey: pathKeys[i]
-        })
+    if (raw) {
+      // RAW mode: render all items
+      for (let i = 0; i < pathKeys.length; i++) {
+        if (pathKeys[i]) {
+          items.push({
+            index: i,
+            pathKey: pathKeys[i]
+          })
+        }
+      }
+    } else {
+      // Normal mode: only render visible range
+      for (
+        let i = visibleRange.start;
+        i <= visibleRange.end && i < pathKeys.length;
+        i++
+      ) {
+        if (pathKeys[i]) {
+          items.push({
+            index: i,
+            pathKey: pathKeys[i]
+          })
+        }
       }
     }
     return items
-  }, [visibleRange.start, visibleRange.end, pathKeys])
+  }, [raw, visibleRange.start, visibleRange.end, pathKeys])
 
   // Report visible paths to granular subscription manager
   // Must be after visibleItems useMemo since it depends on it
@@ -208,9 +224,9 @@ function VirtualizedDataTable({
 
       {/* Info footer */}
       <div className="virtual-table-info">
-        Showing {visibleItems.length} of {pathKeys.length} paths (rows{' '}
-        {visibleRange.start + 1}-
-        {Math.min(visibleRange.end + 1, pathKeys.length)})
+        {raw
+          ? `Showing all ${pathKeys.length} paths (RAW mode)`
+          : `Showing ${visibleItems.length} of ${pathKeys.length} paths (rows ${visibleRange.start + 1}-${Math.min(visibleRange.end + 1, pathKeys.length)})`}
       </div>
     </div>
   )
