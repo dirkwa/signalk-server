@@ -69,7 +69,13 @@ const state = {
       timeoutsOk: true
     }
   },
-  backpressureWarning: null
+  backpressureWarning: null,
+  keeper: {
+    available: null, // null = unknown, true/false = checked
+    checking: false,
+    versions: null,
+    updateStatus: null
+  }
 }
 
 let store = createStore(
@@ -284,6 +290,31 @@ let store = createStore(
       return {
         ...state,
         backpressureWarning: null
+      }
+    }
+    // Keeper integration reducers
+    if (action.type === 'KEEPER_AVAILABILITY_CHECK') {
+      return {
+        ...state,
+        keeper: { ...state.keeper, checking: true }
+      }
+    }
+    if (action.type === 'KEEPER_AVAILABILITY_RESULT') {
+      return {
+        ...state,
+        keeper: { ...state.keeper, available: action.data, checking: false }
+      }
+    }
+    if (action.type === 'KEEPER_VERSIONS_RECEIVED') {
+      return {
+        ...state,
+        keeper: { ...state.keeper, versions: action.data }
+      }
+    }
+    if (action.type === 'KEEPER_UPDATE_STATUS') {
+      return {
+        ...state,
+        keeper: { ...state.keeper, updateStatus: action.data }
       }
     }
     return {

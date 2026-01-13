@@ -27,13 +27,19 @@ import BackupRestore from '../../views/ServerConfig/BackupRestore'
 import ServerLog from '../../views/ServerConfig/ServerLog'
 import ServerUpdate from '../../views/ServerConfig/ServerUpdate'
 
-import { fetchAllData, openServerEventsConnection } from '../../actions'
+import {
+  fetchAllData,
+  openServerEventsConnection,
+  checkKeeperAvailability
+} from '../../actions'
 
 class Full extends Component {
   componentDidMount() {
     const { dispatch } = this.props
     fetchAllData(dispatch)
     openServerEventsConnection(dispatch)
+    // Check if Keeper is available for container management
+    checkKeeperAvailability()(dispatch)
   }
 
   render() {
