@@ -22,11 +22,13 @@ export default defineConfig({
       shared: {
         react: {
           singleton: true,
-          requiredVersion: '^16.14.0'
+          // Allow any React version for backward compatibility with older webapps
+          requiredVersion: false
         },
         'react-dom': {
           singleton: true,
-          requiredVersion: '^16.14.0'
+          // Allow any React version for backward compatibility with older webapps
+          requiredVersion: false
         }
       }
     })
