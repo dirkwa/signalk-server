@@ -12,7 +12,7 @@ export default defineConfig({
   plugins: [
     react({
       babel: {
-        presets: ['@babel/preset-react']
+        presets: [['@babel/preset-react', { runtime: 'automatic' }]]
       }
     }),
     federation({
