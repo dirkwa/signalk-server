@@ -190,6 +190,8 @@ module.exports = function (app) {
   }
 
   function emptyAppStoreInfo(storeAvailable = true) {
+    const containerRuntime = process.env.CONTAINER_RUNTIME || null
+    const keeperUrl = process.env.KEEPER_URL || null
     return {
       available: [],
       installed: [],
@@ -197,7 +199,10 @@ module.exports = function (app) {
       installing: [],
       categories: getAvailableCategories(),
       storeAvailable: storeAvailable,
-      isInDocker: process.env.IS_IN_DOCKER === 'true'
+      isInDocker: process.env.IS_IN_DOCKER === 'true',
+      containerRuntime,
+      keeperUrl,
+      useKeeper: containerRuntime === 'podman' && keeperUrl !== null
     }
   }
 

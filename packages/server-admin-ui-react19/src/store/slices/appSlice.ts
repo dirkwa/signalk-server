@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import escape from 'escape-html'
 import Convert from 'ansi-to-html'
+import { initializeApi } from '../../services/api'
 import type {
   Plugin,
   Webapp,
@@ -144,6 +145,19 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
       installed: [...appStore.installed].sort(nameCollator),
       updates: [...appStore.updates].sort(nameCollator)
     }
+
+    // Initialize API layer with runtime configuration if available
+    if (
+      appStore.containerRuntime !== undefined ||
+      appStore.keeperUrl !== undefined
+    ) {
+      initializeApi({
+        containerRuntime: appStore.containerRuntime ?? null,
+        keeperUrl: appStore.keeperUrl ?? null,
+        useKeeper: appStore.useKeeper ?? false
+      })
+    }
+
     set({ appStore: sorted })
   },
 

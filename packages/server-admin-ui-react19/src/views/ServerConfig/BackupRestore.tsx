@@ -1,15 +1,29 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
+import Alert from 'react-bootstrap/Alert'
+import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Card from 'react-bootstrap/Card'
 import Col from 'react-bootstrap/Col'
 import Form from 'react-bootstrap/Form'
-import Row from 'react-bootstrap/Row'
 import ProgressBar from 'react-bootstrap/ProgressBar'
+import Row from 'react-bootstrap/Row'
+import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
 import { faCircleDot } from '@fortawesome/free-regular-svg-icons/faCircleDot'
-import { useStore, useRestarting } from '../../store'
+import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload'
+import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash'
+import { faUpload } from '@fortawesome/free-solid-svg-icons/faUpload'
+import { faClock } from '@fortawesome/free-solid-svg-icons/faClock'
+import { useStore, useRestarting, useRuntimeConfig } from '../../store'
 import { restartAction } from '../../actions'
+import {
+  backupApi,
+  shouldUseKeeper,
+  type KeeperBackup,
+  type BackupListResponse,
+  type BackupSchedulerStatus
+} from '../../services/api'
 
 const RESTORE_NONE = 0
 const RESTORE_VALIDATING = 1
@@ -22,18 +36,77 @@ interface RestoreStatus {
   percentComplete?: number
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleString()
+}
+
 const BackupRestore: React.FC = () => {
   const restoreStatus = useStore(
     (state) => state.restoreStatus
   ) as RestoreStatus
   const restarting = useRestarting()
+  const { useKeeper } = useRuntimeConfig()
 
+  // Standard restore state
   const [restoreFile, setRestoreFile] = useState<File | null>(null)
   const [restoreState, setRestoreState] = useState(RESTORE_NONE)
   const [includePlugins, setIncludePlugins] = useState(false)
   const [restoreContents, setRestoreContents] = useState<
     Record<string, boolean>
   >({})
+
+  // Keeper-specific state
+  const [backupList, setBackupList] = useState<BackupListResponse | null>(null)
+  const [schedulerStatus, setSchedulerStatus] =
+    useState<BackupSchedulerStatus | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false)
+  const [backupType, setBackupType] = useState<'full' | 'config' | 'plugins'>(
+    'full'
+  )
+  const [backupDescription, setBackupDescription] = useState('')
+
+  useEffect(() => {
+    if (useKeeper && shouldUseKeeper()) {
+      loadBackups()
+      loadSchedulerStatus()
+    }
+  }, [useKeeper])
+
+  const loadBackups = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const list = await backupApi.list()
+      if (list) {
+        setBackupList(list)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load backups')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loadSchedulerStatus = async () => {
+    try {
+      const status = await backupApi.scheduler.status()
+      if (status) {
+        setSchedulerStatus(status)
+      }
+    } catch (err) {
+      console.error('Failed to load scheduler status:', err)
+    }
+  }
 
   const cancelRestore = useCallback(() => {
     setRestoreState(RESTORE_NONE)
@@ -46,37 +119,76 @@ const BackupRestore: React.FC = () => {
     []
   )
 
+  // Standard backup (download)
   const backup = useCallback(() => {
-    const url = `${window.serverRoutesPrefix}/backup?includePlugins=${includePlugins}`
+    const url = backupApi.getDownloadUrl(undefined, includePlugins)
     window.location.href = url
   }, [includePlugins])
 
-  const restore = useCallback(() => {
-    fetch(`${window.serverRoutesPrefix}/restore`, {
-      credentials: 'include',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(restoreContents)
-    })
-      .then((response) => {
-        if (!response.ok) {
-          return response.text()
-        }
-        return null
+  const createKeeperBackup = useCallback(async () => {
+    setIsCreatingBackup(true)
+    setError(null)
+    try {
+      await backupApi.create({
+        type: backupType,
+        description: backupDescription || undefined
       })
-      .then((res) => {
-        if (typeof res === 'string') {
-          alert(res)
-          setRestoreState(RESTORE_NONE)
-          setRestoreFile(null)
-        } else {
-          setRestoreState(RESTORE_RUNNING)
-        }
+      setBackupDescription('')
+      await loadBackups()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create backup')
+    } finally {
+      setIsCreatingBackup(false)
+    }
+  }, [backupType, backupDescription])
+
+  const downloadBackup = useCallback((id: string) => {
+    const url = backupApi.getDownloadUrl(id)
+    window.location.href = url
+  }, [])
+
+  const deleteBackup = useCallback(async (id: string) => {
+    if (!confirm('Are you sure you want to delete this backup?')) return
+    try {
+      await backupApi.delete(id)
+      await loadBackups()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete backup')
+    }
+  }, [])
+
+  const restoreKeeperBackup = useCallback(async (id: string) => {
+    if (
+      !confirm(
+        'Are you sure you want to restore from this backup? This will overwrite your current settings.'
+      )
+    )
+      return
+    setRestoreState(RESTORE_RUNNING)
+    try {
+      await backupApi.restore(id)
+      // The server will restart automatically
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to restore backup')
+      setRestoreState(RESTORE_NONE)
+    }
+  }, [])
+
+  // Standard restore flow
+  const restore = useCallback(() => {
+    const filesToRestore = Object.entries(restoreContents)
+      .filter(([, selected]) => selected)
+      .map(([filename]) => filename)
+
+    backupApi
+      .restore(filesToRestore)
+      .then(() => {
+        setRestoreState(RESTORE_RUNNING)
       })
       .catch((error) => {
         alert(error.message)
+        setRestoreState(RESTORE_NONE)
+        setRestoreFile(null)
       })
   }, [restoreContents])
 
@@ -86,49 +198,38 @@ const BackupRestore: React.FC = () => {
     window.location.href = '/admin/#/dashboard'
   }, [])
 
-  const validate = useCallback(() => {
+  const validate = useCallback(async () => {
     if (!restoreFile) {
       alert('Please choose a file')
       return
     }
 
-    const data = new FormData()
-    data.append('file', restoreFile)
-
     setRestoreState(RESTORE_VALIDATING)
-    fetch(`${window.serverRoutesPrefix}/validateBackup`, {
-      credentials: 'include',
-      method: 'POST',
-      headers: {
-        Accept: 'application/json'
-      },
-      body: data
-    })
-      .then((response) => {
-        if (response.ok) {
-          return response.json()
+    try {
+      const result = await backupApi.upload(restoreFile)
+      if ('files' in result && Array.isArray(result.files)) {
+        // SignalK server response
+        const contents: Record<string, boolean> = {}
+        result.files.forEach((filename: string) => {
+          contents[filename] = true
+        })
+        setRestoreState(RESTORE_CONFIRM)
+        setRestoreContents(contents)
+      } else if ('id' in result) {
+        // Keeper response - file uploaded, can restore directly
+        if (confirm('Backup file validated. Do you want to restore now?')) {
+          await restoreKeeperBackup((result as KeeperBackup).id)
         } else {
-          return response.text()
-        }
-      })
-      .then((res) => {
-        if (typeof res === 'string') {
-          alert(res)
           setRestoreState(RESTORE_NONE)
-          setRestoreFile(null)
-        } else {
-          const contents: Record<string, boolean> = {}
-          ;(res as string[]).forEach((filename) => {
-            contents[filename] = true
-          })
-          setRestoreState(RESTORE_CONFIRM)
-          setRestoreContents(contents)
+          await loadBackups()
         }
-      })
-      .catch((error) => {
-        alert(error.message)
-      })
-  }, [restoreFile])
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Validation failed')
+      setRestoreState(RESTORE_NONE)
+      setRestoreFile(null)
+    }
+  }, [restoreFile, restoreKeeperBackup])
 
   const handleRestoreFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,8 +252,304 @@ const BackupRestore: React.FC = () => {
     []
   )
 
+  const toggleScheduler = useCallback(async () => {
+    if (!schedulerStatus) return
+    try {
+      const newStatus = await backupApi.scheduler.update({
+        enabled: !schedulerStatus.enabled
+      })
+      if (newStatus) {
+        setSchedulerStatus(newStatus)
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to update scheduler'
+      )
+    }
+  }, [schedulerStatus])
+
   const fieldColWidthMd = 10
 
+  const renderBackupList = (backups: KeeperBackup[], type: string) => {
+    if (backups.length === 0) return null
+    return (
+      <div className="mb-4">
+        <h6>{type.charAt(0).toUpperCase() + type.slice(1)} Backups</h6>
+        <Table size="sm" responsive>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Size</th>
+              <th>Description</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {backups.map((backup) => (
+              <tr key={backup.id}>
+                <td>{formatDate(backup.created)}</td>
+                <td>{formatBytes(backup.size)}</td>
+                <td>{backup.description || '-'}</td>
+                <td>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    className="me-1"
+                    onClick={() => downloadBackup(backup.id)}
+                    title="Download"
+                  >
+                    <FontAwesomeIcon icon={faDownload} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="warning"
+                    className="me-1"
+                    onClick={() => restoreKeeperBackup(backup.id)}
+                    title="Restore"
+                  >
+                    <FontAwesomeIcon icon={faUpload} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => deleteBackup(backup.id)}
+                    title="Delete"
+                  >
+                    <FontAwesomeIcon icon={faTrash} />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </div>
+    )
+  }
+
+  // Keeper mode UI
+  if (useKeeper && shouldUseKeeper()) {
+    return (
+      <div>
+        {error && (
+          <Alert variant="danger" dismissible onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Create Backup Card */}
+        <Card className="mb-4">
+          <Card.Header>Create Backup</Card.Header>
+          <Card.Body>
+            <Form>
+              <Row className="mb-3">
+                <Form.Label column sm={2}>Type</Form.Label>
+                <Col sm={10}>
+                  <Form.Select
+                    value={backupType}
+                    onChange={(e) =>
+                      setBackupType(
+                        e.target.value as 'full' | 'config' | 'plugins'
+                      )
+                    }
+                  >
+                    <option value="full">Full (settings + plugins)</option>
+                    <option value="config">Configuration only</option>
+                    <option value="plugins">Plugins only</option>
+                  </Form.Select>
+                </Col>
+              </Row>
+              <Row className="mb-3">
+                <Form.Label column sm={2}>Description</Form.Label>
+                <Col sm={10}>
+                  <Form.Control
+                    type="text"
+                    placeholder="Optional description"
+                    value={backupDescription}
+                    onChange={(e) => setBackupDescription(e.target.value)}
+                  />
+                </Col>
+              </Row>
+            </Form>
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="primary"
+              onClick={createKeeperBackup}
+              disabled={isCreatingBackup}
+            >
+              {isCreatingBackup ? (
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              ) : (
+                <FontAwesomeIcon icon={faCircleDot} />
+              )}{' '}
+              Create Backup
+            </Button>
+          </Card.Footer>
+        </Card>
+
+        {/* Backup Scheduler Card */}
+        {schedulerStatus && (
+          <Card className="mb-4">
+            <Card.Header>
+              <FontAwesomeIcon icon={faClock} /> Automatic Backups
+            </Card.Header>
+            <Card.Body>
+              <Row>
+                <Col sm={6}>
+                  <Form.Group>
+                    <Form.Label>Status</Form.Label>
+                    <div>
+                      <Badge
+                        bg={
+                          schedulerStatus.enabled ? 'success' : 'secondary'
+                        }
+                      >
+                        {schedulerStatus.enabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </div>
+                  </Form.Group>
+                </Col>
+                {schedulerStatus.enabled && (
+                  <>
+                    <Col sm={6}>
+                      <Form.Group>
+                        <Form.Label>Next Run</Form.Label>
+                        <div>
+                          {schedulerStatus.nextRun
+                            ? formatDate(schedulerStatus.nextRun)
+                            : 'Not scheduled'}
+                        </div>
+                      </Form.Group>
+                    </Col>
+                    <Col sm={6}>
+                      <Form.Group>
+                        <Form.Label>Last Run</Form.Label>
+                        <div>
+                          {schedulerStatus.lastRun
+                            ? formatDate(schedulerStatus.lastRun)
+                            : 'Never'}
+                          {schedulerStatus.lastResult && (
+                            <Badge
+                              bg={
+                                schedulerStatus.lastResult === 'success'
+                                  ? 'success'
+                                  : 'danger'
+                              }
+                              className="ms-2"
+                            >
+                              {schedulerStatus.lastResult}
+                            </Badge>
+                          )}
+                        </div>
+                      </Form.Group>
+                    </Col>
+                  </>
+                )}
+              </Row>
+            </Card.Body>
+            <Card.Footer>
+              <Button
+                variant={schedulerStatus.enabled ? 'warning' : 'success'}
+                onClick={toggleScheduler}
+              >
+                {schedulerStatus.enabled ? 'Disable' : 'Enable'} Automatic
+                Backups
+              </Button>
+            </Card.Footer>
+          </Card>
+        )}
+
+        {/* Backup List Card */}
+        <Card className="mb-4">
+          <Card.Header>
+            Available Backups
+            {backupList && (
+              <span className="float-end text-muted">
+                Total: {formatBytes(backupList.totalSize)} / Available:{' '}
+                {formatBytes(backupList.availableSpace)}
+              </span>
+            )}
+          </Card.Header>
+          <Card.Body>
+            {isLoading ? (
+              <div className="text-center">
+                <FontAwesomeIcon icon={faCircleNotch} spin size="2x" />
+              </div>
+            ) : backupList ? (
+              <>
+                {renderBackupList(backupList.backups.full, 'full')}
+                {renderBackupList(backupList.backups.config, 'config')}
+                {renderBackupList(backupList.backups.plugins, 'plugins')}
+                {renderBackupList(backupList.backups.manual, 'manual')}
+                {Object.values(backupList.backups).every(
+                  (arr) => arr.length === 0
+                ) && (
+                  <p className="text-muted text-center">No backups available</p>
+                )}
+              </>
+            ) : (
+              <p className="text-muted">Unable to load backups</p>
+            )}
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="secondary"
+              onClick={loadBackups}
+              disabled={isLoading}
+            >
+              Refresh
+            </Button>
+          </Card.Footer>
+        </Card>
+
+        {/* Upload Restore File Card */}
+        <Card>
+          <Card.Header>Restore from File</Card.Header>
+          <Card.Body>
+            <Form.Text className="text-muted">
+              Upload a backup file from another installation to restore
+              settings.
+            </Form.Text>
+            <br />
+            <Row className="mb-3">
+              <Col xs="12" md={fieldColWidthMd}>
+                <Form.Control
+                  type="file"
+                  name="backupFile"
+                  onChange={fileChanged}
+                  accept=".zip,.tar.gz,.tgz"
+                />
+              </Col>
+            </Row>
+            {restoreState === RESTORE_RUNNING && (
+              <div>
+                <Form.Text>Restoring... Please wait.</Form.Text>
+                <ProgressBar animated variant="success" now={100} />
+              </div>
+            )}
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="danger"
+              onClick={validate}
+              disabled={
+                restoreFile === null || restoreState === RESTORE_RUNNING
+              }
+            >
+              {restoreState === RESTORE_VALIDATING ? (
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              ) : (
+                <FontAwesomeIcon icon={faUpload} />
+              )}{' '}
+              Upload and Restore
+            </Button>
+          </Card.Footer>
+        </Card>
+      </div>
+    )
+  }
+
+  // Standard SignalK Server mode UI (original)
   return (
     <div>
       {restoreState === RESTORE_NONE && !restoreStatus.state && (
