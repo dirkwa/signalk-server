@@ -27,6 +27,8 @@ import Settings from '../../views/ServerConfig/Settings'
 import BackupRestore from '../../views/ServerConfig/BackupRestore'
 import ServerLog from '../../views/ServerConfig/ServerLog'
 import ServerUpdate from '../../views/ServerConfig/ServerUpdate'
+import SystemHealth from '../../views/ServerConfig/SystemHealth'
+import History from '../../views/ServerConfig/History'
 
 import { fetchAllData } from '../../actions'
 
@@ -187,6 +189,14 @@ export default function Full() {
               <Route
                 path="/serverConfiguration/update"
                 element={<ProtectedRoute component={ServerUpdate} />}
+              />
+              <Route
+                path="/serverConfiguration/health"
+                element={<ProtectedRoute component={SystemHealth} />}
+              />
+              <Route
+                path="/serverConfiguration/history"
+                element={<ProtectedRoute component={History} />}
               />
               <Route
                 path="/security/settings"
