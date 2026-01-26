@@ -1,7 +1,12 @@
 import React, { useMemo, useCallback, MouseEvent, ReactNode } from 'react'
 import { NavLink, Location } from 'react-router-dom'
 import { Badge, Nav, NavItem, NavLink as RsNavLink } from 'reactstrap'
-import { useAppStore, useAccessRequests, useLoginStatus } from '../../store'
+import {
+  useAppStore,
+  useAccessRequests,
+  useLoginStatus,
+  useRuntimeConfig
+} from '../../store'
 import classNames from 'classnames'
 import SidebarFooter from './../SidebarFooter/SidebarFooter'
 import SidebarForm from './../SidebarForm/SidebarForm'
@@ -40,6 +45,7 @@ export default function Sidebar({ location }: SidebarProps) {
   const appStore = useAppStore()
   const accessRequests = useAccessRequests()
   const loginStatus = useLoginStatus()
+  const { useKeeper } = useRuntimeConfig()
 
   const items = useMemo((): NavItemData[] => {
     const appUpdates = appStore.updates.length
@@ -140,7 +146,19 @@ export default function Sidebar({ location }: SidebarProps) {
             {
               name: 'Backup/Restore',
               url: '/serverConfiguration/backuprestore'
-            }
+            },
+            ...(useKeeper
+              ? [
+                  {
+                    name: 'System Health',
+                    url: '/serverConfiguration/health'
+                  },
+                  {
+                    name: 'History',
+                    url: '/serverConfiguration/history'
+                  }
+                ]
+              : [])
           ]
         }
       )
@@ -202,7 +220,7 @@ export default function Sidebar({ location }: SidebarProps) {
     })
 
     return result
-  }, [appStore, accessRequests, loginStatus])
+  }, [appStore, accessRequests, loginStatus, useKeeper])
 
   const handleClick = useCallback((e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault()
