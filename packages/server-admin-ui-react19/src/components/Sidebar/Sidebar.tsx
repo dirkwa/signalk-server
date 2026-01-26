@@ -6,7 +6,8 @@ import {
   useAppStore,
   useAccessRequests,
   useDevices,
-  useLoginStatus
+  useLoginStatus,
+  useRuntimeConfig
 } from '../../store'
 import classNames from 'classnames'
 import SidebarFooter from './../SidebarFooter/SidebarFooter'
@@ -48,6 +49,7 @@ export default function Sidebar({ location }: SidebarProps) {
   const accessRequests = useAccessRequests()
   const devices = useDevices()
   const loginStatus = useLoginStatus()
+  const { useKeeper } = useRuntimeConfig()
 
   const nowMs = Date.now() // eslint-disable-line react-hooks/purity -- expired status is stable
   const expiredDeviceCount = devices.filter(
@@ -162,7 +164,19 @@ export default function Sidebar({ location }: SidebarProps) {
             {
               name: 'Backup/Restore',
               url: '/serverConfiguration/backuprestore'
-            }
+            },
+            ...(useKeeper
+              ? [
+                  {
+                    name: 'System Health',
+                    url: '/serverConfiguration/health'
+                  },
+                  {
+                    name: 'History',
+                    url: '/serverConfiguration/history'
+                  }
+                ]
+              : [])
           ]
         }
       )
@@ -229,7 +243,7 @@ export default function Sidebar({ location }: SidebarProps) {
     })
 
     return result
-  }, [appStore, accessRequests, expiredDeviceCount, loginStatus])
+  }, [appStore, accessRequests, expiredDeviceCount, loginStatus, useKeeper])
 
   const handleClick = useCallback((e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault()

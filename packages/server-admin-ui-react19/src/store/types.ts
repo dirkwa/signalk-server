@@ -18,6 +18,9 @@ export interface AppStoreState {
   canUpdateServer?: boolean
   serverUpdate?: string
   isInDocker?: boolean
+  containerRuntime?: string | null
+  keeperUrl?: string | null
+  useKeeper?: boolean
 }
 
 export interface AppInfo {

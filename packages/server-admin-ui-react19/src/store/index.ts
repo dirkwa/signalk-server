@@ -161,4 +161,19 @@ export function useUnitCategories() {
   return useStore((s) => s.categories)
 }
 
+export function useRuntimeConfig() {
+  return useStore(
+    useShallow((s) => ({
+      containerRuntime: s.appStore.containerRuntime ?? null,
+      keeperUrl: s.appStore.keeperUrl ?? null,
+      useKeeper: s.appStore.useKeeper ?? false,
+      isInDocker: s.appStore.isInDocker ?? false
+    }))
+  )
+}
+
+export function useKeeper() {
+  return useStore((s) => s.appStore.useKeeper ?? false)
+}
+
 export * from './types'
