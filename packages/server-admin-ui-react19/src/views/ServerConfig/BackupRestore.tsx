@@ -290,7 +290,9 @@ const BackupRestore: React.FC = () => {
 
   const renderBackupTable = (backups: KeeperBackup[], showType = false) => {
     if (backups.length === 0) {
-      return <p className="text-muted text-center">No backups in this category</p>
+      return (
+        <p className="text-muted text-center">No backups in this category</p>
+      )
     }
     return (
       <Table size="sm" responsive>
@@ -356,13 +358,17 @@ const BackupRestore: React.FC = () => {
       ...backupList.backups.full,
       ...backupList.backups.config,
       ...backupList.backups.plugins
-    ].sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+    ].sort(
+      (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()
+    )
   }
 
   const getBackupCount = (type: string): number => {
     if (!backupList) return 0
     if (type === 'all') return getAllBackups().length
-    return backupList.backups[type as keyof typeof backupList.backups]?.length || 0
+    return (
+      backupList.backups[type as keyof typeof backupList.backups]?.length || 0
+    )
   }
 
   // Keeper mode UI
