@@ -5,8 +5,10 @@ import Button from 'react-bootstrap/Button'
 import Card from 'react-bootstrap/Card'
 import Col from 'react-bootstrap/Col'
 import Form from 'react-bootstrap/Form'
+import Nav from 'react-bootstrap/Nav'
 import ProgressBar from 'react-bootstrap/ProgressBar'
 import Row from 'react-bootstrap/Row'
+import Tab from 'react-bootstrap/Tab'
 import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
@@ -74,6 +76,7 @@ const BackupRestore: React.FC = () => {
     'full'
   )
   const [backupDescription, setBackupDescription] = useState('')
+  const [activeBackupTab, setActiveBackupTab] = useState<string>('all')
 
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
@@ -270,60 +273,96 @@ const BackupRestore: React.FC = () => {
 
   const fieldColWidthMd = 10
 
-  const renderBackupList = (backups: KeeperBackup[], type: string) => {
-    if (backups.length === 0) return null
+  const getBackupTypeColor = (type: string): string => {
+    switch (type) {
+      case 'manual':
+        return 'primary'
+      case 'full':
+        return 'success'
+      case 'config':
+        return 'info'
+      case 'plugins':
+        return 'warning'
+      default:
+        return 'secondary'
+    }
+  }
+
+  const renderBackupTable = (backups: KeeperBackup[], showType = false) => {
+    if (backups.length === 0) {
+      return <p className="text-muted text-center">No backups in this category</p>
+    }
     return (
-      <div className="mb-4">
-        <h6>{type.charAt(0).toUpperCase() + type.slice(1)} Backups</h6>
-        <Table size="sm" responsive>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Size</th>
-              <th>Description</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {backups.map((backup) => (
-              <tr key={backup.id}>
-                <td>{formatDate(backup.created)}</td>
-                <td>{formatBytes(backup.size)}</td>
-                <td>{backup.description || '-'}</td>
+      <Table size="sm" responsive>
+        <thead>
+          <tr>
+            <th>Date</th>
+            {showType && <th>Type</th>}
+            <th>Size</th>
+            <th>Description</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {backups.map((backup) => (
+            <tr key={backup.id}>
+              <td>{formatDate(backup.created)}</td>
+              {showType && (
                 <td>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    className="me-1"
-                    onClick={() => downloadBackup(backup.id)}
-                    title="Download"
-                  >
-                    <FontAwesomeIcon icon={faDownload} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="warning"
-                    className="me-1"
-                    onClick={() => restoreKeeperBackup(backup.id)}
-                    title="Restore"
-                  >
-                    <FontAwesomeIcon icon={faUpload} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => deleteBackup(backup.id)}
-                    title="Delete"
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                  </Button>
+                  <Badge bg={getBackupTypeColor(backup.type)}>{backup.type}</Badge>
                 </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      </div>
+              )}
+              <td>{formatBytes(backup.size)}</td>
+              <td>{backup.description || '-'}</td>
+              <td>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="me-1"
+                  onClick={() => downloadBackup(backup.id)}
+                  title="Download"
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="warning"
+                  className="me-1"
+                  onClick={() => restoreKeeperBackup(backup.id)}
+                  title="Restore"
+                >
+                  <FontAwesomeIcon icon={faUpload} />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => deleteBackup(backup.id)}
+                  title="Delete"
+                >
+                  <FontAwesomeIcon icon={faTrash} />
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
     )
+  }
+
+  const getAllBackups = (): KeeperBackup[] => {
+    if (!backupList) return []
+    return [
+      ...backupList.backups.manual,
+      ...backupList.backups.full,
+      ...backupList.backups.config,
+      ...backupList.backups.plugins
+    ].sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+  }
+
+  const getBackupCount = (type: string): number => {
+    if (!backupList) return 0
+    if (type === 'all') return getAllBackups().length
+    return backupList.backups[type as keyof typeof backupList.backups]?.length || 0
   }
 
   // Keeper mode UI
@@ -401,7 +440,7 @@ const BackupRestore: React.FC = () => {
                     <div>
                       <Badge
                         bg={
-                          schedulerStatus.enabled ? 'success' : 'secondary'
+                          schedulerStatus.enabled ? 'success' : 'danger'
                         }
                       >
                         {schedulerStatus.enabled ? 'Enabled' : 'Disabled'}
@@ -477,15 +516,49 @@ const BackupRestore: React.FC = () => {
               </div>
             ) : backupList ? (
               <>
-                {renderBackupList(backupList.backups.full, 'full')}
-                {renderBackupList(backupList.backups.config, 'config')}
-                {renderBackupList(backupList.backups.plugins, 'plugins')}
-                {renderBackupList(backupList.backups.manual, 'manual')}
-                {Object.values(backupList.backups).every(
-                  (arr) => arr.length === 0
-                ) && (
-                  <p className="text-muted text-center">No backups available</p>
-                )}
+                <Tab.Container activeKey={activeBackupTab} onSelect={(k) => k && setActiveBackupTab(k)}>
+                  <Nav variant="tabs" className="mb-3">
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'manual', label: 'Manual' },
+                      { id: 'full', label: 'Full' },
+                      { id: 'config', label: 'Config' },
+                      { id: 'plugins', label: 'Plugins' }
+                    ].map((tab) => (
+                      <Nav.Item key={tab.id}>
+                        <Nav.Link eventKey={tab.id}>
+                          {tab.label}
+                          {getBackupCount(tab.id) > 0 && (
+                            <Badge bg={getBackupTypeColor(tab.id)} pill className="ms-2">
+                              {getBackupCount(tab.id)}
+                            </Badge>
+                          )}
+                        </Nav.Link>
+                      </Nav.Item>
+                    ))}
+                  </Nav>
+                  <Tab.Content>
+                    <Tab.Pane eventKey="all">
+                      {getAllBackups().length > 0 ? (
+                        renderBackupTable(getAllBackups(), true)
+                      ) : (
+                        <p className="text-muted text-center">No backups available</p>
+                      )}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="manual">
+                      {renderBackupTable(backupList.backups.manual)}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="full">
+                      {renderBackupTable(backupList.backups.full)}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="config">
+                      {renderBackupTable(backupList.backups.config)}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="plugins">
+                      {renderBackupTable(backupList.backups.plugins)}
+                    </Tab.Pane>
+                  </Tab.Content>
+                </Tab.Container>
               </>
             ) : (
               <p className="text-muted">Unable to load backups</p>
