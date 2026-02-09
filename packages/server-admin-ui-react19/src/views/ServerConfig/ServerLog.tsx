@@ -251,16 +251,10 @@ function LogList({ value }: LogListProps) {
       ref={containerRef}
       style={{
         overflowY: 'scroll',
-        height: 'calc(100vh - 400px)',
-        minHeight: '300px',
-        border: '1px solid #333',
-        borderRadius: '4px',
-        padding: '10px',
-        fontFamily: "'Consolas', 'Monaco', 'Courier New', monospace",
-        fontSize: '13px',
-        lineHeight: '1.4',
-        backgroundColor: '#1e1e1e',
-        color: '#d4d4d4'
+        maxHeight: '60vh',
+        border: '1px solid',
+        padding: '5px',
+        fontFamily: 'monospace'
       }}
     >
       {value.entries.length === 0 ? (
