@@ -1,7 +1,3 @@
-/**
- * API Types for Keeper and SignalK Server APIs
- */
-
 export interface KeeperApiResponse<T> {
   success: boolean
   data?: T

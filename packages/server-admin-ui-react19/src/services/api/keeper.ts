@@ -1,10 +1,3 @@
-/**
- * Keeper API Client
- *
- * Client for interacting with the Keeper container management API
- * when running in Podman/Universal Installer environment.
- */
-
 import type {
   KeeperApiResponse,
   ContainerInfo,

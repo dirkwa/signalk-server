@@ -1,10 +1,3 @@
-/**
- * Unified API Service Layer
- *
- * Provides a unified API that automatically routes requests to either
- * the SignalK Server API or Keeper API based on the runtime environment.
- */
-
 import { createKeeperApi, type KeeperApi, KeeperApiError } from './keeper'
 import { createSignalkApi, type SignalkApi } from './signalk'
 
@@ -26,10 +19,7 @@ let runtimeConfig: RuntimeConfig = {
   useKeeper: false
 }
 
-/**
- * Transform Keeper URL for remote browser access.
- * Replaces localhost/127.0.0.1 with the browser's hostname.
- */
+// Replace loopback addresses with the browser's hostname for remote access
 function transformKeeperUrl(url: string | null): string | null {
   if (!url) return null
 
@@ -42,12 +32,7 @@ function transformKeeperUrl(url: string | null): string | null {
   return url
 }
 
-/**
- * Initialize the API layer with runtime configuration.
- * Call this once when the app store data is loaded.
- */
 export function initializeApi(config: Partial<RuntimeConfig>): void {
-  // Transform keeperUrl if browser is accessing remotely
   const keeperUrl = transformKeeperUrl(config.keeperUrl ?? null)
 
   runtimeConfig = {
@@ -63,23 +48,14 @@ export function initializeApi(config: Partial<RuntimeConfig>): void {
   }
 }
 
-/**
- * Get the current runtime configuration
- */
 export function getRuntimeConfig(): RuntimeConfig {
   return { ...runtimeConfig }
 }
 
-/**
- * Check if Keeper API should be used
- */
 export function shouldUseKeeper(): boolean {
   return runtimeConfig.useKeeper && keeperApi !== null
 }
 
-/**
- * Get the Keeper API instance (throws if not available)
- */
 export function getKeeperApi(): KeeperApi {
   if (!keeperApi) {
     throw new Error('Keeper API not initialized or not available')
@@ -87,9 +63,6 @@ export function getKeeperApi(): KeeperApi {
   return keeperApi
 }
 
-/**
- * Get the SignalK API instance
- */
 export function getSignalkApi(): SignalkApi {
   if (!signalkApi) {
     signalkApi = createSignalkApi()
@@ -97,15 +70,8 @@ export function getSignalkApi(): SignalkApi {
   return signalkApi
 }
 
-/**
- * Unified Server API
- *
- * Routes calls to either Keeper or SignalK Server based on runtime.
- */
+// Routes calls to Keeper or SignalK Server based on runtime config
 export const serverApi = {
-  /**
-   * Restart the server/container
-   */
   restart: async (): Promise<void> => {
     if (shouldUseKeeper()) {
       await getKeeperApi().container.restart()
@@ -114,9 +80,6 @@ export const serverApi = {
     }
   },
 
-  /**
-   * Get container/server status (Keeper only)
-   */
   getStatus: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().container.status()
@@ -124,9 +87,6 @@ export const serverApi = {
     return null
   },
 
-  /**
-   * Get container stats (Keeper only)
-   */
   getStats: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().container.stats()
@@ -135,15 +95,8 @@ export const serverApi = {
   }
 }
 
-/**
- * Unified Backup API
- */
 export const backupApi = {
-  /**
-   * List all backups
-   * - Keeper: Returns structured backup list with types
-   * - SignalK: Not supported (single download only)
-   */
+  // Keeper only — SignalK supports single download only
   list: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().backups.list()
@@ -151,11 +104,6 @@ export const backupApi = {
     return null
   },
 
-  /**
-   * Create a new backup
-   * - Keeper: Creates backup via API
-   * - SignalK: Returns download URL
-   */
   create: async (options?: {
     type?: 'full' | 'config' | 'plugins'
     description?: string
@@ -167,7 +115,6 @@ export const backupApi = {
         description: options?.description
       })
     }
-    // For SignalK, return the download URL
     return {
       downloadUrl: getSignalkApi().backup.download(
         options?.includePlugins ?? true
@@ -175,9 +122,6 @@ export const backupApi = {
     }
   },
 
-  /**
-   * Get download URL for a backup
-   */
   getDownloadUrl: (id?: string, includePlugins?: boolean): string => {
     if (shouldUseKeeper() && id) {
       return getKeeperApi().backups.download(id)
@@ -185,9 +129,6 @@ export const backupApi = {
     return getSignalkApi().backup.download(includePlugins ?? true)
   },
 
-  /**
-   * Upload a backup file for restore
-   */
   upload: async (file: File) => {
     if (shouldUseKeeper()) {
       return getKeeperApi().backups.upload(file)
@@ -195,9 +136,6 @@ export const backupApi = {
     return getSignalkApi().backup.validate(file)
   },
 
-  /**
-   * Restore from a backup
-   */
   restore: async (idOrFiles: string | string[]) => {
     if (shouldUseKeeper()) {
       if (typeof idOrFiles === 'string') {
@@ -214,9 +152,6 @@ export const backupApi = {
     }
   },
 
-  /**
-   * Delete a backup (Keeper only)
-   */
   delete: async (id: string) => {
     if (shouldUseKeeper()) {
       await getKeeperApi().backups.delete(id)
@@ -225,9 +160,6 @@ export const backupApi = {
     }
   },
 
-  /**
-   * Get/update backup scheduler (Keeper only)
-   */
   scheduler: {
     status: async () => {
       if (shouldUseKeeper()) {
@@ -248,9 +180,6 @@ export const backupApi = {
     }
   },
 
-  /**
-   * Get storage info (Keeper only)
-   */
   storage: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().backups.storage()
@@ -259,24 +188,14 @@ export const backupApi = {
   }
 }
 
-/**
- * Unified Update API
- */
 export const updateApi = {
-  /**
-   * List available versions
-   */
   listVersions: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().versions.list()
     }
-    // For SignalK, version info is in appStore
     return null
   },
 
-  /**
-   * Get update status
-   */
   status: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().update.status()
@@ -284,9 +203,6 @@ export const updateApi = {
     return null
   },
 
-  /**
-   * Start an update
-   */
   start: async (version?: string) => {
     if (shouldUseKeeper()) {
       await getKeeperApi().update.start({ tag: version })
@@ -298,9 +214,6 @@ export const updateApi = {
     }
   },
 
-  /**
-   * Subscribe to update progress (Keeper only)
-   */
   subscribeProgress: (
     onStatus: (status: import('./types').UpdateStatus) => void
   ): EventSource | null => {
@@ -310,9 +223,6 @@ export const updateApi = {
     return null
   },
 
-  /**
-   * Rollback update (Keeper only)
-   */
   rollback: async () => {
     if (shouldUseKeeper()) {
       await getKeeperApi().update.rollback()
@@ -321,9 +231,6 @@ export const updateApi = {
     }
   },
 
-  /**
-   * Pull a specific version (Keeper only)
-   */
   pullVersion: async (tag: string) => {
     if (shouldUseKeeper()) {
       await getKeeperApi().versions.pull(tag)
@@ -332,9 +239,6 @@ export const updateApi = {
     }
   },
 
-  /**
-   * Switch to a specific version (Keeper only)
-   */
   switchVersion: async (tag: string) => {
     if (shouldUseKeeper()) {
       await getKeeperApi().versions.switch(tag)
@@ -344,13 +248,7 @@ export const updateApi = {
   }
 }
 
-/**
- * Health/Doctor API (primarily Keeper)
- */
 export const healthApi = {
-  /**
-   * Check overall health
-   */
   check: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().health.check()
@@ -358,9 +256,6 @@ export const healthApi = {
     return null
   },
 
-  /**
-   * Check SignalK container health
-   */
   signalkHealth: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().health.signalk()
@@ -368,9 +263,6 @@ export const healthApi = {
     return null
   },
 
-  /**
-   * Run doctor diagnosis (full check with issues and fixes)
-   */
   runDoctor: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().doctor.diagnose()
@@ -378,9 +270,6 @@ export const healthApi = {
     return null
   },
 
-  /**
-   * Apply a doctor fix
-   */
   applyFix: async (fixId: string) => {
     if (shouldUseKeeper()) {
       return getKeeperApi().doctor.applyFix(fixId)
@@ -388,9 +277,6 @@ export const healthApi = {
     return null
   },
 
-  /**
-   * Get system info
-   */
   systemInfo: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().system.info()
@@ -398,9 +284,6 @@ export const healthApi = {
     return null
   },
 
-  /**
-   * Check for Keeper updates
-   */
   checkKeeperUpdate: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().system.keeperVersion()
@@ -408,9 +291,6 @@ export const healthApi = {
     return null
   },
 
-  /**
-   * Get Keeper upgrade state
-   */
   getKeeperUpgradeState: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().system.keeperUpgradeState()
@@ -418,9 +298,6 @@ export const healthApi = {
     return null
   },
 
-  /**
-   * Prepare Keeper upgrade (download new version)
-   */
   prepareKeeperUpgrade: async (version: string) => {
     if (shouldUseKeeper()) {
       return getKeeperApi().system.keeperUpgradePrepare(version)
@@ -428,9 +305,6 @@ export const healthApi = {
     return null
   },
 
-  /**
-   * Apply Keeper upgrade (restart with new version)
-   */
   applyKeeperUpgrade: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().system.keeperUpgradeApply()
@@ -439,13 +313,7 @@ export const healthApi = {
   }
 }
 
-/**
- * History (InfluxDB + Grafana) API (Keeper only)
- */
 export const historyApi = {
-  /**
-   * Get history system status
-   */
   status: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().history.status()
@@ -453,9 +321,6 @@ export const historyApi = {
     return null
   },
 
-  /**
-   * Get history settings
-   */
   settings: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().history.settings()
@@ -463,9 +328,6 @@ export const historyApi = {
     return null
   },
 
-  /**
-   * Get credentials (sanitized)
-   */
   credentials: async () => {
     if (shouldUseKeeper()) {
       return getKeeperApi().history.credentials()
@@ -473,9 +335,6 @@ export const historyApi = {
     return null
   },
 
-  /**
-   * Enable history storage (InfluxDB + Grafana)
-   */
   enable: async (options?: {
     retentionDays?: number
     bucket?: string
@@ -487,9 +346,6 @@ export const historyApi = {
     throw new Error('History management not supported without Keeper')
   },
 
-  /**
-   * Disable history storage
-   */
   disable: async (retainData: boolean = true) => {
     if (shouldUseKeeper()) {
       await getKeeperApi().history.disable(retainData)
@@ -498,9 +354,6 @@ export const historyApi = {
     }
   },
 
-  /**
-   * Update retention policy
-   */
   updateRetention: async (retentionDays: number) => {
     if (shouldUseKeeper()) {
       return getKeeperApi().history.updateRetention(retentionDays)
@@ -508,9 +361,6 @@ export const historyApi = {
     throw new Error('History management not supported without Keeper')
   },
 
-  /**
-   * Grafana management
-   */
   grafana: {
     enable: async () => {
       if (shouldUseKeeper()) {
