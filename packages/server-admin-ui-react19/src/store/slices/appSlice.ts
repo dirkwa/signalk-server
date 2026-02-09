@@ -146,7 +146,6 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
       updates: [...appStore.updates].sort(nameCollator)
     }
 
-    // Initialize API layer with runtime configuration if available
     if (
       appStore.containerRuntime !== undefined ||
       appStore.keeperUrl !== undefined

@@ -32,7 +32,6 @@ export async function logoutAction(): Promise<void> {
 }
 
 /**
- * Restart action - directly updates store
  * Uses Keeper API when running in Podman/Universal Installer environment,
  * otherwise falls back to SignalK Server API.
  */

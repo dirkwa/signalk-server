@@ -1,10 +1,3 @@
-/**
- * SignalK Server API Client
- *
- * Client for interacting with the SignalK server's admin API
- * when running in standard (non-Keeper) mode.
- */
-
 declare const window: Window & {
   serverRoutesPrefix: string
 }
