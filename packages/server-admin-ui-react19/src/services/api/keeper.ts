@@ -381,6 +381,32 @@ export function createKeeperApi(baseUrl: string) {
           used: number
           available: number
         }>(response)
+      },
+
+      password: {
+        status: async (): Promise<{ hasCustomPassword: boolean }> => {
+          const response = await fetch(`${apiUrl}/api/backups/password`)
+          return handleResponse<{ hasCustomPassword: boolean }>(response)
+        },
+
+        change: async (
+          password: string,
+          confirmPassword: string
+        ): Promise<void> => {
+          const response = await fetch(`${apiUrl}/api/backups/password`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, confirmPassword })
+          })
+          await handleResponse<void>(response)
+        },
+
+        reset: async (): Promise<void> => {
+          const response = await fetch(`${apiUrl}/api/backups/password`, {
+            method: 'DELETE'
+          })
+          await handleResponse<void>(response)
+        }
       }
     },
 
