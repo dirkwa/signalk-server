@@ -5,9 +5,11 @@ import Button from 'react-bootstrap/Button'
 import Card from 'react-bootstrap/Card'
 import Col from 'react-bootstrap/Col'
 import Form from 'react-bootstrap/Form'
+import Modal from 'react-bootstrap/Modal'
 import Nav from 'react-bootstrap/Nav'
 import ProgressBar from 'react-bootstrap/ProgressBar'
 import Row from 'react-bootstrap/Row'
+import Spinner from 'react-bootstrap/Spinner'
 import Tab from 'react-bootstrap/Tab'
 import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -17,6 +19,7 @@ import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload'
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash'
 import { faUpload } from '@fortawesome/free-solid-svg-icons/faUpload'
 import { faClock } from '@fortawesome/free-solid-svg-icons/faClock'
+import { faLock } from '@fortawesome/free-solid-svg-icons/faLock'
 import { useStore, useRestarting, useRuntimeConfig } from '../../store'
 import { restartAction } from '../../actions'
 import {
@@ -78,12 +81,71 @@ const BackupRestore: React.FC = () => {
   const [backupDescription, setBackupDescription] = useState('')
   const [activeBackupTab, setActiveBackupTab] = useState<string>('all')
 
+  // Password state
+  const [hasCustomPassword, setHasCustomPassword] = useState(false)
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [resetModalOpen, setResetModalOpen] = useState(false)
+  const [passwordLoading, setPasswordLoading] = useState(false)
+
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
       loadBackups()
       loadSchedulerStatus()
+      loadPasswordStatus()
     }
   }, [useKeeper])
+
+  const loadPasswordStatus = async () => {
+    try {
+      const status = await backupApi.password.status()
+      if (status) {
+        setHasCustomPassword(status.hasCustomPassword)
+      }
+    } catch (err) {
+      console.error('Failed to load password status:', err)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    setPasswordLoading(true)
+    try {
+      await backupApi.password.change(newPassword, confirmPassword)
+      setHasCustomPassword(true)
+      setPasswordModalOpen(false)
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to change password')
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
+  const handleResetPassword = async () => {
+    setPasswordLoading(true)
+    try {
+      await backupApi.password.reset()
+      setHasCustomPassword(false)
+      setResetModalOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reset password')
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
+  const passwordsMatch =
+    newPassword.length >= 8 && newPassword === confirmPassword
 
   const loadBackups = async () => {
     setIsLoading(true)
@@ -582,7 +644,7 @@ const BackupRestore: React.FC = () => {
         </Card>
 
         {/* Upload Restore File Card */}
-        <Card>
+        <Card className="mb-4">
           <Card.Header>Restore from File</Card.Header>
           <Card.Body>
             <Form.Text className="text-muted">
@@ -624,6 +686,121 @@ const BackupRestore: React.FC = () => {
             </Button>
           </Card.Footer>
         </Card>
+
+        {/* Backup Password Card */}
+        <Card>
+          <Card.Header>
+            <FontAwesomeIcon icon={faLock} /> Backup Password
+          </Card.Header>
+          <Card.Body>
+            <Row className="align-items-center">
+              <Col>
+                <p className="mb-1">
+                  <strong>Status:</strong>{' '}
+                  <Badge bg={hasCustomPassword ? 'success' : 'secondary'}>
+                    {hasCustomPassword ? 'Custom password' : 'Default password'}
+                  </Badge>
+                </p>
+                <Form.Text className="text-muted">
+                  All backups are password-protected. A default password is used
+                  unless you set a custom one.
+                </Form.Text>
+              </Col>
+            </Row>
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="primary"
+              className="me-2"
+              onClick={() => setPasswordModalOpen(true)}
+            >
+              Change Password
+            </Button>
+            {hasCustomPassword && (
+              <Button variant="warning" onClick={() => setResetModalOpen(true)}>
+                Reset to Default
+              </Button>
+            )}
+          </Card.Footer>
+        </Card>
+
+        {/* Change Password Modal */}
+        <Modal
+          show={passwordModalOpen}
+          onHide={() => setPasswordModalOpen(false)}
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Change Backup Password</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Alert variant="warning">
+              <strong>Warning:</strong> Changing the password will re-create the
+              backup repository. Existing backups will be lost.
+            </Alert>
+            <Form.Group className="mb-3">
+              <Form.Label htmlFor="new-password">New Password</Form.Label>
+              <Form.Control
+                type="password"
+                id="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Minimum 8 characters"
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label htmlFor="confirm-password">Confirm Password</Form.Label>
+              <Form.Control
+                type="password"
+                id="confirm-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                isValid={confirmPassword.length > 0 && passwordsMatch}
+                isInvalid={confirmPassword.length > 0 && !passwordsMatch}
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setPasswordModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleChangePassword}
+              disabled={!passwordsMatch || passwordLoading}
+            >
+              {passwordLoading ? <Spinner size="sm" /> : 'Change Password'}
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Reset Password Modal */}
+        <Modal show={resetModalOpen} onHide={() => setResetModalOpen(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Reset to Default Password</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Alert variant="warning">
+              This will reset to the default password and re-create the backup
+              repository. Existing backups will be lost.
+            </Alert>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setResetModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="warning"
+              onClick={handleResetPassword}
+              disabled={passwordLoading}
+            >
+              {passwordLoading ? <Spinner size="sm" /> : 'Reset to Default'}
+            </Button>
+          </Modal.Footer>
+        </Modal>
       </div>
     )
   }

@@ -185,6 +185,35 @@ export const backupApi = {
       return getKeeperApi().backups.storage()
     }
     return null
+  },
+
+  password: {
+    status: async () => {
+      if (shouldUseKeeper()) {
+        return getKeeperApi().backups.password.status()
+      }
+      return null
+    },
+
+    change: async (password: string, confirmPassword: string) => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().backups.password.change(password, confirmPassword)
+      } else {
+        throw new Error(
+          'Backup password management not supported without Keeper'
+        )
+      }
+    },
+
+    reset: async () => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().backups.password.reset()
+      } else {
+        throw new Error(
+          'Backup password management not supported without Keeper'
+        )
+      }
+    }
   }
 }
 
