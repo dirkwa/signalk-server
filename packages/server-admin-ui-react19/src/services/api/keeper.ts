@@ -62,22 +62,26 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export function createKeeperApi(baseUrl: string) {
   const apiUrl = baseUrl.replace(/\/$/, '')
 
+  // All Keeper requests go through SignalK's authenticated proxy
+  const keeperFetch = (url: string, options?: RequestInit): Promise<Response> =>
+    fetch(url, { credentials: 'include', ...options })
+
   return {
     health: {
       check: async (): Promise<HealthStatus> => {
-        const response = await fetch(`${apiUrl}/api/health`)
+        const response = await keeperFetch(`${apiUrl}/api/health`)
         return handleResponse<HealthStatus>(response)
       },
 
       signalk: async (): Promise<{ status: string; healthy: boolean }> => {
-        const response = await fetch(`${apiUrl}/api/health/signalk`)
+        const response = await keeperFetch(`${apiUrl}/api/health/signalk`)
         return handleResponse<{ status: string; healthy: boolean }>(response)
       }
     },
 
     container: {
       status: async (): Promise<ContainerInfo> => {
-        const response = await fetch(`${apiUrl}/api/container`)
+        const response = await keeperFetch(`${apiUrl}/api/container`)
         // Keeper returns slightly different structure, transform to expected format
         const rawContainer = await handleResponse<{
           id: string
@@ -124,7 +128,7 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       stats: async (): Promise<ContainerStats> => {
-        const response = await fetch(`${apiUrl}/api/container/stats`)
+        const response = await keeperFetch(`${apiUrl}/api/container/stats`)
         // Keeper returns flat structure, transform to expected nested format
         const rawStats = await handleResponse<{
           cpuPercent: number
@@ -163,7 +167,7 @@ export function createKeeperApi(baseUrl: string) {
         lines: Array<{ timestamp: string; message: string; level: string }>
         count: number
       }> => {
-        const response = await fetch(
+        const response = await keeperFetch(
           `${apiUrl}/api/container/logs?lines=${lines}&source=${source}`
         )
         // Keeper returns { lines: [{ timestamp, message, level }], count }
@@ -183,21 +187,21 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       start: async (): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/container/start`, {
+        const response = await keeperFetch(`${apiUrl}/api/container/start`, {
           method: 'POST'
         })
         await handleResponse<void>(response)
       },
 
       stop: async (): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/container/stop`, {
+        const response = await keeperFetch(`${apiUrl}/api/container/stop`, {
           method: 'POST'
         })
         await handleResponse<void>(response)
       },
 
       restart: async (): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/container/restart`, {
+        const response = await keeperFetch(`${apiUrl}/api/container/restart`, {
           method: 'POST'
         })
         await handleResponse<void>(response)
@@ -206,7 +210,7 @@ export function createKeeperApi(baseUrl: string) {
 
     backups: {
       list: async (): Promise<BackupListResponse> => {
-        const response = await fetch(`${apiUrl}/api/backups`)
+        const response = await keeperFetch(`${apiUrl}/api/backups`)
         // Keeper returns flat array, transform to expected grouped format
         const rawBackups = await handleResponse<{
           backups: Array<{
@@ -267,7 +271,7 @@ export function createKeeperApi(baseUrl: string) {
       }): Promise<KeeperBackup> => {
         // Keeper expects type to be 'manual' for user-initiated backups
         // Don't send the UI's type field, just description
-        const response = await fetch(`${apiUrl}/api/backups`, {
+        const response = await keeperFetch(`${apiUrl}/api/backups`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -285,7 +289,7 @@ export function createKeeperApi(baseUrl: string) {
       upload: async (file: File): Promise<KeeperBackup> => {
         const formData = new FormData()
         formData.append('file', file)
-        const response = await fetch(`${apiUrl}/api/backups/upload`, {
+        const response = await keeperFetch(`${apiUrl}/api/backups/upload`, {
           method: 'POST',
           body: formData
         })
@@ -293,14 +297,14 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       restore: async (id: string): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/backups/${id}/restore`, {
+        const response = await keeperFetch(`${apiUrl}/api/backups/${id}/restore`, {
           method: 'POST'
         })
         await handleResponse<void>(response)
       },
 
       delete: async (id: string): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/backups/${id}`, {
+        const response = await keeperFetch(`${apiUrl}/api/backups/${id}`, {
           method: 'DELETE'
         })
         await handleResponse<void>(response)
@@ -308,7 +312,7 @@ export function createKeeperApi(baseUrl: string) {
 
       scheduler: {
         status: async (): Promise<BackupSchedulerStatus> => {
-          const response = await fetch(`${apiUrl}/api/backups/scheduler`)
+          const response = await keeperFetch(`${apiUrl}/api/backups/scheduler`)
           // Keeper returns different structure, transform to expected format
           const rawScheduler = await handleResponse<{
             enabled: boolean
@@ -341,12 +345,12 @@ export function createKeeperApi(baseUrl: string) {
             const endpoint = config.enabled
               ? `${apiUrl}/api/backups/scheduler/start`
               : `${apiUrl}/api/backups/scheduler/stop`
-            const response = await fetch(endpoint, { method: 'POST' })
+            const response = await keeperFetch(endpoint, { method: 'POST' })
             await handleResponse<{ enabled: boolean }>(response)
           }
 
           // Fetch full status after start/stop (start/stop return minimal data)
-          const statusResponse = await fetch(`${apiUrl}/api/backups/scheduler`)
+          const statusResponse = await keeperFetch(`${apiUrl}/api/backups/scheduler`)
           const rawScheduler = await handleResponse<{
             enabled: boolean
             lastBackup?: string
@@ -375,7 +379,7 @@ export function createKeeperApi(baseUrl: string) {
         used: number
         available: number
       }> => {
-        const response = await fetch(`${apiUrl}/api/backups/storage`)
+        const response = await keeperFetch(`${apiUrl}/api/backups/storage`)
         return handleResponse<{
           total: number
           used: number
@@ -385,7 +389,7 @@ export function createKeeperApi(baseUrl: string) {
 
       password: {
         status: async (): Promise<{ hasCustomPassword: boolean }> => {
-          const response = await fetch(`${apiUrl}/api/backups/password`)
+          const response = await keeperFetch(`${apiUrl}/api/backups/password`)
           return handleResponse<{ hasCustomPassword: boolean }>(response)
         },
 
@@ -393,7 +397,7 @@ export function createKeeperApi(baseUrl: string) {
           password: string,
           confirmPassword: string
         ): Promise<void> => {
-          const response = await fetch(`${apiUrl}/api/backups/password`, {
+          const response = await keeperFetch(`${apiUrl}/api/backups/password`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password, confirmPassword })
@@ -402,7 +406,7 @@ export function createKeeperApi(baseUrl: string) {
         },
 
         reset: async (): Promise<void> => {
-          const response = await fetch(`${apiUrl}/api/backups/password`, {
+          const response = await keeperFetch(`${apiUrl}/api/backups/password`, {
             method: 'DELETE'
           })
           await handleResponse<void>(response)
@@ -412,7 +416,7 @@ export function createKeeperApi(baseUrl: string) {
 
     versions: {
       list: async (): Promise<VersionListResponse> => {
-        const response = await fetch(`${apiUrl}/api/versions`)
+        const response = await keeperFetch(`${apiUrl}/api/versions`)
         // Keeper returns different structure, transform to expected format
         const rawVersions = await handleResponse<{
           currentVersion: {
@@ -430,7 +434,7 @@ export function createKeeperApi(baseUrl: string) {
         }>(response)
 
         // Also fetch local images to include in the response
-        const localResponse = await fetch(`${apiUrl}/api/versions/local`)
+        const localResponse = await keeperFetch(`${apiUrl}/api/versions/local`)
         const rawLocal = await handleResponse<{
           images: Array<{
             id: string
@@ -475,7 +479,7 @@ export function createKeeperApi(baseUrl: string) {
         images: ImageVersion[]
         totalSize: number
       }> => {
-        const response = await fetch(`${apiUrl}/api/versions/local`)
+        const response = await keeperFetch(`${apiUrl}/api/versions/local`)
         // Keeper returns different structure, transform to expected format
         const rawLocal = await handleResponse<{
           images: Array<{
@@ -502,7 +506,7 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       pull: async (tag: string): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/versions/pull`, {
+        const response = await keeperFetch(`${apiUrl}/api/versions/pull`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tag })
@@ -511,7 +515,7 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       switch: async (tag: string): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/versions/switch`, {
+        const response = await keeperFetch(`${apiUrl}/api/versions/switch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tag })
@@ -522,19 +526,19 @@ export function createKeeperApi(baseUrl: string) {
       estimateBackup: async (
         tag: string
       ): Promise<{ size: number; duration: number }> => {
-        const response = await fetch(`${apiUrl}/api/versions/${tag}/estimate`)
+        const response = await keeperFetch(`${apiUrl}/api/versions/${tag}/estimate`)
         return handleResponse<{ size: number; duration: number }>(response)
       }
     },
 
     update: {
       status: async (): Promise<UpdateStatus> => {
-        const response = await fetch(`${apiUrl}/api/update/status`)
+        const response = await keeperFetch(`${apiUrl}/api/update/status`)
         return handleResponse<UpdateStatus>(response)
       },
 
       start: async (options?: { tag?: string }): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/update/start`, {
+        const response = await keeperFetch(`${apiUrl}/api/update/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(options || {})
@@ -561,14 +565,14 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       rollback: async (): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/update/rollback`, {
+        const response = await keeperFetch(`${apiUrl}/api/update/rollback`, {
           method: 'POST'
         })
         await handleResponse<void>(response)
       },
 
       reset: async (): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/update/reset`, {
+        const response = await keeperFetch(`${apiUrl}/api/update/reset`, {
           method: 'POST'
         })
         await handleResponse<void>(response)
@@ -577,7 +581,7 @@ export function createKeeperApi(baseUrl: string) {
 
     system: {
       info: async (): Promise<SystemInfo> => {
-        const response = await fetch(`${apiUrl}/api/system`)
+        const response = await keeperFetch(`${apiUrl}/api/system`)
         // Keeper returns different structure, transform to expected format
         const rawInfo = await handleResponse<{
           host: {
@@ -647,7 +651,7 @@ export function createKeeperApi(baseUrl: string) {
         latestVersion?: string
         lastChecked: string
       }> => {
-        const response = await fetch(`${apiUrl}/api/system/keeper/version`)
+        const response = await keeperFetch(`${apiUrl}/api/system/keeper/version`)
         return handleResponse<{
           updateAvailable: boolean
           currentVersion: string
@@ -664,7 +668,7 @@ export function createKeeperApi(baseUrl: string) {
         error?: string
         quadletSupported: boolean
       }> => {
-        const response = await fetch(`${apiUrl}/api/system/keeper/upgrade`)
+        const response = await keeperFetch(`${apiUrl}/api/system/keeper/upgrade`)
         return handleResponse<{
           step: string
           targetVersion?: string
@@ -678,7 +682,7 @@ export function createKeeperApi(baseUrl: string) {
       keeperUpgradePrepare: async (
         version: string
       ): Promise<{ success: boolean; error?: string }> => {
-        const response = await fetch(
+        const response = await keeperFetch(
           `${apiUrl}/api/system/keeper/upgrade/prepare`,
           {
             method: 'POST',
@@ -693,7 +697,7 @@ export function createKeeperApi(baseUrl: string) {
         success: boolean
         error?: string
       }> => {
-        const response = await fetch(
+        const response = await keeperFetch(
           `${apiUrl}/api/system/keeper/upgrade/apply`,
           {
             method: 'POST'
@@ -705,7 +709,7 @@ export function createKeeperApi(baseUrl: string) {
 
     doctor: {
       preflight: async (): Promise<DoctorResult> => {
-        const response = await fetch(`${apiUrl}/api/doctor/preflight`, {
+        const response = await keeperFetch(`${apiUrl}/api/doctor/preflight`, {
           method: 'POST'
         })
         // Keeper returns different structure, transform to expected format
@@ -731,7 +735,7 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       diagnose: async (): Promise<DoctorResult> => {
-        const response = await fetch(`${apiUrl}/api/doctor/diagnose`, {
+        const response = await keeperFetch(`${apiUrl}/api/doctor/diagnose`, {
           method: 'POST'
         })
         const rawDiagnosis = await handleResponse<{
@@ -768,7 +772,7 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       applyFix: async (fixId: string): Promise<FixResult> => {
-        const response = await fetch(`${apiUrl}/api/doctor/fix/${fixId}`, {
+        const response = await keeperFetch(`${apiUrl}/api/doctor/fix/${fixId}`, {
           method: 'POST'
         })
         return handleResponse<FixResult>(response)
@@ -777,12 +781,12 @@ export function createKeeperApi(baseUrl: string) {
 
     settings: {
       get: async (): Promise<Record<string, unknown>> => {
-        const response = await fetch(`${apiUrl}/api/settings`)
+        const response = await keeperFetch(`${apiUrl}/api/settings`)
         return handleResponse<Record<string, unknown>>(response)
       },
 
       autostart: async (enabled: boolean): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/settings/autostart`, {
+        const response = await keeperFetch(`${apiUrl}/api/settings/autostart`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ enabled })
@@ -793,41 +797,24 @@ export function createKeeperApi(baseUrl: string) {
 
     history: {
       status: async (): Promise<HistorySystemStatus> => {
-        const response = await fetch(`${apiUrl}/api/history/status`)
+        const response = await keeperFetch(`${apiUrl}/api/history/status`)
         return handleResponse<HistorySystemStatus>(response)
       },
 
       settings: async (): Promise<HistorySettings> => {
-        const response = await fetch(`${apiUrl}/api/history/settings`)
+        const response = await keeperFetch(`${apiUrl}/api/history/settings`)
         return handleResponse<HistorySettings>(response)
       },
 
       credentials: async (): Promise<HistoryCredentials> => {
-        // Use /credentials/full to get usernames and passwords
-        const response = await fetch(`${apiUrl}/api/history/credentials/full`)
-        const creds = await handleResponse<HistoryCredentials>(response)
-
-        // Transform localhost URLs for remote browser access
-        const browserHost = window.location.hostname
-        if (browserHost !== 'localhost' && browserHost !== '127.0.0.1') {
-          if (creds.influxUrl) {
-            creds.influxUrl = creds.influxUrl
-              .replace('localhost', browserHost)
-              .replace('127.0.0.1', browserHost)
-          }
-          if (creds.grafanaUrl) {
-            creds.grafanaUrl = creds.grafanaUrl
-              .replace('localhost', browserHost)
-              .replace('127.0.0.1', browserHost)
-          }
-        }
-        return creds
+        const response = await keeperFetch(`${apiUrl}/api/history/credentials/full`)
+        return handleResponse<HistoryCredentials>(response)
       },
 
       enable: async (
         options?: EnableHistoryRequest
       ): Promise<EnableHistoryResult> => {
-        const response = await fetch(`${apiUrl}/api/history/enable`, {
+        const response = await keeperFetch(`${apiUrl}/api/history/enable`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(options || {})
@@ -836,7 +823,7 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       disable: async (retainData: boolean = true): Promise<void> => {
-        const response = await fetch(`${apiUrl}/api/history/disable`, {
+        const response = await keeperFetch(`${apiUrl}/api/history/disable`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ retainData })
@@ -847,7 +834,7 @@ export function createKeeperApi(baseUrl: string) {
       updateRetention: async (
         retentionDays: number
       ): Promise<HistorySettings> => {
-        const response = await fetch(`${apiUrl}/api/history/retention`, {
+        const response = await keeperFetch(`${apiUrl}/api/history/retention`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ retentionDays })
@@ -857,14 +844,14 @@ export function createKeeperApi(baseUrl: string) {
 
       grafana: {
         enable: async (): Promise<HistorySystemStatus> => {
-          const response = await fetch(`${apiUrl}/api/history/grafana/enable`, {
+          const response = await keeperFetch(`${apiUrl}/api/history/grafana/enable`, {
             method: 'POST'
           })
           return handleResponse<HistorySystemStatus>(response)
         },
 
         disable: async (): Promise<HistorySystemStatus> => {
-          const response = await fetch(
+          const response = await keeperFetch(
             `${apiUrl}/api/history/grafana/disable`,
             {
               method: 'POST'
@@ -874,7 +861,7 @@ export function createKeeperApi(baseUrl: string) {
         },
 
         refresh: async (): Promise<HistorySystemStatus> => {
-          const response = await fetch(
+          const response = await keeperFetch(
             `${apiUrl}/api/history/grafana/refresh`,
             {
               method: 'POST'
