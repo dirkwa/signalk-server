@@ -19,32 +19,18 @@ let runtimeConfig: RuntimeConfig = {
   useKeeper: false
 }
 
-// Replace loopback addresses with the browser's hostname for remote access
-function transformKeeperUrl(url: string | null): string | null {
-  if (!url) return null
-
-  const browserHost = window.location.hostname
-  if (browserHost !== 'localhost' && browserHost !== '127.0.0.1') {
-    return url
-      .replace('localhost', browserHost)
-      .replace('127.0.0.1', browserHost)
-  }
-  return url
-}
-
 export function initializeApi(config: Partial<RuntimeConfig>): void {
-  const keeperUrl = transformKeeperUrl(config.keeperUrl ?? null)
-
   runtimeConfig = {
     containerRuntime: config.containerRuntime ?? null,
-    keeperUrl,
+    keeperUrl: config.keeperUrl ?? null,
     useKeeper: config.useKeeper ?? false
   }
 
   signalkApi = createSignalkApi()
 
-  if (runtimeConfig.useKeeper && runtimeConfig.keeperUrl) {
-    keeperApi = createKeeperApi(runtimeConfig.keeperUrl)
+  if (runtimeConfig.useKeeper) {
+    // Proxy through SignalK server — works with HTTPS, remote access, any network topology
+    keeperApi = createKeeperApi(`${window.serverRoutesPrefix}/keeper`)
   }
 }
 
