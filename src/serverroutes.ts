@@ -348,6 +348,17 @@ module.exports = function (
           [`^${SERVERROUTESPREFIX}/keeper`]: ''
         },
         on: {
+          proxyReq: (proxyReq, req) => {
+            // body-parser consumes the request stream before the proxy sees it.
+            // Re-stream the already-parsed body so Keeper receives it.
+            const body = (req as Request).body
+            if (body && Object.keys(body).length > 0) {
+              const bodyData = JSON.stringify(body)
+              proxyReq.setHeader('Content-Type', 'application/json')
+              proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData))
+              proxyReq.write(bodyData)
+            }
+          },
           error: (err: Error, _req, res) => {
             console.error('Keeper proxy error:', err.message)
             if ('status' in res) {
