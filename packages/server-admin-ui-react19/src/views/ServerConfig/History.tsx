@@ -93,30 +93,42 @@ const History: React.FC = () => {
     }
   }, [])
 
-  // Wait for SignalK to come back after a restart, then reload data
+  // Wait for SignalK to come back after a restart, then reload data.
+  // isReady: predicate that checks if the operation is fully complete
+  // (not just "server is back" — e.g. Grafana must also be running for enable)
   const waitForServerAndReload = useCallback(
-    async (message: string) => {
+    async (
+      message: string,
+      isReady: (status: HistorySystemStatus) => boolean
+    ) => {
       setRestartMessage(message)
       setError(null)
-      // Wait for SignalK to come back (proxy becomes available again)
+      // Wait for SignalK to come back and operation to complete
       const maxAttempts = 60
       for (let i = 0; i < maxAttempts; i++) {
         await new Promise((r) => setTimeout(r, 3000))
         try {
           const result = await historyApi.status()
           if (result) {
-            // Server is back — reload everything
-            setRestartMessage(null)
-            setSuccess(message.replace('...', '') + ' completed successfully!')
-            await loadData()
-            return
+            if (isReady(result)) {
+              // Operation complete — reload everything
+              setRestartMessage(null)
+              setSuccess(
+                message.replace('...', '') + ' completed successfully!'
+              )
+              await loadData()
+              return
+            }
+            // Server is back but operation still in progress
+            setRestartMessage(message + ' almost done...')
           }
         } catch {
           // Still restarting, keep waiting
         }
       }
       setRestartMessage(null)
-      setError('Server did not come back after restart. Please refresh the page.')
+      // Timed out but server might be up — load whatever state we have
+      await loadData()
     },
     [loadData]
   )
@@ -153,7 +165,13 @@ const History: React.FC = () => {
       // Enable restarts SignalK to load the plugin, which kills the proxy
       // connection. This is expected — wait for it to come back.
       setIsEnabling(false)
-      await waitForServerAndReload('Enabling history database...')
+      await waitForServerAndReload(
+        'Enabling history database...',
+        (s) =>
+          s.status === 'running' &&
+          s.grafana?.status === 'running' &&
+          s.plugin.configured
+      )
       return
     } finally {
       setIsEnabling(false)
@@ -180,7 +198,10 @@ const History: React.FC = () => {
       // connection. This is expected — wait for it to come back.
       setIsDisabling(false)
       setCredentials(null)
-      await waitForServerAndReload('Disabling history database...')
+      await waitForServerAndReload(
+        'Disabling history database...',
+        (s) => s.status === 'disabled'
+      )
       return
     } finally {
       setIsDisabling(false)
@@ -265,8 +286,14 @@ const History: React.FC = () => {
   const isRunning = status?.status === 'running'
   const isDisabled = status?.status === 'disabled'
   const isError = status?.status === 'error'
-  const grafanaPort = 3003 // Default Grafana port
-  const influxPort = 3002 // Default InfluxDB port
+
+  // Grafana is proxied through Caddy at /grafana/ when using HTTPS
+  const grafanaHref =
+    window.location.protocol === 'https:'
+      ? `${window.location.origin}/grafana/`
+      : `http://${window.location.hostname}:3003`
+  // InfluxDB is not proxied — only accessible on localhost
+  const influxHref = `http://${window.location.hostname}:3002`
 
   return (
     <div className="animated fadeIn">
@@ -604,10 +631,7 @@ const History: React.FC = () => {
                 <Button
                   color="primary"
                   tag="a"
-                  href={
-                    credentials.grafanaUrl ||
-                    `http://${window.location.hostname}:${grafanaPort}`
-                  }
+                  href={grafanaHref}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -617,7 +641,8 @@ const History: React.FC = () => {
               <Col md={6}>
                 <h6>InfluxDB UI</h6>
                 <p className="text-muted">
-                  Direct access to the database for advanced queries
+                  Direct access to the database for advanced queries.
+                  Only accessible from the server itself (localhost:3002).
                 </p>
                 {credentials.influxUser && (
                   <Table size="sm" borderless className="mb-2">
@@ -658,10 +683,7 @@ const History: React.FC = () => {
                 <Button
                   color="secondary"
                   tag="a"
-                  href={
-                    credentials.influxUrl ||
-                    `http://${window.location.hostname}:${influxPort}`
-                  }
+                  href="http://localhost:3002"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
