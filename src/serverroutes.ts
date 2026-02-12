@@ -15,6 +15,7 @@
 */
 
 import busboy from 'busboy'
+import { createProxyMiddleware } from 'http-proxy-middleware'
 import commandExists from 'command-exists'
 import express, { IRouter, NextFunction, Request, Response } from 'express'
 import zip from 'express-easy-zip'
@@ -326,6 +327,37 @@ module.exports = function (
       res.status(401).json('Restart not allowed')
     }
   })
+
+  // Proxy Keeper API requests: /skServer/keeper/* → KEEPER_URL/*
+  const keeperProxyUrl = process.env.KEEPER_URL
+  if (keeperProxyUrl) {
+    app.use(`${SERVERROUTESPREFIX}/keeper`, (req: Request, res: Response, next: NextFunction) => {
+      if (req.method !== 'GET' && !app.securityStrategy.allowConfigure(req)) {
+        res.status(401).json({ error: 'Admin access required' })
+        return
+      }
+      next()
+    })
+
+    app.use(
+      `${SERVERROUTESPREFIX}/keeper`,
+      createProxyMiddleware({
+        target: keeperProxyUrl,
+        changeOrigin: true,
+        pathRewrite: {
+          [`^${SERVERROUTESPREFIX}/keeper`]: ''
+        },
+        on: {
+          error: (err: Error, _req, res) => {
+            console.error('Keeper proxy error:', err.message)
+            if ('status' in res) {
+              ;(res as unknown as Response).status(502).json({ error: 'Keeper unreachable' })
+            }
+          }
+        }
+      })
+    )
+  }
 
   const getLoginStatus = (req: Request, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
