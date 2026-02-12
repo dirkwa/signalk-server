@@ -59,14 +59,9 @@ const History: React.FC = () => {
 
   // Form state for enabling
   const [retentionDays, setRetentionDays] = useState(365)
+  const [restartMessage, setRestartMessage] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (useKeeper && shouldUseKeeper()) {
-      loadData()
-    }
-  }, [useKeeper])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -96,7 +91,41 @@ const History: React.FC = () => {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
+
+  // Wait for SignalK to come back after a restart, then reload data
+  const waitForServerAndReload = useCallback(
+    async (message: string) => {
+      setRestartMessage(message)
+      setError(null)
+      // Wait for SignalK to come back (proxy becomes available again)
+      const maxAttempts = 60
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((r) => setTimeout(r, 3000))
+        try {
+          const result = await historyApi.status()
+          if (result) {
+            // Server is back — reload everything
+            setRestartMessage(null)
+            setSuccess(message.replace('...', '') + ' completed successfully!')
+            await loadData()
+            return
+          }
+        } catch {
+          // Still restarting, keep waiting
+        }
+      }
+      setRestartMessage(null)
+      setError('Server did not come back after restart. Please refresh the page.')
+    },
+    [loadData]
+  )
+
+  useEffect(() => {
+    if (useKeeper && shouldUseKeeper()) {
+      loadData()
+    }
+  }, [useKeeper, loadData])
 
   const handleEnable = useCallback(async () => {
     if (
@@ -120,12 +149,16 @@ const History: React.FC = () => {
       } else {
         setError(result.error || 'Failed to enable history')
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to enable history')
+    } catch {
+      // Enable restarts SignalK to load the plugin, which kills the proxy
+      // connection. This is expected — wait for it to come back.
+      setIsEnabling(false)
+      await waitForServerAndReload('Enabling history database...')
+      return
     } finally {
       setIsEnabling(false)
     }
-  }, [retentionDays])
+  }, [retentionDays, waitForServerAndReload])
 
   const handleDisable = useCallback(async (retainData: boolean) => {
     const message = retainData
@@ -142,12 +175,17 @@ const History: React.FC = () => {
       setSuccess('History database disabled')
       setCredentials(null)
       await loadData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disable history')
+    } catch {
+      // Disable restarts SignalK to unload the plugin, which kills the proxy
+      // connection. This is expected — wait for it to come back.
+      setIsDisabling(false)
+      setCredentials(null)
+      await waitForServerAndReload('Disabling history database...')
+      return
     } finally {
       setIsDisabling(false)
     }
-  }, [])
+  }, [waitForServerAndReload])
 
   const handleUpdateRetention = useCallback(async () => {
     setError(null)
@@ -232,6 +270,12 @@ const History: React.FC = () => {
 
   return (
     <div className="animated fadeIn">
+      {restartMessage && (
+        <Alert color="info">
+          <FontAwesomeIcon icon={faCircleNotch} spin className="me-2" />
+          {restartMessage} SignalK server is restarting, please wait...
+        </Alert>
+      )}
       {error && (
         <Alert color="danger" toggle={() => setError(null)}>
           {error}
