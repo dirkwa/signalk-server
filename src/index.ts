@@ -100,7 +100,7 @@ class Server {
         xDownloadOptions: true,
         xPermittedCrossDomainPolicies: true,
         referrerPolicy: true,
-        hsts: true,
+        hsts: false, // Disabled: Caddy handles TLS, and HSTS blocks port 80 CA cert landing page
 
         // DISABLED (would break chart plotters, plugins, webapps):
         frameguard: false, // Allow embedding in iframes (chart plotters, MFDs)
