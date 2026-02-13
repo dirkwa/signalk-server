@@ -287,11 +287,8 @@ const History: React.FC = () => {
   const isDisabled = status?.status === 'disabled'
   const isError = status?.status === 'error'
 
-  // Grafana is proxied through Caddy at /grafana/ when using HTTPS
-  const grafanaHref =
-    window.location.protocol === 'https:'
-      ? `${window.location.origin}/grafana/`
-      : `http://${window.location.hostname}:3003`
+  // Grafana is always accessed through Caddy's HTTPS proxy
+  const grafanaHref = `https://${window.location.hostname}/grafana/`
   // InfluxDB is not proxied — only accessible on localhost
   const influxHref = `http://${window.location.hostname}:3002`
 
