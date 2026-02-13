@@ -260,6 +260,22 @@ export const updateApi = {
     } else {
       throw new Error('Version switch not supported without Keeper')
     }
+  },
+
+  getSettings: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().versions.settings()
+    }
+    return null
+  },
+
+  updateSettings: async (
+    settings: Partial<import('./types').VersionSettings>
+  ) => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().versions.updateSettings(settings)
+    }
+    return null
   }
 }
 
