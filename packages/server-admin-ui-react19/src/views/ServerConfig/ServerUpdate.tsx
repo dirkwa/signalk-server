@@ -13,6 +13,7 @@ import {
   Row,
   Col,
   FormGroup,
+  Input,
   Label
 } from 'reactstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -27,7 +28,8 @@ import {
   shouldUseKeeper,
   type VersionListResponse,
   type UpdateStatus,
-  type ImageVersion
+  type ImageVersion,
+  type VersionSettings
 } from '../../services/api'
 
 interface InstallingApp {
@@ -64,16 +66,46 @@ const ServerUpdate: React.FC = () => {
   // Keeper-specific state
   const [versions, setVersions] = useState<VersionListResponse | null>(null)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+  const [versionSettings, setVersionSettings] =
+    useState<VersionSettings | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPulling, setIsPulling] = useState<string | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
+
+  const loadVersionSettings = async () => {
+    try {
+      const settings = await updateApi.getSettings()
+      if (settings) {
+        setVersionSettings(settings)
+      }
+    } catch (err) {
+      console.error('Failed to load version settings:', err)
+    }
+  }
+
+  const handleToggleSetting = async (
+    key: 'showBeta' | 'showMaster',
+    value: boolean
+  ) => {
+    try {
+      const updated = await updateApi.updateSettings({ [key]: value })
+      if (updated) {
+        setVersionSettings(updated)
+      }
+      // Reload versions to reflect the new filter
+      await loadVersions()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update settings')
+    }
+  }
 
   // Load versions on mount
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
       loadVersions()
       loadUpdateStatus()
+      loadVersionSettings()
     }
 
     return () => {
@@ -455,6 +487,36 @@ const ServerUpdate: React.FC = () => {
             </Button>
           </CardHeader>
           <CardBody>
+            {versionSettings && (
+              <div className="mb-3 d-flex gap-4">
+                <FormGroup check inline>
+                  <Input
+                    type="checkbox"
+                    id="showBeta"
+                    checked={versionSettings.showBeta}
+                    onChange={(e) =>
+                      handleToggleSetting('showBeta', e.target.checked)
+                    }
+                  />
+                  <Label check for="showBeta">
+                    Show beta versions
+                  </Label>
+                </FormGroup>
+                <FormGroup check inline>
+                  <Input
+                    type="checkbox"
+                    id="showMaster"
+                    checked={versionSettings.showMaster}
+                    onChange={(e) =>
+                      handleToggleSetting('showMaster', e.target.checked)
+                    }
+                  />
+                  <Label check for="showMaster">
+                    Show development builds
+                  </Label>
+                </FormGroup>
+              </div>
+            )}
             {isLoading ? (
               <div className="text-center">
                 <FontAwesomeIcon icon={faCircleNotch} spin size="2x" />
