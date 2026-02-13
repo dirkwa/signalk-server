@@ -92,6 +92,7 @@ export interface ImageVersion {
   size: number
   isLocal: boolean
   isCurrent?: boolean
+  channel?: 'stable' | 'beta' | 'master'
 }
 
 export interface VersionListResponse {

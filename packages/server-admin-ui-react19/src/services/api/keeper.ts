@@ -434,6 +434,7 @@ export function createKeeperApi(baseUrl: string) {
             digest?: string
             publishedAt?: string
             size?: number
+            channel?: 'stable' | 'beta' | 'master'
             isLocallyAvailable?: boolean
             isCurrentlyRunning?: boolean
           }>
@@ -447,6 +448,7 @@ export function createKeeperApi(baseUrl: string) {
             tags: string[]
             size: number
             created: string
+            channel?: 'stable' | 'beta' | 'master' | 'dev'
           }>
         }>(localResponse)
 
@@ -459,7 +461,8 @@ export function createKeeperApi(baseUrl: string) {
             created: img.created,
             size: img.size,
             isLocal: true,
-            isCurrent: rawVersions.currentVersion.tag === tag
+            isCurrent: rawVersions.currentVersion.tag === tag,
+            channel: img.channel === 'dev' ? 'master' : img.channel
           }
         })
 
@@ -475,7 +478,8 @@ export function createKeeperApi(baseUrl: string) {
             created: v.publishedAt || '',
             size: v.size || 0,
             isLocal: v.isLocallyAvailable || false,
-            isCurrent: v.isCurrentlyRunning || false
+            isCurrent: v.isCurrentlyRunning || false,
+            channel: v.channel
           })),
           local: localImages
         }

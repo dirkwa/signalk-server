@@ -319,10 +319,29 @@ const ServerUpdate: React.FC = () => {
       }
     }
 
+    const getChannelBadge = (version: ImageVersion) => {
+      if (version.channel === 'beta') {
+        return (
+          <Badge color="warning" className="ms-1">
+            beta
+          </Badge>
+        )
+      }
+      if (version.channel === 'master') {
+        return (
+          <Badge color="danger" className="ms-1">
+            dev
+          </Badge>
+        )
+      }
+      return null
+    }
+
     const renderVersionRow = (version: ImageVersion, isCurrent: boolean) => (
       <tr key={version.tag} className={isCurrent ? 'table-success' : ''}>
         <td>
           {version.tag}
+          {getChannelBadge(version)}
           {isCurrent && (
             <Badge bg="success" className="ms-2">
               Current
