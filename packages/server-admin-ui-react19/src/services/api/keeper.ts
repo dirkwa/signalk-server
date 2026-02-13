@@ -17,7 +17,8 @@ import type {
   HistorySettings,
   HistoryCredentials,
   EnableHistoryRequest,
-  EnableHistoryResult
+  EnableHistoryResult,
+  VersionSettings
 } from './types'
 
 export class KeeperApiError extends Error {
@@ -297,9 +298,12 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       restore: async (id: string): Promise<void> => {
-        const response = await keeperFetch(`${apiUrl}/api/backups/${id}/restore`, {
-          method: 'POST'
-        })
+        const response = await keeperFetch(
+          `${apiUrl}/api/backups/${id}/restore`,
+          {
+            method: 'POST'
+          }
+        )
         await handleResponse<void>(response)
       },
 
@@ -350,7 +354,9 @@ export function createKeeperApi(baseUrl: string) {
           }
 
           // Fetch full status after start/stop (start/stop return minimal data)
-          const statusResponse = await keeperFetch(`${apiUrl}/api/backups/scheduler`)
+          const statusResponse = await keeperFetch(
+            `${apiUrl}/api/backups/scheduler`
+          )
           const rawScheduler = await handleResponse<{
             enabled: boolean
             lastBackup?: string
@@ -526,8 +532,26 @@ export function createKeeperApi(baseUrl: string) {
       estimateBackup: async (
         tag: string
       ): Promise<{ size: number; duration: number }> => {
-        const response = await keeperFetch(`${apiUrl}/api/versions/${tag}/estimate`)
+        const response = await keeperFetch(
+          `${apiUrl}/api/versions/${tag}/estimate`
+        )
         return handleResponse<{ size: number; duration: number }>(response)
+      },
+
+      settings: async (): Promise<VersionSettings> => {
+        const response = await keeperFetch(`${apiUrl}/api/versions/settings`)
+        return handleResponse<VersionSettings>(response)
+      },
+
+      updateSettings: async (
+        settings: Partial<VersionSettings>
+      ): Promise<VersionSettings> => {
+        const response = await keeperFetch(`${apiUrl}/api/versions/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        })
+        return handleResponse<VersionSettings>(response)
       }
     },
 
@@ -651,7 +675,9 @@ export function createKeeperApi(baseUrl: string) {
         latestVersion?: string
         lastChecked: string
       }> => {
-        const response = await keeperFetch(`${apiUrl}/api/system/keeper/version`)
+        const response = await keeperFetch(
+          `${apiUrl}/api/system/keeper/version`
+        )
         return handleResponse<{
           updateAvailable: boolean
           currentVersion: string
@@ -668,7 +694,9 @@ export function createKeeperApi(baseUrl: string) {
         error?: string
         quadletSupported: boolean
       }> => {
-        const response = await keeperFetch(`${apiUrl}/api/system/keeper/upgrade`)
+        const response = await keeperFetch(
+          `${apiUrl}/api/system/keeper/upgrade`
+        )
         return handleResponse<{
           step: string
           targetVersion?: string
@@ -772,9 +800,12 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       applyFix: async (fixId: string): Promise<FixResult> => {
-        const response = await keeperFetch(`${apiUrl}/api/doctor/fix/${fixId}`, {
-          method: 'POST'
-        })
+        const response = await keeperFetch(
+          `${apiUrl}/api/doctor/fix/${fixId}`,
+          {
+            method: 'POST'
+          }
+        )
         return handleResponse<FixResult>(response)
       }
     },
@@ -807,7 +838,9 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       credentials: async (): Promise<HistoryCredentials> => {
-        const response = await keeperFetch(`${apiUrl}/api/history/credentials/full`)
+        const response = await keeperFetch(
+          `${apiUrl}/api/history/credentials/full`
+        )
         return handleResponse<HistoryCredentials>(response)
       },
 
@@ -844,9 +877,12 @@ export function createKeeperApi(baseUrl: string) {
 
       grafana: {
         enable: async (): Promise<HistorySystemStatus> => {
-          const response = await keeperFetch(`${apiUrl}/api/history/grafana/enable`, {
-            method: 'POST'
-          })
+          const response = await keeperFetch(
+            `${apiUrl}/api/history/grafana/enable`,
+            {
+              method: 'POST'
+            }
+          )
           return handleResponse<HistorySystemStatus>(response)
         },
 

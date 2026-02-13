@@ -331,13 +331,16 @@ module.exports = function (
   // Proxy Keeper API requests: /skServer/keeper/* → KEEPER_URL/*
   const keeperProxyUrl = process.env.KEEPER_URL
   if (keeperProxyUrl) {
-    app.use(`${SERVERROUTESPREFIX}/keeper`, (req: Request, res: Response, next: NextFunction) => {
-      if (req.method !== 'GET' && !app.securityStrategy.allowConfigure(req)) {
-        res.status(401).json({ error: 'Admin access required' })
-        return
+    app.use(
+      `${SERVERROUTESPREFIX}/keeper`,
+      (req: Request, res: Response, next: NextFunction) => {
+        if (req.method !== 'GET' && !app.securityStrategy.allowConfigure(req)) {
+          res.status(401).json({ error: 'Admin access required' })
+          return
+        }
+        next()
       }
-      next()
-    })
+    )
 
     app.use(
       `${SERVERROUTESPREFIX}/keeper`,
@@ -362,7 +365,9 @@ module.exports = function (
           error: (err: Error, _req, res) => {
             console.error('Keeper proxy error:', err.message)
             if ('status' in res) {
-              ;(res as unknown as Response).status(502).json({ error: 'Keeper unreachable' })
+              ;(res as unknown as Response)
+                .status(502)
+                .json({ error: 'Keeper unreachable' })
             }
           }
         }

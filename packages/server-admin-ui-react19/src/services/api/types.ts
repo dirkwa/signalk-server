@@ -104,6 +104,12 @@ export interface VersionListResponse {
   local: ImageVersion[]
 }
 
+export interface VersionSettings {
+  showBeta: boolean
+  showMaster: boolean
+  updateChannel: 'stable' | 'beta' | 'master'
+}
+
 export interface UpdateStatus {
   state:
     | 'idle'

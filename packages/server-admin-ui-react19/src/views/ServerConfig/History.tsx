@@ -176,37 +176,40 @@ const History: React.FC = () => {
     } finally {
       setIsEnabling(false)
     }
-  }, [retentionDays, waitForServerAndReload])
+  }, [retentionDays, waitForServerAndReload, loadData])
 
-  const handleDisable = useCallback(async (retainData: boolean) => {
-    const message = retainData
-      ? 'Disable history? Data will be preserved for future re-enable.'
-      : 'Disable history and DELETE all data? This cannot be undone!'
-    if (!confirm(message)) {
-      return
-    }
-    setIsDisabling(true)
-    setError(null)
-    setSuccess(null)
-    try {
-      await historyApi.disable(retainData)
-      setSuccess('History database disabled')
-      setCredentials(null)
-      await loadData()
-    } catch {
-      // Disable restarts SignalK to unload the plugin, which kills the proxy
-      // connection. This is expected — wait for it to come back.
-      setIsDisabling(false)
-      setCredentials(null)
-      await waitForServerAndReload(
-        'Disabling history database...',
-        (s) => s.status === 'disabled'
-      )
-      return
-    } finally {
-      setIsDisabling(false)
-    }
-  }, [waitForServerAndReload])
+  const handleDisable = useCallback(
+    async (retainData: boolean) => {
+      const message = retainData
+        ? 'Disable history? Data will be preserved for future re-enable.'
+        : 'Disable history and DELETE all data? This cannot be undone!'
+      if (!confirm(message)) {
+        return
+      }
+      setIsDisabling(true)
+      setError(null)
+      setSuccess(null)
+      try {
+        await historyApi.disable(retainData)
+        setSuccess('History database disabled')
+        setCredentials(null)
+        await loadData()
+      } catch {
+        // Disable restarts SignalK to unload the plugin, which kills the proxy
+        // connection. This is expected — wait for it to come back.
+        setIsDisabling(false)
+        setCredentials(null)
+        await waitForServerAndReload(
+          'Disabling history database...',
+          (s) => s.status === 'disabled'
+        )
+        return
+      } finally {
+        setIsDisabling(false)
+      }
+    },
+    [waitForServerAndReload, loadData]
+  )
 
   const handleUpdateRetention = useCallback(async () => {
     setError(null)
@@ -289,8 +292,6 @@ const History: React.FC = () => {
 
   // Grafana is always accessed through Caddy's HTTPS proxy
   const grafanaHref = `https://${window.location.hostname}/grafana/`
-  // InfluxDB is not proxied — only accessible on localhost
-  const influxHref = `http://${window.location.hostname}:3002`
 
   return (
     <div className="animated fadeIn">
@@ -638,8 +639,8 @@ const History: React.FC = () => {
               <Col md={6}>
                 <h6>InfluxDB UI</h6>
                 <p className="text-muted">
-                  Direct access to the database for advanced queries.
-                  Only accessible from the server itself (localhost:3002).
+                  Direct access to the database for advanced queries. Only
+                  accessible from the server itself (localhost:3002).
                 </p>
                 {credentials.influxUser && (
                   <Table size="sm" borderless className="mb-2">
