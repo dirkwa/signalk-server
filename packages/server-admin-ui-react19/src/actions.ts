@@ -39,13 +39,21 @@ export async function restartAction(): Promise<void> {
   if (confirm('Are you sure you want to restart?')) {
     try {
       await serverApi.restart()
-      useStore.getState().setRestarting(true)
     } catch (error) {
-      console.error('Failed to restart server:', error)
-      alert(
-        `Restart failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      )
+      // Network errors and 502s are expected during restart — the server goes down
+      // before the proxied response arrives, breaking the connection.
+      const isExpectedRestartError =
+        error instanceof TypeError || // fetch network error
+        (error instanceof Error && /502|503|fetch/.test(error.message))
+      if (!isExpectedRestartError) {
+        console.error('Failed to restart server:', error)
+        alert(
+          `Restart failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
+        return
+      }
     }
+    useStore.getState().setRestarting(true)
   }
 }
 
