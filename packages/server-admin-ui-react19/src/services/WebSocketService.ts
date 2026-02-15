@@ -66,6 +66,10 @@ export class WebSocketService {
       this.updateState({ status: 'open', ws })
 
       if (isReconnect) {
+        // Clear restart spinner — server is back
+        if (this.zustandSetState) {
+          this.zustandSetState({ restarting: false } as Partial<SignalKStore>)
+        }
         // Dynamic import avoids circular dependency with actions.ts
         import('../actions').then(({ fetchAllData }) => fetchAllData())
       }
