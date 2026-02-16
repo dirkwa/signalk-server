@@ -55,7 +55,9 @@ function formatBytes(bytes: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString()
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return isNaN(d.getTime()) ? '' : d.toLocaleString()
 }
 
 const ServerUpdate: React.FC = () => {
@@ -326,6 +328,11 @@ const ServerUpdate: React.FC = () => {
       }
     }
 
+    // The first stable version in the sorted list is "latest"
+    const latestStableTag = versions?.available.find(
+      (v) => v.channel === 'stable'
+    )?.tag
+
     const getChannelBadge = (version: ImageVersion) => {
       if (version.channel === 'beta') {
         return (
@@ -338,6 +345,13 @@ const ServerUpdate: React.FC = () => {
         return (
           <Badge color="danger" className="ms-1">
             dev
+          </Badge>
+        )
+      }
+      if (version.tag === latestStableTag) {
+        return (
+          <Badge color="info" className="ms-1">
+            latest
           </Badge>
         )
       }
@@ -356,7 +370,7 @@ const ServerUpdate: React.FC = () => {
           )}
         </td>
         <td>{formatDate(version.created)}</td>
-        <td>{formatBytes(version.size)}</td>
+        <td>{version.size ? formatBytes(version.size) : ''}</td>
         <td>
           {version.isLocal ? (
             <Badge color="primary">Local</Badge>
