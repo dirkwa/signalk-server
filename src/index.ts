@@ -118,8 +118,15 @@ class Server {
 
     load(app)
 
-    // Apply trust proxy setting if configured
-    if (app.config.settings.trustProxy !== undefined) {
+    // Apply trust proxy setting if configured (settings.json or env var).
+    // TRUST_PROXY env var is set by Keeper when running behind Caddy reverse proxy.
+    if (process.env.TRUST_PROXY !== undefined) {
+      const envValue = process.env.TRUST_PROXY
+      const trustProxy =
+        envValue === 'true' ? true : envValue === 'false' ? false : envValue
+      app.config.settings.trustProxy = trustProxy
+      app.set('trust proxy', trustProxy)
+    } else if (app.config.settings.trustProxy !== undefined) {
       app.set('trust proxy', app.config.settings.trustProxy)
     }
 
