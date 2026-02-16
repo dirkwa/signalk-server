@@ -37,6 +37,7 @@ export async function logoutAction(): Promise<void> {
  */
 export async function restartAction(): Promise<void> {
   if (confirm('Are you sure you want to restart?')) {
+    useStore.getState().setRestarting(true)
     try {
       await serverApi.restart()
     } catch (error) {
@@ -47,13 +48,12 @@ export async function restartAction(): Promise<void> {
         (error instanceof Error && /502|503|fetch/.test(error.message))
       if (!isExpectedRestartError) {
         console.error('Failed to restart server:', error)
+        useStore.getState().setRestarting(false)
         alert(
           `Restart failed: ${error instanceof Error ? error.message : 'Unknown error'}`
         )
-        return
       }
     }
-    useStore.getState().setRestarting(true)
   }
 }
 
