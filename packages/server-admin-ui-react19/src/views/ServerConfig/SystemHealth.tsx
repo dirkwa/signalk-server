@@ -1,17 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import {
-  Button,
-  Card,
-  CardHeader,
-  CardBody,
-  CardFooter,
-  Row,
-  Col,
-  Badge,
-  Alert,
-  Progress,
-  Table
-} from 'reactstrap'
+import Alert from 'react-bootstrap/Alert'
+import Badge from 'react-bootstrap/Badge'
+import Button from 'react-bootstrap/Button'
+import Card from 'react-bootstrap/Card'
+import Col from 'react-bootstrap/Col'
+import ProgressBar from 'react-bootstrap/ProgressBar'
+import Row from 'react-bootstrap/Row'
+import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
 import { faHeartPulse } from '@fortawesome/free-solid-svg-icons/faHeartPulse'
@@ -287,7 +282,7 @@ const SystemHealth: React.FC = () => {
       unhealthy: 'danger'
     }
     return (
-      <Badge color={colors[status]}>
+      <Badge bg={colors[status]}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </Badge>
     )
@@ -317,7 +312,7 @@ const SystemHealth: React.FC = () => {
       exited: 'danger',
       paused: 'warning'
     }
-    return <Badge color={colors[state] || 'secondary'}>{state}</Badge>
+    return <Badge bg={colors[state] || 'secondary'}>{state}</Badge>
   }
 
   // Not in Keeper mode - show message
@@ -325,13 +320,13 @@ const SystemHealth: React.FC = () => {
     return (
       <div className="animated fadeIn">
         <Card>
-          <CardHeader>System Health</CardHeader>
-          <CardBody>
-            <Alert color="info">
+          <Card.Header>System Health</Card.Header>
+          <Card.Body>
+            <Alert variant="info">
               System health monitoring is only available when running with the
               Universal Installer (Keeper).
             </Alert>
-          </CardBody>
+          </Card.Body>
         </Card>
       </div>
     )
@@ -340,14 +335,14 @@ const SystemHealth: React.FC = () => {
   return (
     <div className="animated fadeIn">
       {error && (
-        <Alert color="danger" toggle={() => setError(null)}>
+        <Alert variant="danger" dismissible onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
       {/* Overall Health Status */}
       <Card className="mb-4">
-        <CardHeader>
+        <Card.Header>
           <FontAwesomeIcon icon={faHeartPulse} className="me-2" />
           System Health
           {healthStatus && (
@@ -355,8 +350,8 @@ const SystemHealth: React.FC = () => {
               {getStatusBadge(healthStatus.status)}
             </span>
           )}
-        </CardHeader>
-        <CardBody>
+        </Card.Header>
+        <Card.Body>
           {isLoading ? (
             <div className="text-center">
               <FontAwesomeIcon icon={faCircleNotch} spin size="2x" />
@@ -371,9 +366,9 @@ const SystemHealth: React.FC = () => {
                       <td>Podman Socket</td>
                       <td className="text-end">
                         {healthStatus.checks.podmanSocket ? (
-                          <Badge color="success">Connected</Badge>
+                          <Badge bg="success">Connected</Badge>
                         ) : (
-                          <Badge color="danger">Disconnected</Badge>
+                          <Badge bg="danger">Disconnected</Badge>
                         )}
                       </td>
                     </tr>
@@ -381,9 +376,9 @@ const SystemHealth: React.FC = () => {
                       <td>SignalK Container</td>
                       <td className="text-end">
                         {healthStatus.checks.signalkContainer ? (
-                          <Badge color="success">Running</Badge>
+                          <Badge bg="success">Running</Badge>
                         ) : (
-                          <Badge color="danger">Not Running</Badge>
+                          <Badge bg="danger">Not Running</Badge>
                         )}
                       </td>
                     </tr>
@@ -392,9 +387,9 @@ const SystemHealth: React.FC = () => {
                         <td>Network Connectivity</td>
                         <td className="text-end">
                           {healthStatus.checks.networkConnectivity ? (
-                            <Badge color="success">OK</Badge>
+                            <Badge bg="success">OK</Badge>
                           ) : (
-                            <Badge color="warning">Limited</Badge>
+                            <Badge bg="warning">Limited</Badge>
                           )}
                         </td>
                       </tr>
@@ -423,28 +418,28 @@ const SystemHealth: React.FC = () => {
           ) : (
             <p className="text-muted">Unable to load health status</p>
           )}
-        </CardBody>
-        <CardFooter>
+        </Card.Body>
+        <Card.Footer>
           <Button
-            color="secondary"
+            variant="secondary"
             size="sm"
             onClick={loadAllData}
             disabled={isLoading}
           >
             <FontAwesomeIcon icon={faSync} spin={isLoading} /> Refresh
           </Button>
-        </CardFooter>
+        </Card.Footer>
       </Card>
 
       {/* Doctor / Preflight Checks */}
       <Card className="mb-4">
-        <CardHeader>
+        <Card.Header>
           <FontAwesomeIcon icon={faStethoscope} className="me-2" />
           System Doctor
           {doctorResult && (
             <span className="float-end">
               <Badge
-                color={
+                bg={
                   doctorResult.overall === 'pass'
                     ? 'success'
                     : doctorResult.overall === 'warn'
@@ -456,8 +451,8 @@ const SystemHealth: React.FC = () => {
               </Badge>
             </span>
           )}
-        </CardHeader>
-        <CardBody>
+        </Card.Header>
+        <Card.Body>
           <p className="text-muted">
             Run a comprehensive system check to identify potential issues with
             your SignalK installation.
@@ -501,7 +496,7 @@ const SystemHealth: React.FC = () => {
                 Issues Detected ({doctorResult.issues.length})
               </h6>
               {fixSuccess && (
-                <Alert color="success" className="mt-2">
+                <Alert variant="success" className="mt-2">
                   {fixSuccess}
                 </Alert>
               )}
@@ -510,7 +505,7 @@ const SystemHealth: React.FC = () => {
                   key={issue.id}
                   className={`mt-2 border-${issue.severity === 'critical' ? 'danger' : 'warning'}`}
                 >
-                  <CardBody className="py-2">
+                  <Card.Body className="py-2">
                     <div className="d-flex justify-content-between align-items-start">
                       <div>
                         <strong
@@ -525,11 +520,11 @@ const SystemHealth: React.FC = () => {
                         <p className="mb-1 small text-muted">
                           {issue.description}
                         </p>
-                        <Badge color="secondary" className="me-1">
+                        <Badge bg="secondary" className="me-1">
                           {issue.category}
                         </Badge>
                         <Badge
-                          color={
+                          bg={
                             issue.severity === 'critical' ? 'danger' : 'warning'
                           }
                         >
@@ -541,7 +536,7 @@ const SystemHealth: React.FC = () => {
                           {issue.fixes.map((fix) => (
                             <Button
                               key={fix.id}
-                              color="success"
+                              variant="success"
                               size="sm"
                               onClick={() => applyFix(fix.id, fix.title)}
                               disabled={applyingFixId === fix.id}
@@ -558,15 +553,15 @@ const SystemHealth: React.FC = () => {
                         </div>
                       )}
                     </div>
-                  </CardBody>
+                  </Card.Body>
                 </Card>
               ))}
             </div>
           )}
-        </CardBody>
-        <CardFooter>
+        </Card.Body>
+        <Card.Footer>
           <Button
-            color="primary"
+            variant="primary"
             onClick={runDoctor}
             disabled={isRunningDoctor}
           >
@@ -577,48 +572,48 @@ const SystemHealth: React.FC = () => {
             )}{' '}
             Run Doctor Check
           </Button>
-        </CardFooter>
+        </Card.Footer>
       </Card>
 
       {/* Container Status */}
       {containerInfo && (
         <Card className="mb-4">
-          <CardHeader>
+          <Card.Header>
             <FontAwesomeIcon icon={faServer} className="me-2" />
             Container Status
             <span className="float-end">
               {/* Running container badges */}
-              <Badge color="primary" className="me-1">
+              <Badge bg="primary" className="me-1">
                 SignalK
               </Badge>
               {systemInfo?.keeper && (
-                <Badge color="info" className="me-1">
+                <Badge bg="info" className="me-1">
                   Keeper
                 </Badge>
               )}
               {systemInfo?.memory?.influxdbMB &&
                 systemInfo.memory.influxdbMB > 0 && (
-                  <Badge color="warning" className="me-1">
+                  <Badge bg="warning" className="me-1">
                     InfluxDB
                   </Badge>
                 )}
               {systemInfo?.memory?.grafanaMB &&
                 systemInfo.memory.grafanaMB > 0 && (
-                  <Badge color="success" className="me-1">
+                  <Badge bg="success" className="me-1">
                     Grafana
                   </Badge>
                 )}
               {keeperVersion?.updateAvailable && (
-                <Badge color="danger" className="ms-2">
+                <Badge bg="danger" className="ms-2">
                   Update Available
                 </Badge>
               )}
             </span>
-          </CardHeader>
-          <CardBody>
+          </Card.Header>
+          <Card.Body>
             {/* Keeper Upgrade Status */}
             {isUpgrading && upgradeState && (
-              <Alert color="info" className="mb-3">
+              <Alert variant="info" className="mb-3">
                 <FontAwesomeIcon icon={faCircleNotch} spin className="me-2" />
                 {upgradeState.step === 'downloading' &&
                   'Downloading Keeper update...'}
@@ -630,14 +625,14 @@ const SystemHealth: React.FC = () => {
                   'Waiting for Keeper to restart...'}
                 {upgradeState.progress !== undefined &&
                   upgradeState.progress > 0 && (
-                    <Progress value={upgradeState.progress} className="mt-2" />
+                    <ProgressBar now={upgradeState.progress} className="mt-2" />
                   )}
               </Alert>
             )}
 
             {/* Keeper Update Available */}
             {keeperVersion?.updateAvailable && !isUpgrading && (
-              <Alert color="warning" className="mb-3">
+              <Alert variant="warning" className="mb-3">
                 <FontAwesomeIcon icon={faRocket} className="me-2" />
                 <strong>Keeper Update Available:</strong> Version{' '}
                 {keeperVersion.latestVersion}
@@ -648,7 +643,7 @@ const SystemHealth: React.FC = () => {
                   </small>
                 </div>
                 <Button
-                  color="success"
+                  variant="success"
                   size="sm"
                   className="mt-2"
                   onClick={startKeeperUpgrade}
@@ -682,7 +677,7 @@ const SystemHealth: React.FC = () => {
                         <td>Health</td>
                         <td className="text-end">
                           <Badge
-                            color={
+                            bg={
                               containerInfo.health.status === 'healthy'
                                 ? 'success'
                                 : 'warning'
@@ -714,9 +709,9 @@ const SystemHealth: React.FC = () => {
                         System: {systemInfo.cpu.systemPercent.toFixed(1)}% (
                         {systemInfo.cpu.cpuCount} cores)
                       </small>
-                      <Progress
-                        value={systemInfo.cpu.systemPercent}
-                        color="secondary"
+                      <ProgressBar
+                        now={systemInfo.cpu.systemPercent}
+                        variant="secondary"
                         style={{ height: '10px' }}
                       />
                     </div>
@@ -724,9 +719,9 @@ const SystemHealth: React.FC = () => {
                       <small>
                         SignalK: {systemInfo.cpu.signalkPercent.toFixed(1)}%
                       </small>
-                      <Progress
-                        value={systemInfo.cpu.signalkPercent}
-                        color="primary"
+                      <ProgressBar
+                        now={systemInfo.cpu.signalkPercent}
+                        variant="primary"
                         style={{ height: '10px' }}
                       />
                     </div>
@@ -738,67 +733,67 @@ const SystemHealth: React.FC = () => {
                 {systemInfo?.memory ? (
                   <>
                     <div className="mb-2">
-                      <Progress multi style={{ height: '20px' }}>
-                        <Progress
-                          bar
-                          color="primary"
-                          value={
+                      <ProgressBar style={{ height: '20px' }}>
+                        <ProgressBar
+                          variant="primary"
+                          now={
                             (systemInfo.memory.signalkMB /
                               systemInfo.memory.totalMB) *
                             100
                           }
+                          key="signalk"
                         />
                         {systemInfo.memory.keeperMB > 0 && (
-                          <Progress
-                            bar
-                            color="info"
-                            value={
+                          <ProgressBar
+                            variant="info"
+                            now={
                               (systemInfo.memory.keeperMB /
                                 systemInfo.memory.totalMB) *
                               100
                             }
+                            key="keeper"
                           />
                         )}
                         {systemInfo.memory.influxdbMB > 0 && (
-                          <Progress
-                            bar
-                            color="warning"
-                            value={
+                          <ProgressBar
+                            variant="warning"
+                            now={
                               (systemInfo.memory.influxdbMB /
                                 systemInfo.memory.totalMB) *
                               100
                             }
+                            key="influxdb"
                           />
                         )}
                         {systemInfo.memory.grafanaMB > 0 && (
-                          <Progress
-                            bar
-                            color="success"
-                            value={
+                          <ProgressBar
+                            variant="success"
+                            now={
                               (systemInfo.memory.grafanaMB /
                                 systemInfo.memory.totalMB) *
                               100
                             }
+                            key="grafana"
                           />
                         )}
-                      </Progress>
+                      </ProgressBar>
                     </div>
                     <small className="text-muted">
-                      <Badge color="primary" className="me-1">
+                      <Badge bg="primary" className="me-1">
                         SignalK: {systemInfo.memory.signalkMB} MB
                       </Badge>
                       {systemInfo.memory.keeperMB > 0 && (
-                        <Badge color="info" className="me-1">
+                        <Badge bg="info" className="me-1">
                           Keeper: {systemInfo.memory.keeperMB} MB
                         </Badge>
                       )}
                       {systemInfo.memory.influxdbMB > 0 && (
-                        <Badge color="warning" className="me-1">
+                        <Badge bg="warning" className="me-1">
                           InfluxDB: {systemInfo.memory.influxdbMB} MB
                         </Badge>
                       )}
                       {systemInfo.memory.grafanaMB > 0 && (
-                        <Badge color="success" className="me-1">
+                        <Badge bg="success" className="me-1">
                           Grafana: {systemInfo.memory.grafanaMB} MB
                         </Badge>
                       )}
@@ -817,9 +812,9 @@ const SystemHealth: React.FC = () => {
                       <small>
                         CPU: {containerStats.cpu.percentage.toFixed(1)}%
                       </small>
-                      <Progress
-                        value={containerStats.cpu.percentage}
-                        color="info"
+                      <ProgressBar
+                        now={containerStats.cpu.percentage}
+                        variant="info"
                         className="mb-2"
                       />
                     </div>
@@ -829,9 +824,9 @@ const SystemHealth: React.FC = () => {
                         {formatBytes(containerStats.memory.limit)} (
                         {containerStats.memory.percentage.toFixed(1)}%)
                       </small>
-                      <Progress
-                        value={containerStats.memory.percentage}
-                        color="primary"
+                      <ProgressBar
+                        now={containerStats.memory.percentage}
+                        variant="primary"
                         className="mb-2"
                       />
                     </div>
@@ -845,15 +840,15 @@ const SystemHealth: React.FC = () => {
                 )}
               </Col>
             </Row>
-          </CardBody>
+          </Card.Body>
         </Card>
       )}
 
       {/* System Info */}
       {systemInfo && (
         <Card className="mb-4">
-          <CardHeader>System Information</CardHeader>
-          <CardBody>
+          <Card.Header>System Information</Card.Header>
+          <Card.Body>
             <Row>
               <Col md={6}>
                 <Table size="sm" borderless>
@@ -881,9 +876,9 @@ const SystemHealth: React.FC = () => {
                       <td>D-Bus</td>
                       <td className="text-end">
                         {systemInfo.capabilities.dbus ? (
-                          <Badge color="success">Available</Badge>
+                          <Badge bg="success">Available</Badge>
                         ) : (
-                          <Badge color="secondary">Not Available</Badge>
+                          <Badge bg="secondary">Not Available</Badge>
                         )}
                       </td>
                     </tr>
@@ -891,9 +886,9 @@ const SystemHealth: React.FC = () => {
                       <td>Bluetooth</td>
                       <td className="text-end">
                         {systemInfo.capabilities.bluetooth ? (
-                          <Badge color="success">Available</Badge>
+                          <Badge bg="success">Available</Badge>
                         ) : (
-                          <Badge color="secondary">Not Available</Badge>
+                          <Badge bg="secondary">Not Available</Badge>
                         )}
                       </td>
                     </tr>
@@ -901,11 +896,11 @@ const SystemHealth: React.FC = () => {
                       <td>Serial Ports</td>
                       <td className="text-end">
                         {systemInfo.capabilities.serialPorts.length > 0 ? (
-                          <Badge color="success">
+                          <Badge bg="success">
                             {systemInfo.capabilities.serialPorts.length} found
                           </Badge>
                         ) : (
-                          <Badge color="secondary">None</Badge>
+                          <Badge bg="secondary">None</Badge>
                         )}
                       </td>
                     </tr>
@@ -913,11 +908,11 @@ const SystemHealth: React.FC = () => {
                       <td>CAN Interfaces (SocketCAN)</td>
                       <td className="text-end">
                         {systemInfo.capabilities.canInterfaces?.length > 0 ? (
-                          <Badge color="success">
+                          <Badge bg="success">
                             {systemInfo.capabilities.canInterfaces.length} found
                           </Badge>
                         ) : (
-                          <Badge color="secondary">None</Badge>
+                          <Badge bg="secondary">None</Badge>
                         )}
                       </td>
                     </tr>
@@ -937,11 +932,11 @@ const SystemHealth: React.FC = () => {
                   ).toFixed(1)}
                   %)
                 </small>
-                <Progress
-                  value={
+                <ProgressBar
+                  now={
                     (systemInfo.storage.used / systemInfo.storage.total) * 100
                   }
-                  color={
+                  variant={
                     systemInfo.storage.available < 1073741824
                       ? 'danger'
                       : 'info'
@@ -949,7 +944,7 @@ const SystemHealth: React.FC = () => {
                 />
               </div>
             )}
-          </CardBody>
+          </Card.Body>
         </Card>
       )}
     </div>

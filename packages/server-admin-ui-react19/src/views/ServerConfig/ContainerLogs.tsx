@@ -1,18 +1,14 @@
 /* eslint-disable @eslint-react/no-array-index-key -- log entries don't have unique IDs */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import AnsiToHtml from 'ansi-to-html'
-import {
-  Card,
-  CardHeader,
-  CardBody,
-  Button,
-  ButtonGroup,
-  Spinner,
-  Alert,
-  Input,
-  Row,
-  Col
-} from 'reactstrap'
+import Alert from 'react-bootstrap/Alert'
+import Button from 'react-bootstrap/Button'
+import ButtonGroup from 'react-bootstrap/ButtonGroup'
+import Card from 'react-bootstrap/Card'
+import Col from 'react-bootstrap/Col'
+import Form from 'react-bootstrap/Form'
+import Row from 'react-bootstrap/Row'
+import Spinner from 'react-bootstrap/Spinner'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faAlignJustify } from '@fortawesome/free-solid-svg-icons/faAlignJustify'
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay'
@@ -288,38 +284,38 @@ export default function ContainerLogs() {
         return {
           icon: <Spinner size="sm" />,
           text: 'Copying...',
-          color: 'secondary' as const
+          variant: 'outline-secondary' as const
         }
       case 'success':
         return {
           icon: <FontAwesomeIcon icon={faCheck} />,
           text: `Copied ${logs.length} lines`,
-          color: 'primary' as const
+          variant: 'primary' as const
         }
       case 'success-selection':
         return {
           icon: <FontAwesomeIcon icon={faCheck} />,
           text: 'Copied selection',
-          color: 'primary' as const
+          variant: 'primary' as const
         }
       case 'error':
         return {
           icon: <FontAwesomeIcon icon={faTimes} />,
           text: 'Failed',
-          color: 'danger' as const
+          variant: 'danger' as const
         }
       default:
         if (hasSelection) {
           return {
             icon: <FontAwesomeIcon icon={faCopy} />,
             text: 'Copy Selection',
-            color: 'secondary' as const
+            variant: 'outline-secondary' as const
           }
         }
         return {
           icon: <FontAwesomeIcon icon={faCopy} />,
           text: 'Copy All',
-          color: 'secondary' as const
+          variant: 'outline-secondary' as const
         }
     }
   }
@@ -349,11 +345,11 @@ export default function ContainerLogs() {
   if (isLoading && !logsData) {
     return (
       <Card>
-        <CardBody>
+        <Card.Body>
           <div className="d-flex justify-content-center">
             <Spinner />
           </div>
-        </CardBody>
+        </Card.Body>
       </Card>
     )
   }
@@ -361,15 +357,15 @@ export default function ContainerLogs() {
   if (error) {
     return (
       <Card>
-        <CardBody>
-          <Alert color="danger">
+        <Card.Body>
+          <Alert variant="danger">
             <strong>Failed to load logs</strong>
             <p className="mb-2">{error}</p>
-            <Button color="link" onClick={() => fetchLogs()}>
+            <Button variant="link" onClick={() => fetchLogs()}>
               Retry
             </Button>
           </Alert>
-        </CardBody>
+        </Card.Body>
       </Card>
     )
   }
@@ -377,7 +373,7 @@ export default function ContainerLogs() {
   return (
     <div className="animated fadeIn">
       <Card>
-        <CardHeader>
+        <Card.Header>
           <Row className="align-items-center">
             <Col>
               <FontAwesomeIcon icon={faAlignJustify} />{' '}
@@ -391,8 +387,8 @@ export default function ContainerLogs() {
               </span>
             </Col>
           </Row>
-        </CardHeader>
-        <CardBody>
+        </Card.Header>
+        <Card.Body>
           {/* Source Selector */}
           {availableSources.length > 1 && (
             <div className="mb-3">
@@ -400,10 +396,9 @@ export default function ContainerLogs() {
                 {availableSources.map((source) => (
                   <Button
                     key={source.id}
-                    color={
-                      effectiveLogSource === source.id ? 'primary' : 'secondary'
+                    variant={
+                      effectiveLogSource === source.id ? 'primary' : 'outline-secondary'
                     }
-                    outline={effectiveLogSource !== source.id}
                     onClick={() => setLogSource(source.id)}
                     size="sm"
                   >
@@ -420,7 +415,7 @@ export default function ContainerLogs() {
             <Row className="align-items-center g-2">
               <Col>
                 <div className="position-relative">
-                  <Input
+                  <Form.Control
                     type="text"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
@@ -429,7 +424,7 @@ export default function ContainerLogs() {
                   />
                   {filter && (
                     <Button
-                      color="link"
+                      variant="link"
                       className="position-absolute"
                       onClick={() => setFilter('')}
                       aria-label="Clear filter"
@@ -446,8 +441,7 @@ export default function ContainerLogs() {
                 </div>
               </Col>
               <Col xs="auto">
-                <Input
-                  type="select"
+                <Form.Select
                   aria-label="Lines to show"
                   value={lineCount}
                   onChange={(e) => setLineCount(Number(e.target.value))}
@@ -458,12 +452,11 @@ export default function ContainerLogs() {
                       {num} lines
                     </option>
                   ))}
-                </Input>
+                </Form.Select>
               </Col>
               <Col xs="auto">
                 <Button
-                  color={isFollowing ? 'primary' : 'secondary'}
-                  outline={!isFollowing}
+                  variant={isFollowing ? 'primary' : 'outline-secondary'}
                   onClick={() => setIsFollowing(!isFollowing)}
                   title={
                     isFollowing
@@ -480,8 +473,7 @@ export default function ContainerLogs() {
               </Col>
               <Col xs="auto">
                 <Button
-                  color="secondary"
-                  outline
+                  variant="outline-secondary"
                   onClick={() => fetchLogs()}
                   title="Refresh logs now"
                 >
@@ -491,8 +483,7 @@ export default function ContainerLogs() {
               </Col>
               <Col xs="auto">
                 <Button
-                  color={copyButtonContent.color}
-                  outline={copyButtonContent.color === 'secondary'}
+                  variant={copyButtonContent.variant}
                   onClick={copyLogs}
                   disabled={copyStatus === 'copying' || logs.length === 0}
                   title={
@@ -552,7 +543,7 @@ export default function ContainerLogs() {
               ))
             )}
           </div>
-        </CardBody>
+        </Card.Body>
       </Card>
     </div>
   )

@@ -1,20 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import {
-  Button,
-  Card,
-  CardHeader,
-  CardBody,
-  CardFooter,
-  Row,
-  Col,
-  Badge,
-  Alert,
-  Form,
-  FormGroup,
-  Label,
-  Input,
-  Table
-} from 'reactstrap'
+import Alert from 'react-bootstrap/Alert'
+import Badge from 'react-bootstrap/Badge'
+import Button from 'react-bootstrap/Button'
+import Card from 'react-bootstrap/Card'
+import Col from 'react-bootstrap/Col'
+import Form from 'react-bootstrap/Form'
+import Row from 'react-bootstrap/Row'
+import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
 import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase'
@@ -249,7 +241,7 @@ const History: React.FC = () => {
       not_found: 'warning'
     }
     return (
-      <Badge color={colors[containerStatus] || 'secondary'}>
+      <Badge bg={colors[containerStatus] || 'secondary'}>
         {containerStatus}
       </Badge>
     )
@@ -263,7 +255,7 @@ const History: React.FC = () => {
       starting: 'info'
     }
     return (
-      <Badge color={colors[health] || 'secondary'} className="ms-1">
+      <Badge bg={colors[health] || 'secondary'} className="ms-1">
         {health}
       </Badge>
     )
@@ -274,13 +266,13 @@ const History: React.FC = () => {
     return (
       <div className="animated fadeIn">
         <Card>
-          <CardHeader>History Database</CardHeader>
-          <CardBody>
-            <Alert color="info">
+          <Card.Header>History Database</Card.Header>
+          <Card.Body>
+            <Alert variant="info">
               History database management is only available when running with
               the Universal Installer (Keeper).
             </Alert>
-          </CardBody>
+          </Card.Body>
         </Card>
       </div>
     )
@@ -296,31 +288,31 @@ const History: React.FC = () => {
   return (
     <div className="animated fadeIn">
       {restartMessage && (
-        <Alert color="info">
+        <Alert variant="info">
           <FontAwesomeIcon icon={faCircleNotch} spin className="me-2" />
           {restartMessage} SignalK server is restarting, please wait...
         </Alert>
       )}
       {error && (
-        <Alert color="danger" toggle={() => setError(null)}>
+        <Alert variant="danger" dismissible onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
       {success && (
-        <Alert color="success" toggle={() => setSuccess(null)}>
+        <Alert variant="success" dismissible onClose={() => setSuccess(null)}>
           {success}
         </Alert>
       )}
 
       {/* Status Overview */}
       <Card className="mb-4">
-        <CardHeader>
+        <Card.Header>
           <FontAwesomeIcon icon={faDatabase} className="me-2" />
           History Database
           {status && (
             <span className="float-end">
               <Badge
-                color={
+                bg={
                   status.status === 'running'
                     ? 'success'
                     : status.status === 'error'
@@ -332,8 +324,8 @@ const History: React.FC = () => {
               </Badge>
             </span>
           )}
-        </CardHeader>
-        <CardBody>
+        </Card.Header>
+        <Card.Body>
           {isLoading ? (
             <div className="text-center">
               <FontAwesomeIcon icon={faCircleNotch} spin size="2x" />
@@ -377,7 +369,7 @@ const History: React.FC = () => {
                           <td>Installed</td>
                           <td className="text-end">
                             <Badge
-                              color={
+                              bg={
                                 status.plugin.installed ? 'success' : 'warning'
                               }
                             >
@@ -389,7 +381,7 @@ const History: React.FC = () => {
                           <td>Enabled</td>
                           <td className="text-end">
                             <Badge
-                              color={
+                              bg={
                                 status.plugin.enabled ? 'success' : 'secondary'
                               }
                             >
@@ -401,7 +393,7 @@ const History: React.FC = () => {
                           <td>Configured</td>
                           <td className="text-end">
                             <Badge
-                              color={
+                              bg={
                                 status.plugin.configured
                                   ? 'success'
                                   : 'secondary'
@@ -426,7 +418,7 @@ const History: React.FC = () => {
                 </p>
               )}
               {status.lastError && (
-                <Alert color="warning" className="mt-2">
+                <Alert variant="warning" className="mt-2">
                   Last error: {status.lastError}
                 </Alert>
               )}
@@ -434,28 +426,28 @@ const History: React.FC = () => {
           ) : (
             <p className="text-muted">Unable to load status</p>
           )}
-        </CardBody>
-        <CardFooter>
+        </Card.Body>
+        <Card.Footer>
           <Button
-            color="secondary"
+            variant="secondary"
             size="sm"
             onClick={loadData}
             disabled={isLoading}
           >
             <FontAwesomeIcon icon={faSync} spin={isLoading} /> Refresh
           </Button>
-        </CardFooter>
+        </Card.Footer>
       </Card>
 
       {/* Error Recovery Card - Links to Doctor */}
       {isError && (
         <Card className="mb-4 border-danger">
-          <CardHeader className="text-danger">
+          <Card.Header className="text-danger">
             <FontAwesomeIcon icon={faDatabase} className="me-2" />
             History Error - Containers Not Running
-          </CardHeader>
-          <CardBody>
-            <Alert color="danger">
+          </Card.Header>
+          <Card.Body>
+            <Alert variant="danger">
               The history containers are in an error state. This can happen if:
               <ul className="mb-0 mt-2">
                 <li>Containers were removed manually</li>
@@ -467,21 +459,21 @@ const History: React.FC = () => {
               Use the System Doctor to diagnose and repair this issue. The
               Doctor can automatically re-enable the history containers.
             </p>
-          </CardBody>
-          <CardFooter>
-            <Button color="primary" tag={Link} to="/serverConfiguration/health">
+          </Card.Body>
+          <Card.Footer>
+            <Button variant="primary" as={Link} to="/serverConfiguration/health">
               <FontAwesomeIcon icon={faStethoscope} className="me-1" />
               Open System Doctor
             </Button>
-          </CardFooter>
+          </Card.Footer>
         </Card>
       )}
 
       {/* Enable Card */}
       {isDisabled && (
         <Card className="mb-4">
-          <CardHeader>Enable History</CardHeader>
-          <CardBody>
+          <Card.Header>Enable History</Card.Header>
+          <Card.Body>
             <p>
               Enable the history database to store Signal K data over time. This
               will:
@@ -492,10 +484,10 @@ const History: React.FC = () => {
               <li>Install and configure the signalk-to-influxdb2 plugin</li>
             </ul>
             <Form>
-              <FormGroup row>
-                <Label sm={4}>Retention Period (days)</Label>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={4}>Retention Period (days)</Form.Label>
                 <Col sm={4}>
-                  <Input
+                  <Form.Control
                     type="number"
                     min={7}
                     max={3650}
@@ -509,12 +501,12 @@ const History: React.FC = () => {
                     days)
                   </small>
                 </Col>
-              </FormGroup>
+              </Form.Group>
             </Form>
-          </CardBody>
-          <CardFooter>
+          </Card.Body>
+          <Card.Footer>
             <Button
-              color="success"
+              variant="success"
               onClick={handleEnable}
               disabled={isEnabling}
             >
@@ -525,20 +517,20 @@ const History: React.FC = () => {
               )}{' '}
               Enable History Database
             </Button>
-          </CardFooter>
+          </Card.Footer>
         </Card>
       )}
 
       {/* Running - Settings Card */}
       {isRunning && settings && (
         <Card className="mb-4">
-          <CardHeader>Settings</CardHeader>
-          <CardBody>
+          <Card.Header>Settings</Card.Header>
+          <Card.Body>
             <Form>
-              <FormGroup row>
-                <Label sm={4}>Retention Period</Label>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={4}>Retention Period</Form.Label>
                 <Col sm={4}>
-                  <Input
+                  <Form.Control
                     type="number"
                     min={7}
                     max={3650}
@@ -550,7 +542,7 @@ const History: React.FC = () => {
                 </Col>
                 <Col sm={4}>
                   <Button
-                    color="primary"
+                    variant="primary"
                     size="sm"
                     onClick={handleUpdateRetention}
                     disabled={retentionDays === settings.retentionDays}
@@ -558,32 +550,32 @@ const History: React.FC = () => {
                     Update
                   </Button>
                 </Col>
-              </FormGroup>
-              <FormGroup row>
-                <Label sm={4}>Organization</Label>
+              </Form.Group>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={4}>Organization</Form.Label>
                 <Col sm={4}>
-                  <Input type="text" value={settings.org} disabled />
+                  <Form.Control type="text" value={settings.org} disabled />
                 </Col>
-              </FormGroup>
-              <FormGroup row>
-                <Label sm={4}>Bucket</Label>
+              </Form.Group>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={4}>Bucket</Form.Label>
                 <Col sm={4}>
-                  <Input type="text" value={settings.bucket} disabled />
+                  <Form.Control type="text" value={settings.bucket} disabled />
                 </Col>
-              </FormGroup>
+              </Form.Group>
             </Form>
-          </CardBody>
+          </Card.Body>
         </Card>
       )}
 
       {/* Access Links Card */}
       {isRunning && credentials && (
         <Card className="mb-4">
-          <CardHeader>
+          <Card.Header>
             <FontAwesomeIcon icon={faChartLine} className="me-2" />
             Access
-          </CardHeader>
-          <CardBody>
+          </Card.Header>
+          <Card.Body>
             <Row>
               <Col md={6}>
                 <h6>Grafana Dashboard</h6>
@@ -598,10 +590,10 @@ const History: React.FC = () => {
                           Username:
                         </td>
                         <td>
-                          <Input
+                          <Form.Control
                             type="text"
                             readOnly
-                            bsSize="sm"
+                            size="sm"
                             value={credentials.grafanaUser}
                             onClick={(e) =>
                               (e.target as HTMLInputElement).select()
@@ -612,10 +604,10 @@ const History: React.FC = () => {
                       <tr>
                         <td className="text-muted">Password:</td>
                         <td>
-                          <Input
+                          <Form.Control
                             type="text"
                             readOnly
-                            bsSize="sm"
+                            size="sm"
                             value={credentials.grafanaPassword || ''}
                             onClick={(e) =>
                               (e.target as HTMLInputElement).select()
@@ -627,8 +619,8 @@ const History: React.FC = () => {
                   </Table>
                 )}
                 <Button
-                  color="primary"
-                  tag="a"
+                  variant="primary"
+                  as="a"
                   href={grafanaHref}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -650,10 +642,10 @@ const History: React.FC = () => {
                           Username:
                         </td>
                         <td>
-                          <Input
+                          <Form.Control
                             type="text"
                             readOnly
-                            bsSize="sm"
+                            size="sm"
                             value={credentials.influxUser}
                             onClick={(e) =>
                               (e.target as HTMLInputElement).select()
@@ -664,10 +656,10 @@ const History: React.FC = () => {
                       <tr>
                         <td className="text-muted">Password:</td>
                         <td>
-                          <Input
+                          <Form.Control
                             type="text"
                             readOnly
-                            bsSize="sm"
+                            size="sm"
                             value={credentials.influxPassword || ''}
                             onClick={(e) =>
                               (e.target as HTMLInputElement).select()
@@ -679,8 +671,8 @@ const History: React.FC = () => {
                   </Table>
                 )}
                 <Button
-                  color="secondary"
-                  tag="a"
+                  variant="secondary"
+                  as="a"
                   href="http://localhost:3002"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -689,10 +681,10 @@ const History: React.FC = () => {
                 </Button>
               </Col>
             </Row>
-          </CardBody>
-          <CardFooter>
+          </Card.Body>
+          <Card.Footer>
             <Button
-              color="info"
+              variant="info"
               size="sm"
               onClick={handleRefreshGrafana}
               disabled={isRefreshing}
@@ -703,23 +695,23 @@ const History: React.FC = () => {
             <small className="text-muted ms-2">
               Use this after changing SignalK security settings
             </small>
-          </CardFooter>
+          </Card.Footer>
         </Card>
       )}
 
       {/* Disable Card */}
       {isRunning && (
         <Card className="border-danger">
-          <CardHeader className="text-danger">Disable History</CardHeader>
-          <CardBody>
+          <Card.Header className="text-danger">Disable History</Card.Header>
+          <Card.Body>
             <p>
               Stop the history database containers. You can choose to keep the
               data for later re-enabling.
             </p>
-          </CardBody>
-          <CardFooter>
+          </Card.Body>
+          <Card.Footer>
             <Button
-              color="warning"
+              variant="warning"
               className="me-2"
               onClick={() => handleDisable(true)}
               disabled={isDisabling}
@@ -732,13 +724,13 @@ const History: React.FC = () => {
               Disable (Keep Data)
             </Button>
             <Button
-              color="danger"
+              variant="danger"
               onClick={() => handleDisable(false)}
               disabled={isDisabling}
             >
               <FontAwesomeIcon icon={faStop} /> Disable and Delete Data
             </Button>
-          </CardFooter>
+          </Card.Footer>
         </Card>
       )}
     </div>
