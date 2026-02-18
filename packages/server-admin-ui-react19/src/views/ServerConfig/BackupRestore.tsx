@@ -292,15 +292,13 @@ const BackupRestore: React.FC = () => {
   }
 
   const handleCloudSync = async () => {
-    setCloudLoading(true)
     try {
       await cloudApi.sync()
-      // Poll for updated status
-      setTimeout(loadCloudStatus, 2000)
+      // Optimistically show syncing state immediately
+      setCloudStatus((prev) => (prev ? { ...prev, syncing: true } : prev))
+      // Poll will pick up via the useEffect that watches cloudStatus.syncing
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start sync')
-    } finally {
-      setCloudLoading(false)
     }
   }
 
@@ -1204,12 +1202,13 @@ const BackupRestore: React.FC = () => {
                           Sync Now
                         </Button>
                       )}
-                      {cloudStatus.lastSync && (
-                        <span className="text-muted">
-                          <FontAwesomeIcon icon={faClock} className="me-1" />
-                          Last sync: {formatDate(cloudStatus.lastSync)}
-                        </span>
-                      )}
+                      <span className="text-muted">
+                        <FontAwesomeIcon icon={faClock} className="me-1" />
+                        Last sync:{' '}
+                        {cloudStatus.lastSync
+                          ? formatDate(cloudStatus.lastSync)
+                          : 'Never'}
+                      </span>
                       {cloudStatus.internetAvailable === false && (
                         <Badge bg="warning">
                           <FontAwesomeIcon icon={faWifi} className="me-1" />
