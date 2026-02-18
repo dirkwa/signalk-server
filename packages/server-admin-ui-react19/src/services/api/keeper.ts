@@ -954,6 +954,18 @@ export function createKeeperApi(baseUrl: string) {
             { method: 'POST' }
           )
           await handleResponse<{ message: string }>(response)
+        },
+
+        forwardCallback: async (url: string): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/auth-callback`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url })
+            }
+          )
+          await handleResponse<{ message: string }>(response)
         }
       },
 
@@ -977,16 +989,12 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       password: async (): Promise<PasswordStatusResult> => {
-        const response = await keeperFetch(
-          `${apiUrl}/api/backups/password`
-        )
+        const response = await keeperFetch(`${apiUrl}/api/backups/password`)
         return handleResponse<PasswordStatusResult>(response)
       },
 
       installs: async (): Promise<CloudInstall[]> => {
-        const response = await keeperFetch(
-          `${apiUrl}/api/cloud/installs`
-        )
+        const response = await keeperFetch(`${apiUrl}/api/cloud/installs`)
         return handleResponse<CloudInstall[]>(response)
       },
 
@@ -1017,21 +1025,33 @@ export function createKeeperApi(baseUrl: string) {
             body: JSON.stringify({ snapshotId, mode })
           }
         )
-        await handleResponse<{ snapshotId: string; mode: string; status: string }>(response)
+        await handleResponse<{
+          snapshotId: string
+          mode: string
+          status: string
+        }>(response)
       },
 
       restoreStatus: async (): Promise<{
         cloudPhase: string
         cloudError: string | null
-        restore: { state: string; progress: number; statusMessage: string; error?: string } | null
+        restore: {
+          state: string
+          progress: number
+          statusMessage: string
+          error?: string
+        } | null
       }> => {
-        const response = await keeperFetch(
-          `${apiUrl}/api/cloud/restore/status`
-        )
+        const response = await keeperFetch(`${apiUrl}/api/cloud/restore/status`)
         return handleResponse<{
           cloudPhase: string
           cloudError: string | null
-          restore: { state: string; progress: number; statusMessage: string; error?: string } | null
+          restore: {
+            state: string
+            progress: number
+            statusMessage: string
+            error?: string
+          } | null
         }>(response)
       },
 

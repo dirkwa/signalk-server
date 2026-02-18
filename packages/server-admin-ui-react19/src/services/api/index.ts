@@ -316,6 +316,14 @@ export const cloudApi = {
       } else {
         throw new Error('Cloud backup not supported without Keeper')
       }
+    },
+
+    forwardCallback: async (url: string) => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().cloud.gdrive.forwardCallback(url)
+      } else {
+        throw new Error('Cloud backup not supported without Keeper')
+      }
     }
   },
 

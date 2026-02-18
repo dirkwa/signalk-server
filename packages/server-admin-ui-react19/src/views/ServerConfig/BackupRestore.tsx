@@ -112,24 +112,55 @@ const BackupRestore: React.FC = () => {
   const [disconnectConfirm, setDisconnectConfirm] = useState(false)
   const [cloudLoading, setCloudLoading] = useState(false)
   const [authPolling, setAuthPolling] = useState(false)
+  const [callbackUrl, setCallbackUrl] = useState('')
+  const [showCallbackFallback, setShowCallbackFallback] = useState(false)
   const authPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const authStartTimeRef = useRef<number>(0)
 
   // Cloud restore state
   const [showCloudRestore, setShowCloudRestore] = useState(false)
   const [cloudRestoreStep, setCloudRestoreStep] = useState<
-    'select-install' | 'enter-password' | 'preparing' | 'select-snapshot' | 'confirm' | 'restoring'
+    | 'select-install'
+    | 'enter-password'
+    | 'preparing'
+    | 'select-snapshot'
+    | 'confirm'
+    | 'restoring'
   >('select-install')
   const [cloudInstalls, setCloudInstalls] = useState<
-    Array<{ folder: string; info?: { installName?: string; vesselName?: string; hardware?: string; lastUpdated?: string } }>
+    Array<{
+      folder: string
+      info?: {
+        installName?: string
+        vesselName?: string
+        hardware?: string
+        lastUpdated?: string
+      }
+    }>
   >([])
-  const [selectedInstall, setSelectedInstall] = useState<typeof cloudInstalls[0] | null>(null)
+  const [selectedInstall, setSelectedInstall] = useState<
+    (typeof cloudInstalls)[0] | null
+  >(null)
   const [cloudRestorePassword, setCloudRestorePassword] = useState('')
   const [cloudSnapshots, setCloudSnapshots] = useState<
-    Array<{ id: string; createdAt: string; version: { tag: string }; type: string; size: number; description?: string }>
+    Array<{
+      id: string
+      createdAt: string
+      version: { tag: string }
+      type: string
+      size: number
+      description?: string
+    }>
   >([])
-  const [selectedCloudSnapshot, setSelectedCloudSnapshot] = useState<string | null>(null)
-  const [cloudRestoreMode, setCloudRestoreMode] = useState<'restore' | 'clone'>('restore')
-  const [cloudRestoreError, setCloudRestoreError] = useState<string | null>(null)
+  const [selectedCloudSnapshot, setSelectedCloudSnapshot] = useState<
+    string | null
+  >(null)
+  const [cloudRestoreMode, setCloudRestoreMode] = useState<'restore' | 'clone'>(
+    'restore'
+  )
+  const [cloudRestoreError, setCloudRestoreError] = useState<string | null>(
+    null
+  )
 
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
@@ -173,6 +204,9 @@ const BackupRestore: React.FC = () => {
       window.open(result.authUrl, '_blank', 'width=600,height=700')
       // Start polling for auth completion
       setAuthPolling(true)
+      setShowCallbackFallback(false)
+      setCallbackUrl('')
+      authStartTimeRef.current = Date.now()
       if (authPollRef.current) clearInterval(authPollRef.current)
       authPollRef.current = setInterval(async () => {
         try {
@@ -181,12 +215,17 @@ const BackupRestore: React.FC = () => {
             if (authPollRef.current) clearInterval(authPollRef.current)
             authPollRef.current = null
             setAuthPolling(false)
+            setShowCallbackFallback(false)
             await loadCloudStatus()
           } else if (state.state === 'failed') {
             if (authPollRef.current) clearInterval(authPollRef.current)
             authPollRef.current = null
             setAuthPolling(false)
+            setShowCallbackFallback(false)
             setError(state.error || 'Authorization failed')
+          } else if (Date.now() - authStartTimeRef.current > 15000) {
+            // After 15s, show fallback for remote users
+            setShowCallbackFallback(true)
           }
         } catch {
           // Ignore poll errors
@@ -207,12 +246,26 @@ const BackupRestore: React.FC = () => {
       authPollRef.current = null
     }
     setAuthPolling(false)
+    setShowCallbackFallback(false)
+    setCallbackUrl('')
     try {
       await cloudApi.gdrive.cancel()
     } catch {
       // Ignore cancel errors
     }
   }, [])
+
+  const handleForwardCallback = useCallback(async () => {
+    if (!callbackUrl.trim()) return
+    try {
+      await cloudApi.gdrive.forwardCallback(callbackUrl.trim())
+      // Auth state polling will pick up the completion
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to forward callback'
+      )
+    }
+  }, [callbackUrl])
 
   // Cleanup auth polling on unmount
   useEffect(() => {
@@ -231,9 +284,7 @@ const BackupRestore: React.FC = () => {
       await loadCloudStatus()
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to disconnect Google Drive'
+        err instanceof Error ? err.message : 'Failed to disconnect Google Drive'
       )
     } finally {
       setCloudLoading(false)
@@ -270,9 +321,7 @@ const BackupRestore: React.FC = () => {
       await loadCloudStatus()
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to update sync frequency'
+        err instanceof Error ? err.message : 'Failed to update sync frequency'
       )
     }
   }
@@ -301,7 +350,9 @@ const BackupRestore: React.FC = () => {
       setCloudInstalls(installs || [])
     } catch (err) {
       setCloudRestoreError(
-        err instanceof Error ? err.message : 'Failed to load cloud installations'
+        err instanceof Error
+          ? err.message
+          : 'Failed to load cloud installations'
       )
     } finally {
       setCloudLoading(false)
@@ -320,9 +371,7 @@ const BackupRestore: React.FC = () => {
       )
 
       if (result.phase === 'failed') {
-        setCloudRestoreError(
-          result.error || 'Failed to prepare cloud restore'
-        )
+        setCloudRestoreError(result.error || 'Failed to prepare cloud restore')
         setCloudRestoreStep('enter-password')
         return
       }
@@ -625,7 +674,9 @@ const BackupRestore: React.FC = () => {
               <td>{formatDate(backup.created)}</td>
               {showType && (
                 <td>
-                  <Badge bg={getBackupTypeColor(backup.type)}>{backup.type}</Badge>
+                  <Badge bg={getBackupTypeColor(backup.type)}>
+                    {backup.type}
+                  </Badge>
                 </td>
               )}
               <td>{formatBytes(backup.size)}</td>
@@ -701,7 +752,9 @@ const BackupRestore: React.FC = () => {
           <Card.Body>
             <Form>
               <Row className="mb-3">
-                <Form.Label column sm={2}>Type</Form.Label>
+                <Form.Label column sm={2}>
+                  Type
+                </Form.Label>
                 <Col sm={10}>
                   <Form.Select
                     value={backupType}
@@ -718,7 +771,9 @@ const BackupRestore: React.FC = () => {
                 </Col>
               </Row>
               <Row className="mb-3">
-                <Form.Label column sm={2}>Description</Form.Label>
+                <Form.Label column sm={2}>
+                  Description
+                </Form.Label>
                 <Col sm={10}>
                   <Form.Control
                     type="text"
@@ -759,9 +814,7 @@ const BackupRestore: React.FC = () => {
                     <Form.Label>Status</Form.Label>
                     <div>
                       <Badge
-                        bg={
-                          schedulerStatus.enabled ? 'success' : 'danger'
-                        }
+                        bg={schedulerStatus.enabled ? 'success' : 'danger'}
                       >
                         {schedulerStatus.enabled ? 'Enabled' : 'Disabled'}
                       </Badge>
@@ -836,7 +889,10 @@ const BackupRestore: React.FC = () => {
               </div>
             ) : backupList ? (
               <>
-                <Tab.Container activeKey={activeBackupTab} onSelect={(k) => k && setActiveBackupTab(k)}>
+                <Tab.Container
+                  activeKey={activeBackupTab}
+                  onSelect={(k) => k && setActiveBackupTab(k)}
+                >
                   <Nav variant="tabs" className="mb-3">
                     {[
                       { id: 'all', label: 'All' },
@@ -849,7 +905,11 @@ const BackupRestore: React.FC = () => {
                         <Nav.Link eventKey={tab.id}>
                           {tab.label}
                           {getBackupCount(tab.id) > 0 && (
-                            <Badge bg={getBackupTypeColor(tab.id)} pill className="ms-2">
+                            <Badge
+                              bg={getBackupTypeColor(tab.id)}
+                              pill
+                              className="ms-2"
+                            >
                               {getBackupCount(tab.id)}
                             </Badge>
                           )}
@@ -862,7 +922,9 @@ const BackupRestore: React.FC = () => {
                       {getAllBackups().length > 0 ? (
                         renderBackupTable(getAllBackups(), true)
                       ) : (
-                        <p className="text-muted text-center">No backups available</p>
+                        <p className="text-muted text-center">
+                          No backups available
+                        </p>
                       )}
                     </Tab.Pane>
                     <Tab.Pane eventKey="manual">
@@ -1013,12 +1075,50 @@ const BackupRestore: React.FC = () => {
                       <Spinner size="sm" />
                       <span>Waiting for Google authorization...</span>
                     </div>
-                    <span className="text-muted d-block mb-2" style={{ fontSize: '0.85rem' }}>
+                    <span
+                      className="text-muted d-block mb-2"
+                      style={{ fontSize: '0.85rem' }}
+                    >
                       Complete the sign-in in the browser tab that just opened.
                     </span>
+                    {showCallbackFallback && (
+                      <div
+                        className="mt-3 p-2 border rounded"
+                        style={{ fontSize: '0.85rem' }}
+                      >
+                        <div className="text-muted mb-2">
+                          <strong>Remote access?</strong> If a page failed to
+                          load after signing in, copy the URL from that page and
+                          paste it here:
+                        </div>
+                        <div className="d-flex gap-2">
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="http://127.0.0.1:53682/..."
+                            value={callbackUrl}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setCallbackUrl(e.target.value)}
+                            onKeyDown={(e: React.KeyboardEvent) => {
+                              if (e.key === 'Enter') handleForwardCallback()
+                            }}
+                          />
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={handleForwardCallback}
+                            disabled={!callbackUrl.trim()}
+                          >
+                            Submit
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     <Button
                       variant="outline-secondary"
                       size="sm"
+                      className="mt-2"
                       onClick={handleCancelAuth}
                     >
                       Cancel
@@ -1184,10 +1284,16 @@ const BackupRestore: React.FC = () => {
                 </Row>
 
                 {/* Restore from Cloud */}
-                <Row className="mt-3 pt-3 align-items-center" style={{ borderTop: '1px solid #dee2e6' }}>
+                <Row
+                  className="mt-3 pt-3 align-items-center"
+                  style={{ borderTop: '1px solid #dee2e6' }}
+                >
                   <Col sm={3}>
                     <strong>
-                      <FontAwesomeIcon icon={faCloudArrowDown} className="me-1" />
+                      <FontAwesomeIcon
+                        icon={faCloudArrowDown}
+                        className="me-1"
+                      />
                       Restore from Cloud
                     </strong>
                   </Col>
@@ -1197,7 +1303,10 @@ const BackupRestore: React.FC = () => {
                       size="sm"
                       onClick={openCloudRestore}
                     >
-                      <FontAwesomeIcon icon={faCloudArrowDown} className="me-1" />
+                      <FontAwesomeIcon
+                        icon={faCloudArrowDown}
+                        className="me-1"
+                      />
                       Restore from Cloud
                     </Button>
                     <Form.Text className="text-muted d-block mt-1">
@@ -1306,8 +1415,7 @@ const BackupRestore: React.FC = () => {
               <>
                 <p>
                   Enter the recovery password from the source device (
-                  {selectedInstall?.info?.vesselName ||
-                    selectedInstall?.folder}
+                  {selectedInstall?.info?.vesselName || selectedInstall?.folder}
                   ).
                 </p>
                 <Form.Group className="mb-3">
@@ -1360,9 +1468,7 @@ const BackupRestore: React.FC = () => {
                         <div
                           key={snap.id}
                           className={`p-2 d-flex align-items-center gap-2 ${
-                            selectedCloudSnapshot === snap.id
-                              ? 'bg-light'
-                              : ''
+                            selectedCloudSnapshot === snap.id ? 'bg-light' : ''
                           }`}
                           style={{
                             cursor: 'pointer',
@@ -1373,9 +1479,7 @@ const BackupRestore: React.FC = () => {
                           <Form.Check
                             type="radio"
                             checked={selectedCloudSnapshot === snap.id}
-                            onChange={() =>
-                              setSelectedCloudSnapshot(snap.id)
-                            }
+                            onChange={() => setSelectedCloudSnapshot(snap.id)}
                           />
                           <div className="flex-grow-1">
                             <div>
@@ -1458,9 +1562,7 @@ const BackupRestore: React.FC = () => {
                   </div>
                   <div>
                     <strong>Snapshot:</strong>{' '}
-                    {cloudSnapshots.find(
-                      (s) => s.id === selectedCloudSnapshot
-                    )
+                    {cloudSnapshots.find((s) => s.id === selectedCloudSnapshot)
                       ? formatDate(
                           cloudSnapshots.find(
                             (s) => s.id === selectedCloudSnapshot
@@ -1517,10 +1619,7 @@ const BackupRestore: React.FC = () => {
                 >
                   Back
                 </Button>
-                <Button
-                  variant="primary"
-                  onClick={handleCloudRestorePrepare}
-                >
+                <Button variant="primary" onClick={handleCloudRestorePrepare}>
                   Prepare Restore
                 </Button>
               </>
@@ -1552,10 +1651,7 @@ const BackupRestore: React.FC = () => {
                 >
                   Back
                 </Button>
-                <Button
-                  variant="danger"
-                  onClick={handleCloudRestoreStart}
-                >
+                <Button variant="danger" onClick={handleCloudRestoreStart}>
                   {cloudRestoreMode === 'clone'
                     ? 'Clone & Restore'
                     : 'Start Restore'}
@@ -1578,7 +1674,9 @@ const BackupRestore: React.FC = () => {
               This will remove the Google Drive connection. Cloud sync will stop
               and you will need to reconnect to resume cloud backups.
             </p>
-            <p>Your existing cloud backups on Google Drive will not be deleted.</p>
+            <p>
+              Your existing cloud backups on Google Drive will not be deleted.
+            </p>
           </Modal.Body>
           <Modal.Footer>
             <Button
@@ -1621,7 +1719,9 @@ const BackupRestore: React.FC = () => {
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label htmlFor="confirm-password">Confirm Password</Form.Label>
+              <Form.Label htmlFor="confirm-password">
+                Confirm Password
+              </Form.Label>
               <Form.Control
                 type="password"
                 id="confirm-password"
@@ -1662,7 +1762,10 @@ const BackupRestore: React.FC = () => {
             </Alert>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={() => setResetModalOpen(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => setResetModalOpen(false)}
+            >
               Cancel
             </Button>
             <Button
