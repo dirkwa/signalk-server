@@ -319,7 +319,12 @@ export interface CloudSyncStatus {
 
 export interface CloudConnectResult {
   authUrl: string
-  manualAuthUrl: string
+}
+
+export interface CloudAuthState {
+  state: 'idle' | 'waiting' | 'completed' | 'failed'
+  authUrl: string | null
+  error: string | null
 }
 
 export interface PasswordStatusResult {

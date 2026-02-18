@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -108,12 +108,11 @@ const BackupRestore: React.FC = () => {
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus | null>(null)
   const [passwordStatus, setPasswordStatus] =
     useState<PasswordStatusResult | null>(null)
-  const [showManualAuth, setShowManualAuth] = useState(false)
-  const [manualAuthCode, setManualAuthCode] = useState('')
-  const [manualAuthUrl, setManualAuthUrl] = useState('')
   const [showRecoveryPassword, setShowRecoveryPassword] = useState(false)
   const [disconnectConfirm, setDisconnectConfirm] = useState(false)
   const [cloudLoading, setCloudLoading] = useState(false)
+  const [authPolling, setAuthPolling] = useState(false)
+  const authPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Cloud restore state
   const [showCloudRestore, setShowCloudRestore] = useState(false)
@@ -171,8 +170,28 @@ const BackupRestore: React.FC = () => {
     setCloudLoading(true)
     try {
       const result = await cloudApi.gdrive.connect()
-      setManualAuthUrl(result.manualAuthUrl)
       window.open(result.authUrl, '_blank', 'width=600,height=700')
+      // Start polling for auth completion
+      setAuthPolling(true)
+      if (authPollRef.current) clearInterval(authPollRef.current)
+      authPollRef.current = setInterval(async () => {
+        try {
+          const state = await cloudApi.gdrive.authState()
+          if (state.state === 'completed') {
+            if (authPollRef.current) clearInterval(authPollRef.current)
+            authPollRef.current = null
+            setAuthPolling(false)
+            await loadCloudStatus()
+          } else if (state.state === 'failed') {
+            if (authPollRef.current) clearInterval(authPollRef.current)
+            authPollRef.current = null
+            setAuthPolling(false)
+            setError(state.error || 'Authorization failed')
+          }
+        } catch {
+          // Ignore poll errors
+        }
+      }, 2000)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to connect Google Drive'
@@ -181,6 +200,28 @@ const BackupRestore: React.FC = () => {
       setCloudLoading(false)
     }
   }
+
+  const handleCancelAuth = useCallback(async () => {
+    if (authPollRef.current) {
+      clearInterval(authPollRef.current)
+      authPollRef.current = null
+    }
+    setAuthPolling(false)
+    try {
+      await cloudApi.gdrive.cancel()
+    } catch {
+      // Ignore cancel errors
+    }
+  }, [])
+
+  // Cleanup auth polling on unmount
+  useEffect(() => {
+    return () => {
+      if (authPollRef.current) {
+        clearInterval(authPollRef.current)
+      }
+    }
+  }, [])
 
   const handleDisconnectGDrive = async () => {
     setCloudLoading(true)
@@ -193,22 +234,6 @@ const BackupRestore: React.FC = () => {
         err instanceof Error
           ? err.message
           : 'Failed to disconnect Google Drive'
-      )
-    } finally {
-      setCloudLoading(false)
-    }
-  }
-
-  const handleManualCode = async () => {
-    setCloudLoading(true)
-    try {
-      await cloudApi.gdrive.submitCode(manualAuthCode)
-      setShowManualAuth(false)
-      setManualAuthCode('')
-      await loadCloudStatus()
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to exchange auth code'
       )
     } finally {
       setCloudLoading(false)
@@ -982,7 +1007,24 @@ const BackupRestore: React.FC = () => {
                       Disconnect
                     </Button>
                   </div>
-                ) : cloudStatus?.configured ? (
+                ) : authPolling ? (
+                  <div>
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <Spinner size="sm" />
+                      <span>Waiting for Google authorization...</span>
+                    </div>
+                    <span className="text-muted d-block mb-2" style={{ fontSize: '0.85rem' }}>
+                      Complete the sign-in in the browser tab that just opened.
+                    </span>
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={handleCancelAuth}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
                   <div>
                     <Button
                       variant="primary"
@@ -997,22 +1039,7 @@ const BackupRestore: React.FC = () => {
                       )}{' '}
                       Connect Google Drive
                     </Button>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="ms-2"
-                      onClick={() => {
-                        if (!manualAuthUrl) handleConnectGDrive()
-                        setShowManualAuth(true)
-                      }}
-                    >
-                      Can&apos;t redirect?
-                    </Button>
                   </div>
-                ) : (
-                  <span className="text-muted">
-                    Google OAuth credentials not configured.
-                  </span>
                 )}
               </Col>
             </Row>
@@ -1535,52 +1562,6 @@ const BackupRestore: React.FC = () => {
                 </Button>
               </>
             )}
-          </Modal.Footer>
-        </Modal>
-
-        {/* Manual Auth Code Modal */}
-        <Modal show={showManualAuth} onHide={() => setShowManualAuth(false)}>
-          <Modal.Header closeButton>
-            <Modal.Title>Manual Google Drive Connection</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <p>
-              If the automatic redirect doesn&apos;t work (remote access, no
-              mDNS), you can connect manually:
-            </p>
-            <ol>
-              <li>
-                <a
-                  href={manualAuthUrl || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open Google authorization page
-                </a>
-              </li>
-              <li>Authorize SignalK Keeper</li>
-              <li>Copy the authorization code and paste it below</li>
-            </ol>
-            <Form.Control
-              value={manualAuthCode}
-              onChange={(e) => setManualAuthCode(e.target.value)}
-              placeholder="Paste authorization code here"
-            />
-          </Modal.Body>
-          <Modal.Footer>
-            <Button
-              variant="secondary"
-              onClick={() => setShowManualAuth(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleManualCode}
-              disabled={!manualAuthCode.trim() || cloudLoading}
-            >
-              {cloudLoading ? <Spinner size="sm" /> : 'Connect'}
-            </Button>
           </Modal.Footer>
         </Modal>
 

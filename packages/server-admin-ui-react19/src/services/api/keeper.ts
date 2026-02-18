@@ -21,6 +21,7 @@ import type {
   VersionSettings,
   CloudSyncStatus,
   CloudConnectResult,
+  CloudAuthState,
   PasswordStatusResult,
   CloudInstall,
   CloudRestorePrepareResult
@@ -940,14 +941,17 @@ export function createKeeperApi(baseUrl: string) {
           await handleResponse<{ message: string }>(response)
         },
 
-        submitCode: async (code: string): Promise<void> => {
+        authState: async (): Promise<CloudAuthState> => {
           const response = await keeperFetch(
-            `${apiUrl}/api/cloud/gdrive/token`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ code })
-            }
+            `${apiUrl}/api/cloud/gdrive/auth-state`
+          )
+          return handleResponse<CloudAuthState>(response)
+        },
+
+        cancel: async (): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/cancel`,
+            { method: 'POST' }
           )
           await handleResponse<{ message: string }>(response)
         }

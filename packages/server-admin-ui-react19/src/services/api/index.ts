@@ -303,9 +303,16 @@ export const cloudApi = {
       }
     },
 
-    submitCode: async (code: string) => {
+    authState: async () => {
       if (shouldUseKeeper()) {
-        await getKeeperApi().cloud.gdrive.submitCode(code)
+        return getKeeperApi().cloud.gdrive.authState()
+      }
+      throw new Error('Cloud backup not supported without Keeper')
+    },
+
+    cancel: async () => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().cloud.gdrive.cancel()
       } else {
         throw new Error('Cloud backup not supported without Keeper')
       }
