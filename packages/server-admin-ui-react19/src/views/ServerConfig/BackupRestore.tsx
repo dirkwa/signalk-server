@@ -30,6 +30,7 @@ import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash'
 import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy'
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey'
 import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown'
+import { faFolder } from '@fortawesome/free-solid-svg-icons/faFolder'
 import { useStore, useRestarting, useRuntimeConfig } from '../../store'
 import { restartAction } from '../../actions'
 import {
@@ -162,12 +163,18 @@ const BackupRestore: React.FC = () => {
     null
   )
 
+  // Backup exclusions state
+  const [dataDirs, setDataDirs] = useState<
+    Array<{ name: string; size: number; excluded: boolean }>
+  >([])
+
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
       loadBackups()
       loadSchedulerStatus()
       loadPasswordStatus()
       loadCloudStatus()
+      loadDataDirs()
     }
   }, [useKeeper])
 
@@ -194,6 +201,35 @@ const BackupRestore: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to load cloud status:', err)
+    }
+  }
+
+  const loadDataDirs = async () => {
+    try {
+      const dirs = await backupApi.dataDirs()
+      if (dirs) {
+        setDataDirs(dirs)
+      }
+    } catch (err) {
+      console.error('Failed to load data directories:', err)
+    }
+  }
+
+  const handleExclusionToggle = async (dirName: string, excluded: boolean) => {
+    // Optimistically update UI
+    setDataDirs((prev) =>
+      prev.map((d) => (d.name === dirName ? { ...d, excluded } : d))
+    )
+    try {
+      const newExclusions = dataDirs
+        .map((d) => (d.name === dirName ? { ...d, excluded } : d))
+        .filter((d) => d.excluded)
+        .map((d) => d.name + '/')
+      await backupApi.exclusions.update(newExclusions)
+    } catch (err) {
+      console.error('Failed to update exclusions:', err)
+      // Revert on failure
+      loadDataDirs()
     }
   }
 
@@ -1223,6 +1259,55 @@ const BackupRestore: React.FC = () => {
                     )}
                   </Col>
                 </Row>
+
+                {/* Backup Exclusions */}
+                {dataDirs.length > 0 && (
+                  <Row>
+                    <Col sm={3}>
+                      <strong>
+                        <FontAwesomeIcon icon={faFolder} className="me-1" />
+                        Backup Exclusions
+                      </strong>
+                    </Col>
+                    <Col>
+                      <Form.Text className="text-muted d-block mb-2">
+                        Excluded directories are not included in backups. Charts
+                        and plugins can be re-downloaded after restore.
+                      </Form.Text>
+                      {dataDirs.map((dir) => (
+                        <Form.Check
+                          key={dir.name}
+                          type="checkbox"
+                          id={`exclude-${dir.name}`}
+                          checked={dir.excluded}
+                          onChange={(e) =>
+                            handleExclusionToggle(dir.name, e.target.checked)
+                          }
+                          label={
+                            <span>
+                              {dir.name}{' '}
+                              <span className="text-muted">
+                                ({formatBytes(dir.size)})
+                              </span>
+                              {dir.name === 'node_modules' && (
+                                <span className="text-muted fst-italic">
+                                  {' '}
+                                  — reinstalled on restore
+                                </span>
+                              )}
+                              {dir.name.startsWith('charts') && (
+                                <span className="text-muted fst-italic">
+                                  {' '}
+                                  — re-downloadable
+                                </span>
+                              )}
+                            </span>
+                          }
+                        />
+                      ))}
+                    </Col>
+                  </Row>
+                )}
 
                 {/* Recovery Password */}
                 <Row className="align-items-center">

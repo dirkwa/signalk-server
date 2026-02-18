@@ -173,6 +173,30 @@ export const backupApi = {
     return null
   },
 
+  dataDirs: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().backups.dataDirs()
+    }
+    return null
+  },
+
+  exclusions: {
+    get: async () => {
+      if (shouldUseKeeper()) {
+        return getKeeperApi().backups.exclusions.get()
+      }
+      return null
+    },
+
+    update: async (exclusions: string[]) => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().backups.exclusions.update(exclusions)
+      } else {
+        throw new Error('Backup exclusions not supported without Keeper')
+      }
+    }
+  },
+
   password: {
     status: async () => {
       if (shouldUseKeeper()) {

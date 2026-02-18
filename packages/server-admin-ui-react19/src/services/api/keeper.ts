@@ -399,6 +399,35 @@ export function createKeeperApi(baseUrl: string) {
         }>(response)
       },
 
+      dataDirs: async (): Promise<
+        Array<{ name: string; size: number; excluded: boolean }>
+      > => {
+        const response = await keeperFetch(`${apiUrl}/api/backups/data-dirs`)
+        return handleResponse<
+          Array<{ name: string; size: number; excluded: boolean }>
+        >(response)
+      },
+
+      exclusions: {
+        get: async (): Promise<string[]> => {
+          const response = await keeperFetch(`${apiUrl}/api/backups/exclusions`)
+          const data = await handleResponse<{ exclusions: string[] }>(response)
+          return data.exclusions
+        },
+
+        update: async (exclusions: string[]): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/backups/exclusions`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ exclusions })
+            }
+          )
+          await handleResponse<{ exclusions: string[] }>(response)
+        }
+      },
+
       password: {
         status: async (): Promise<{ hasCustomPassword: boolean }> => {
           const response = await keeperFetch(`${apiUrl}/api/backups/password`)
