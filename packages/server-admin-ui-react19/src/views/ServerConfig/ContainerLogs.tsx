@@ -397,7 +397,9 @@ export default function ContainerLogs() {
                   <Button
                     key={source.id}
                     variant={
-                      effectiveLogSource === source.id ? 'primary' : 'outline-secondary'
+                      effectiveLogSource === source.id
+                        ? 'primary'
+                        : 'outline-secondary'
                     }
                     onClick={() => setLogSource(source.id)}
                     size="sm"

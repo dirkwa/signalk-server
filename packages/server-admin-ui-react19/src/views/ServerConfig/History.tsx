@@ -461,7 +461,11 @@ const History: React.FC = () => {
             </p>
           </Card.Body>
           <Card.Footer>
-            <Button variant="primary" as={Link} to="/serverConfiguration/health">
+            <Button
+              variant="primary"
+              as={Link}
+              to="/serverConfiguration/health"
+            >
               <FontAwesomeIcon icon={faStethoscope} className="me-1" />
               Open System Doctor
             </Button>
@@ -485,7 +489,9 @@ const History: React.FC = () => {
             </ul>
             <Form>
               <Form.Group as={Row} className="mb-3">
-                <Form.Label column sm={4}>Retention Period (days)</Form.Label>
+                <Form.Label column sm={4}>
+                  Retention Period (days)
+                </Form.Label>
                 <Col sm={4}>
                   <Form.Control
                     type="number"
@@ -528,7 +534,9 @@ const History: React.FC = () => {
           <Card.Body>
             <Form>
               <Form.Group as={Row} className="mb-3">
-                <Form.Label column sm={4}>Retention Period</Form.Label>
+                <Form.Label column sm={4}>
+                  Retention Period
+                </Form.Label>
                 <Col sm={4}>
                   <Form.Control
                     type="number"
@@ -552,13 +560,17 @@ const History: React.FC = () => {
                 </Col>
               </Form.Group>
               <Form.Group as={Row} className="mb-3">
-                <Form.Label column sm={4}>Organization</Form.Label>
+                <Form.Label column sm={4}>
+                  Organization
+                </Form.Label>
                 <Col sm={4}>
                   <Form.Control type="text" value={settings.org} disabled />
                 </Col>
               </Form.Group>
               <Form.Group as={Row} className="mb-3">
-                <Form.Label column sm={4}>Bucket</Form.Label>
+                <Form.Label column sm={4}>
+                  Bucket
+                </Form.Label>
                 <Col sm={4}>
                   <Form.Control type="text" value={settings.bucket} disabled />
                 </Col>
