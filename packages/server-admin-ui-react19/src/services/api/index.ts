@@ -279,6 +279,66 @@ export const updateApi = {
   }
 }
 
+export const cloudApi = {
+  status: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.status()
+    }
+    return null
+  },
+
+  gdrive: {
+    connect: async () => {
+      if (shouldUseKeeper()) {
+        return getKeeperApi().cloud.gdrive.connect()
+      }
+      throw new Error('Cloud backup not supported without Keeper')
+    },
+
+    disconnect: async () => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().cloud.gdrive.disconnect()
+      } else {
+        throw new Error('Cloud backup not supported without Keeper')
+      }
+    },
+
+    submitCode: async (code: string) => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().cloud.gdrive.submitCode(code)
+      } else {
+        throw new Error('Cloud backup not supported without Keeper')
+      }
+    }
+  },
+
+  sync: async () => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.sync()
+    } else {
+      throw new Error('Cloud backup not supported without Keeper')
+    }
+  },
+
+  updateConfig: async (config: {
+    syncMode?: string
+    syncFrequency?: string
+  }) => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.updateConfig(config)
+    } else {
+      throw new Error('Cloud backup not supported without Keeper')
+    }
+  },
+
+  password: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.password()
+    }
+    return null
+  }
+}
+
 export const healthApi = {
   check: async () => {
     if (shouldUseKeeper()) {

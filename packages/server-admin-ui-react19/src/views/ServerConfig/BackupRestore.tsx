@@ -20,15 +20,29 @@ import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash'
 import { faUpload } from '@fortawesome/free-solid-svg-icons/faUpload'
 import { faClock } from '@fortawesome/free-solid-svg-icons/faClock'
 import { faLock } from '@fortawesome/free-solid-svg-icons/faLock'
+import { faCloud } from '@fortawesome/free-solid-svg-icons/faCloud'
+import { faCloudArrowUp } from '@fortawesome/free-solid-svg-icons/faCloudArrowUp'
+import { faLink } from '@fortawesome/free-solid-svg-icons/faLink'
+import { faLinkSlash } from '@fortawesome/free-solid-svg-icons/faLinkSlash'
+import { faWifi } from '@fortawesome/free-solid-svg-icons/faWifi'
+import { faEye } from '@fortawesome/free-solid-svg-icons/faEye'
+import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash'
+import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy'
+import { faKey } from '@fortawesome/free-solid-svg-icons/faKey'
 import { useStore, useRestarting, useRuntimeConfig } from '../../store'
 import { restartAction } from '../../actions'
 import {
   backupApi,
+  cloudApi,
   shouldUseKeeper,
   type KeeperBackup,
   type BackupListResponse,
   type BackupSchedulerStatus
 } from '../../services/api'
+import type {
+  CloudSyncStatus,
+  PasswordStatusResult
+} from '../../services/api/types'
 
 const RESTORE_NONE = 0
 const RESTORE_VALIDATING = 1
@@ -89,11 +103,23 @@ const BackupRestore: React.FC = () => {
   const [resetModalOpen, setResetModalOpen] = useState(false)
   const [passwordLoading, setPasswordLoading] = useState(false)
 
+  // Cloud backup state
+  const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus | null>(null)
+  const [passwordStatus, setPasswordStatus] =
+    useState<PasswordStatusResult | null>(null)
+  const [showManualAuth, setShowManualAuth] = useState(false)
+  const [manualAuthCode, setManualAuthCode] = useState('')
+  const [manualAuthUrl, setManualAuthUrl] = useState('')
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false)
+  const [disconnectConfirm, setDisconnectConfirm] = useState(false)
+  const [cloudLoading, setCloudLoading] = useState(false)
+
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
       loadBackups()
       loadSchedulerStatus()
       loadPasswordStatus()
+      loadCloudStatus()
     }
   }, [useKeeper])
 
@@ -107,6 +133,113 @@ const BackupRestore: React.FC = () => {
       console.error('Failed to load password status:', err)
     }
   }
+
+  const loadCloudStatus = async () => {
+    try {
+      const status = await cloudApi.status()
+      if (status) {
+        setCloudStatus(status)
+      }
+      const pw = await cloudApi.password()
+      if (pw) {
+        setPasswordStatus(pw)
+      }
+    } catch (err) {
+      console.error('Failed to load cloud status:', err)
+    }
+  }
+
+  const handleConnectGDrive = async () => {
+    setCloudLoading(true)
+    try {
+      const result = await cloudApi.gdrive.connect()
+      setManualAuthUrl(result.manualAuthUrl)
+      window.open(result.authUrl, '_blank', 'width=600,height=700')
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to connect Google Drive'
+      )
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
+  const handleDisconnectGDrive = async () => {
+    setCloudLoading(true)
+    try {
+      await cloudApi.gdrive.disconnect()
+      setDisconnectConfirm(false)
+      await loadCloudStatus()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to disconnect Google Drive'
+      )
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
+  const handleManualCode = async () => {
+    setCloudLoading(true)
+    try {
+      await cloudApi.gdrive.submitCode(manualAuthCode)
+      setShowManualAuth(false)
+      setManualAuthCode('')
+      await loadCloudStatus()
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to exchange auth code'
+      )
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
+  const handleCloudSync = async () => {
+    setCloudLoading(true)
+    try {
+      await cloudApi.sync()
+      // Poll for updated status
+      setTimeout(loadCloudStatus, 2000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start sync')
+    } finally {
+      setCloudLoading(false)
+    }
+  }
+
+  const handleSyncModeChange = async (syncMode: string) => {
+    try {
+      await cloudApi.updateConfig({ syncMode })
+      await loadCloudStatus()
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to update sync mode'
+      )
+    }
+  }
+
+  const handleSyncFrequencyChange = async (syncFrequency: string) => {
+    try {
+      await cloudApi.updateConfig({ syncFrequency })
+      await loadCloudStatus()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update sync frequency'
+      )
+    }
+  }
+
+  // Poll cloud status while syncing
+  useEffect(() => {
+    if (!cloudStatus?.syncing) return
+    const interval = setInterval(loadCloudStatus, 5000)
+    return () => clearInterval(interval)
+  }, [cloudStatus?.syncing])
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
@@ -723,6 +856,293 @@ const BackupRestore: React.FC = () => {
             )}
           </Card.Footer>
         </Card>
+
+        {/* Cloud Backup Card */}
+        <Card className="mt-4">
+          <Card.Header>
+            <FontAwesomeIcon icon={faCloud} /> Cloud Backup
+          </Card.Header>
+          <Card.Body>
+            {/* Google Drive Connection */}
+            <Row className="mb-3 align-items-center">
+              <Col sm={3}>
+                <strong>Google Drive</strong>
+              </Col>
+              <Col>
+                {cloudStatus?.connected ? (
+                  <div>
+                    <Badge bg="success" className="me-2">
+                      <FontAwesomeIcon icon={faLink} className="me-1" />
+                      Connected
+                    </Badge>
+                    {cloudStatus.email && (
+                      <span className="text-muted">{cloudStatus.email}</span>
+                    )}
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      className="ms-3"
+                      onClick={() => setDisconnectConfirm(true)}
+                    >
+                      <FontAwesomeIcon icon={faLinkSlash} className="me-1" />
+                      Disconnect
+                    </Button>
+                  </div>
+                ) : cloudStatus?.configured ? (
+                  <div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleConnectGDrive}
+                      disabled={cloudLoading}
+                    >
+                      {cloudLoading ? (
+                        <FontAwesomeIcon icon={faCircleNotch} spin />
+                      ) : (
+                        <FontAwesomeIcon icon={faLink} />
+                      )}{' '}
+                      Connect Google Drive
+                    </Button>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="ms-2"
+                      onClick={() => {
+                        if (!manualAuthUrl) handleConnectGDrive()
+                        setShowManualAuth(true)
+                      }}
+                    >
+                      Can&apos;t redirect?
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="text-muted">
+                    Google OAuth credentials not configured.
+                  </span>
+                )}
+              </Col>
+            </Row>
+
+            {cloudStatus?.connected && (
+              <>
+                {/* Sync Mode */}
+                <Row className="mb-3 align-items-center">
+                  <Col sm={3}>
+                    <strong>Sync Mode</strong>
+                  </Col>
+                  <Col sm={4}>
+                    <Form.Select
+                      size="sm"
+                      value={cloudStatus.syncMode || 'manual'}
+                      onChange={(e) => handleSyncModeChange(e.target.value)}
+                    >
+                      <option value="manual">Manual only</option>
+                      <option value="after_backup">After each backup</option>
+                      <option value="scheduled">Scheduled</option>
+                    </Form.Select>
+                  </Col>
+                  {cloudStatus.syncMode === 'scheduled' && (
+                    <Col sm={3}>
+                      <Form.Select
+                        size="sm"
+                        value={cloudStatus.syncFrequency || 'daily'}
+                        onChange={(e) =>
+                          handleSyncFrequencyChange(e.target.value)
+                        }
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                      </Form.Select>
+                    </Col>
+                  )}
+                </Row>
+
+                {/* Sync Status */}
+                <Row className="mb-3 align-items-center">
+                  <Col sm={3}>
+                    <strong>Status</strong>
+                  </Col>
+                  <Col>
+                    <div className="d-flex align-items-center gap-3">
+                      {cloudStatus.syncing ? (
+                        <span>
+                          <FontAwesomeIcon icon={faCircleNotch} spin />{' '}
+                          Syncing...
+                        </span>
+                      ) : (
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={handleCloudSync}
+                          disabled={cloudLoading}
+                        >
+                          <FontAwesomeIcon
+                            icon={faCloudArrowUp}
+                            className="me-1"
+                          />
+                          Sync Now
+                        </Button>
+                      )}
+                      {cloudStatus.lastSync && (
+                        <span className="text-muted">
+                          <FontAwesomeIcon icon={faClock} className="me-1" />
+                          Last sync: {formatDate(cloudStatus.lastSync)}
+                        </span>
+                      )}
+                      {cloudStatus.internetAvailable === false && (
+                        <Badge bg="warning">
+                          <FontAwesomeIcon icon={faWifi} className="me-1" />
+                          No internet
+                        </Badge>
+                      )}
+                    </div>
+                    {cloudStatus.lastSyncError && (
+                      <Alert variant="danger" className="mt-2 mb-0 py-2">
+                        {cloudStatus.lastSyncError}
+                      </Alert>
+                    )}
+                  </Col>
+                </Row>
+
+                {/* Recovery Password */}
+                <Row className="align-items-center">
+                  <Col sm={3}>
+                    <strong>
+                      <FontAwesomeIcon icon={faKey} className="me-1" />
+                      Recovery Password
+                    </strong>
+                  </Col>
+                  <Col>
+                    {passwordStatus?.password ? (
+                      <div className="d-flex align-items-center gap-2">
+                        <code>
+                          {showRecoveryPassword
+                            ? passwordStatus.password
+                            : '\u2022'.repeat(16)}
+                        </code>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="p-0"
+                          onClick={() =>
+                            setShowRecoveryPassword(!showRecoveryPassword)
+                          }
+                          title={
+                            showRecoveryPassword
+                              ? 'Hide password'
+                              : 'Show password'
+                          }
+                        >
+                          <FontAwesomeIcon
+                            icon={showRecoveryPassword ? faEyeSlash : faEye}
+                          />
+                        </Button>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="p-0"
+                          onClick={() => {
+                            if (passwordStatus?.password) {
+                              navigator.clipboard.writeText(
+                                passwordStatus.password
+                              )
+                            }
+                          }}
+                          title="Copy to clipboard"
+                        >
+                          <FontAwesomeIcon icon={faCopy} />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-muted">No password set</span>
+                    )}
+                    <Form.Text className="text-muted d-block mt-1">
+                      You need this password to restore backups on a new device.
+                    </Form.Text>
+                  </Col>
+                </Row>
+              </>
+            )}
+          </Card.Body>
+        </Card>
+
+        {/* Manual Auth Code Modal */}
+        <Modal show={showManualAuth} onHide={() => setShowManualAuth(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Manual Google Drive Connection</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>
+              If the automatic redirect doesn&apos;t work (remote access, no
+              mDNS), you can connect manually:
+            </p>
+            <ol>
+              <li>
+                <a
+                  href={manualAuthUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Google authorization page
+                </a>
+              </li>
+              <li>Authorize SignalK Keeper</li>
+              <li>Copy the authorization code and paste it below</li>
+            </ol>
+            <Form.Control
+              value={manualAuthCode}
+              onChange={(e) => setManualAuthCode(e.target.value)}
+              placeholder="Paste authorization code here"
+            />
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setShowManualAuth(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleManualCode}
+              disabled={!manualAuthCode.trim() || cloudLoading}
+            >
+              {cloudLoading ? <Spinner size="sm" /> : 'Connect'}
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Disconnect Confirm Modal */}
+        <Modal
+          show={disconnectConfirm}
+          onHide={() => setDisconnectConfirm(false)}
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Disconnect Google Drive</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>
+              This will remove the Google Drive connection. Cloud sync will stop
+              and you will need to reconnect to resume cloud backups.
+            </p>
+            <p>Your existing cloud backups on Google Drive will not be deleted.</p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setDisconnectConfirm(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDisconnectGDrive}
+              disabled={cloudLoading}
+            >
+              {cloudLoading ? <Spinner size="sm" /> : 'Disconnect'}
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
         {/* Change Password Modal */}
         <Modal

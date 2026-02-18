@@ -18,7 +18,10 @@ import type {
   HistoryCredentials,
   EnableHistoryRequest,
   EnableHistoryResult,
-  VersionSettings
+  VersionSettings,
+  CloudSyncStatus,
+  CloudConnectResult,
+  PasswordStatusResult
 } from './types'
 
 export class KeeperApiError extends Error {
@@ -909,6 +912,69 @@ export function createKeeperApi(baseUrl: string) {
           )
           return handleResponse<HistorySystemStatus>(response)
         }
+      }
+    },
+
+    cloud: {
+      status: async (): Promise<CloudSyncStatus> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/status`)
+        return handleResponse<CloudSyncStatus>(response)
+      },
+
+      gdrive: {
+        connect: async (): Promise<CloudConnectResult> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/connect`,
+            { method: 'POST' }
+          )
+          return handleResponse<CloudConnectResult>(response)
+        },
+
+        disconnect: async (): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/disconnect`,
+            { method: 'POST' }
+          )
+          await handleResponse<{ message: string }>(response)
+        },
+
+        submitCode: async (code: string): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/token`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code })
+            }
+          )
+          await handleResponse<{ message: string }>(response)
+        }
+      },
+
+      sync: async (): Promise<void> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/sync`, {
+          method: 'POST'
+        })
+        await handleResponse<{ message: string }>(response)
+      },
+
+      updateConfig: async (config: {
+        syncMode?: string
+        syncFrequency?: string
+      }): Promise<void> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        })
+        await handleResponse<unknown>(response)
+      },
+
+      password: async (): Promise<PasswordStatusResult> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/backups/password`
+        )
+        return handleResponse<PasswordStatusResult>(response)
       }
     }
   }

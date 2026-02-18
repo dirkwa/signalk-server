@@ -304,3 +304,25 @@ export interface EnableHistoryResult {
   error?: string
   credentials?: HistoryCredentials
 }
+
+export interface CloudSyncStatus {
+  connected: boolean
+  configured: boolean
+  syncing: boolean
+  syncMode: 'manual' | 'after_backup' | 'scheduled' | null
+  syncFrequency: 'daily' | 'weekly' | null
+  lastSync: string | null
+  lastSyncError: string | null
+  internetAvailable: boolean | null
+  email?: string
+}
+
+export interface CloudConnectResult {
+  authUrl: string
+  manualAuthUrl: string
+}
+
+export interface PasswordStatusResult {
+  hasCustomPassword: boolean
+  password?: string
+}
