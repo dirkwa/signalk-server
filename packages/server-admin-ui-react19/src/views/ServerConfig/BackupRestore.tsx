@@ -1220,9 +1220,25 @@ const BackupRestore: React.FC = () => {
                   <Col>
                     <div className="d-flex align-items-center gap-3">
                       {cloudStatus.syncing ? (
-                        <span>
+                        <span className="d-flex align-items-center gap-2">
                           <FontAwesomeIcon icon={faCircleNotch} spin />{' '}
                           Syncing...
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await cloudApi.cancelSync()
+                                setCloudStatus((prev) =>
+                                  prev ? { ...prev, syncing: false } : prev
+                                )
+                              } catch (err) {
+                                console.error('Failed to cancel sync:', err)
+                              }
+                            }}
+                          >
+                            Cancel
+                          </Button>
                         </span>
                       ) : (
                         <Button

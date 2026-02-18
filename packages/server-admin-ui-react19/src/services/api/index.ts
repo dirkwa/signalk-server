@@ -359,6 +359,14 @@ export const cloudApi = {
     }
   },
 
+  cancelSync: async () => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.cancelSync()
+    } else {
+      throw new Error('Cloud backup not supported without Keeper')
+    }
+  },
+
   updateConfig: async (config: {
     syncMode?: string
     syncFrequency?: string

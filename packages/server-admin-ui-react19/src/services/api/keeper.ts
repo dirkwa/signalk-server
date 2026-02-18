@@ -1005,6 +1005,13 @@ export function createKeeperApi(baseUrl: string) {
         await handleResponse<{ message: string }>(response)
       },
 
+      cancelSync: async (): Promise<void> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/sync/cancel`, {
+          method: 'POST'
+        })
+        await handleResponse<{ message: string }>(response)
+      },
+
       updateConfig: async (config: {
         syncMode?: string
         syncFrequency?: string
