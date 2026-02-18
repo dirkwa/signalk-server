@@ -326,3 +326,26 @@ export interface PasswordStatusResult {
   hasCustomPassword: boolean
   password?: string
 }
+
+export interface CloudInstall {
+  folder: string
+  info?: {
+    installName?: string
+    vesselName?: string
+    hardware?: string
+    lastUpdated?: string
+  }
+}
+
+export interface CloudRestorePrepareResult {
+  phase: string
+  snapshots: Array<{
+    id: string
+    createdAt: string
+    version: { tag: string; fullRef: string }
+    type: string
+    size: number
+    description?: string
+  }>
+  error?: string
+}

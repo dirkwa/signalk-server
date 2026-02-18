@@ -29,6 +29,7 @@ import { faEye } from '@fortawesome/free-solid-svg-icons/faEye'
 import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash'
 import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy'
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey'
+import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown'
 import { useStore, useRestarting, useRuntimeConfig } from '../../store'
 import { restartAction } from '../../actions'
 import {
@@ -113,6 +114,23 @@ const BackupRestore: React.FC = () => {
   const [showRecoveryPassword, setShowRecoveryPassword] = useState(false)
   const [disconnectConfirm, setDisconnectConfirm] = useState(false)
   const [cloudLoading, setCloudLoading] = useState(false)
+
+  // Cloud restore state
+  const [showCloudRestore, setShowCloudRestore] = useState(false)
+  const [cloudRestoreStep, setCloudRestoreStep] = useState<
+    'select-install' | 'enter-password' | 'preparing' | 'select-snapshot' | 'confirm' | 'restoring'
+  >('select-install')
+  const [cloudInstalls, setCloudInstalls] = useState<
+    Array<{ folder: string; info?: { installName?: string; vesselName?: string; hardware?: string; lastUpdated?: string } }>
+  >([])
+  const [selectedInstall, setSelectedInstall] = useState<typeof cloudInstalls[0] | null>(null)
+  const [cloudRestorePassword, setCloudRestorePassword] = useState('')
+  const [cloudSnapshots, setCloudSnapshots] = useState<
+    Array<{ id: string; createdAt: string; version: { tag: string }; type: string; size: number; description?: string }>
+  >([])
+  const [selectedCloudSnapshot, setSelectedCloudSnapshot] = useState<string | null>(null)
+  const [cloudRestoreMode, setCloudRestoreMode] = useState<'restore' | 'clone'>('restore')
+  const [cloudRestoreError, setCloudRestoreError] = useState<string | null>(null)
 
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
@@ -240,6 +258,82 @@ const BackupRestore: React.FC = () => {
     const interval = setInterval(loadCloudStatus, 5000)
     return () => clearInterval(interval)
   }, [cloudStatus?.syncing])
+
+  // Cloud restore handlers
+  const openCloudRestore = useCallback(async () => {
+    setCloudRestoreError(null)
+    setCloudRestoreStep('select-install')
+    setSelectedInstall(null)
+    setCloudRestorePassword('')
+    setCloudSnapshots([])
+    setSelectedCloudSnapshot(null)
+    setCloudRestoreMode('restore')
+    setShowCloudRestore(true)
+    setCloudLoading(true)
+
+    try {
+      const installs = await cloudApi.installs()
+      setCloudInstalls(installs || [])
+    } catch (err) {
+      setCloudRestoreError(
+        err instanceof Error ? err.message : 'Failed to load cloud installations'
+      )
+    } finally {
+      setCloudLoading(false)
+    }
+  }, [])
+
+  const handleCloudRestorePrepare = useCallback(async () => {
+    if (!selectedInstall) return
+    setCloudRestoreError(null)
+    setCloudRestoreStep('preparing')
+
+    try {
+      const result = await cloudApi.restorePrepare(
+        selectedInstall.folder,
+        cloudRestorePassword || undefined
+      )
+
+      if (result.phase === 'failed') {
+        setCloudRestoreError(
+          result.error || 'Failed to prepare cloud restore'
+        )
+        setCloudRestoreStep('enter-password')
+        return
+      }
+
+      setCloudSnapshots(result.snapshots)
+      setCloudRestoreStep('select-snapshot')
+    } catch (err) {
+      setCloudRestoreError(
+        err instanceof Error ? err.message : 'Failed to prepare cloud restore'
+      )
+      setCloudRestoreStep('enter-password')
+    }
+  }, [selectedInstall, cloudRestorePassword])
+
+  const handleCloudRestoreStart = useCallback(async () => {
+    if (!selectedCloudSnapshot) return
+    setCloudRestoreError(null)
+    setCloudRestoreStep('restoring')
+
+    try {
+      await cloudApi.restoreStart(selectedCloudSnapshot, cloudRestoreMode)
+      setShowCloudRestore(false)
+      // The restore is now running - SignalK will restart
+      setRestoreState(RESTORE_RUNNING)
+    } catch (err) {
+      setCloudRestoreError(
+        err instanceof Error ? err.message : 'Failed to start cloud restore'
+      )
+      setCloudRestoreStep('confirm')
+    }
+  }, [selectedCloudSnapshot, cloudRestoreMode])
+
+  const closeCloudRestore = useCallback(() => {
+    setShowCloudRestore(false)
+    cloudApi.restoreReset().catch(() => {})
+  }, [])
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
@@ -1061,10 +1155,388 @@ const BackupRestore: React.FC = () => {
                     </Form.Text>
                   </Col>
                 </Row>
+
+                {/* Restore from Cloud */}
+                <Row className="mt-3 pt-3 align-items-center" style={{ borderTop: '1px solid #dee2e6' }}>
+                  <Col sm={3}>
+                    <strong>
+                      <FontAwesomeIcon icon={faCloudArrowDown} className="me-1" />
+                      Restore from Cloud
+                    </strong>
+                  </Col>
+                  <Col>
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={openCloudRestore}
+                    >
+                      <FontAwesomeIcon icon={faCloudArrowDown} className="me-1" />
+                      Restore from Cloud
+                    </Button>
+                    <Form.Text className="text-muted d-block mt-1">
+                      Restore a backup from Google Drive to this device.
+                    </Form.Text>
+                  </Col>
+                </Row>
               </>
             )}
           </Card.Body>
         </Card>
+
+        {/* Cloud Restore Wizard Modal */}
+        <Modal
+          show={showCloudRestore}
+          onHide={
+            cloudRestoreStep === 'preparing' || cloudRestoreStep === 'restoring'
+              ? undefined
+              : closeCloudRestore
+          }
+          backdrop={
+            cloudRestoreStep === 'preparing' || cloudRestoreStep === 'restoring'
+              ? 'static'
+              : true
+          }
+          keyboard={
+            cloudRestoreStep !== 'preparing' && cloudRestoreStep !== 'restoring'
+          }
+          size="lg"
+        >
+          <Modal.Header
+            closeButton={
+              cloudRestoreStep !== 'preparing' &&
+              cloudRestoreStep !== 'restoring'
+            }
+          >
+            <Modal.Title>
+              <FontAwesomeIcon icon={faCloudArrowDown} className="me-2" />
+              Restore from Cloud
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {cloudRestoreError && (
+              <Alert
+                variant="danger"
+                dismissible
+                onClose={() => setCloudRestoreError(null)}
+              >
+                {cloudRestoreError}
+              </Alert>
+            )}
+
+            {/* Step 1: Select Installation */}
+            {cloudRestoreStep === 'select-install' && (
+              <>
+                <p>Select the installation to restore from:</p>
+                {cloudLoading ? (
+                  <div className="text-center py-4">
+                    <Spinner size="sm" className="me-2" />
+                    Loading cloud installations...
+                  </div>
+                ) : cloudInstalls.length === 0 ? (
+                  <Alert variant="info">
+                    No installations found on Google Drive.
+                  </Alert>
+                ) : (
+                  <div className="d-flex flex-column gap-2">
+                    {cloudInstalls.map((install) => (
+                      <div
+                        key={install.folder}
+                        className={`p-3 rounded border ${
+                          selectedInstall?.folder === install.folder
+                            ? 'border-primary bg-light'
+                            : ''
+                        }`}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setSelectedInstall(install)}
+                      >
+                        <strong>
+                          {install.info?.vesselName ||
+                            install.info?.installName ||
+                            install.folder}
+                        </strong>
+                        {install.info?.hardware && (
+                          <span className="text-muted ms-2">
+                            ({install.info.hardware})
+                          </span>
+                        )}
+                        {install.info?.lastUpdated && (
+                          <div
+                            className="text-muted"
+                            style={{ fontSize: '0.85rem' }}
+                          >
+                            Last synced: {formatDate(install.info.lastUpdated)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Step 2: Enter Password */}
+            {cloudRestoreStep === 'enter-password' && (
+              <>
+                <p>
+                  Enter the recovery password from the source device (
+                  {selectedInstall?.info?.vesselName ||
+                    selectedInstall?.folder}
+                  ).
+                </p>
+                <Form.Group className="mb-3">
+                  <Form.Label>Recovery Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    value={cloudRestorePassword}
+                    onChange={(e) => setCloudRestorePassword(e.target.value)}
+                    placeholder="Enter recovery password"
+                  />
+                  <Form.Text className="text-muted">
+                    If this is the same device and you haven&apos;t changed the
+                    password, you can leave this empty.
+                  </Form.Text>
+                </Form.Group>
+              </>
+            )}
+
+            {/* Step 3: Preparing */}
+            {cloudRestoreStep === 'preparing' && (
+              <div className="text-center py-4">
+                <Spinner size="sm" className="me-2" />
+                <p className="mt-2">Downloading backup from cloud...</p>
+                <p className="text-muted" style={{ fontSize: '0.85rem' }}>
+                  This may take several minutes depending on backup size and
+                  internet speed.
+                </p>
+              </div>
+            )}
+
+            {/* Step 4: Select Snapshot */}
+            {cloudRestoreStep === 'select-snapshot' && (
+              <>
+                <p>Select a backup to restore:</p>
+                {cloudSnapshots.length === 0 ? (
+                  <Alert variant="warning">
+                    No snapshots found in this installation.
+                  </Alert>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        maxHeight: '300px',
+                        overflowY: 'auto',
+                        border: '1px solid #dee2e6',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      {cloudSnapshots.slice(0, 20).map((snap) => (
+                        <div
+                          key={snap.id}
+                          className={`p-2 d-flex align-items-center gap-2 ${
+                            selectedCloudSnapshot === snap.id
+                              ? 'bg-light'
+                              : ''
+                          }`}
+                          style={{
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #dee2e6'
+                          }}
+                          onClick={() => setSelectedCloudSnapshot(snap.id)}
+                        >
+                          <Form.Check
+                            type="radio"
+                            checked={selectedCloudSnapshot === snap.id}
+                            onChange={() =>
+                              setSelectedCloudSnapshot(snap.id)
+                            }
+                          />
+                          <div className="flex-grow-1">
+                            <div>
+                              {formatDate(snap.createdAt)}
+                              <Badge
+                                bg="secondary"
+                                className="ms-2"
+                                style={{ fontSize: '0.7rem' }}
+                              >
+                                {snap.type}
+                              </Badge>
+                            </div>
+                            {snap.description && (
+                              <div
+                                className="text-muted"
+                                style={{ fontSize: '0.8rem' }}
+                              >
+                                {snap.description}
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className="text-muted"
+                            style={{ fontSize: '0.8rem' }}
+                          >
+                            {formatBytes(snap.size)}
+                          </span>
+                          <span
+                            className="text-muted"
+                            style={{ fontSize: '0.8rem' }}
+                          >
+                            v{snap.version?.tag || '?'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <Form.Group className="mt-3">
+                      <Form.Label>Restore Mode</Form.Label>
+                      <div className="d-flex gap-3">
+                        <Form.Check
+                          type="radio"
+                          id="cr-mode-restore"
+                          label="Restore"
+                          checked={cloudRestoreMode === 'restore'}
+                          onChange={() => setCloudRestoreMode('restore')}
+                        />
+                        <Form.Check
+                          type="radio"
+                          id="cr-mode-clone"
+                          label="Clone (new device)"
+                          checked={cloudRestoreMode === 'clone'}
+                          onChange={() => setCloudRestoreMode('clone')}
+                        />
+                      </div>
+                      <Form.Text className="text-muted">
+                        {cloudRestoreMode === 'restore'
+                          ? 'Replaces this installation with the cloud backup.'
+                          : 'Restores the backup but creates a new device identity. Use for a spare device or hardware upgrade.'}
+                      </Form.Text>
+                    </Form.Group>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Step 5: Confirm */}
+            {cloudRestoreStep === 'confirm' && (
+              <>
+                <Alert variant="warning">
+                  <strong>Warning:</strong> This will replace all SignalK
+                  configuration and data on this device with the selected cloud
+                  backup.
+                </Alert>
+                <div className="mb-3">
+                  <div>
+                    <strong>Source:</strong>{' '}
+                    {selectedInstall?.info?.vesselName ||
+                      selectedInstall?.folder}
+                  </div>
+                  <div>
+                    <strong>Snapshot:</strong>{' '}
+                    {cloudSnapshots.find(
+                      (s) => s.id === selectedCloudSnapshot
+                    )
+                      ? formatDate(
+                          cloudSnapshots.find(
+                            (s) => s.id === selectedCloudSnapshot
+                          )!.createdAt
+                        )
+                      : selectedCloudSnapshot}
+                  </div>
+                  <div>
+                    <strong>Mode:</strong>{' '}
+                    {cloudRestoreMode === 'clone'
+                      ? 'Clone (new device identity)'
+                      : 'Restore'}
+                  </div>
+                </div>
+                <p>
+                  A safety backup will be created before the restore. SignalK
+                  will restart during the process and will be temporarily
+                  unavailable.
+                </p>
+              </>
+            )}
+
+            {/* Step 6: Restoring */}
+            {cloudRestoreStep === 'restoring' && (
+              <div className="text-center py-4">
+                <Spinner size="sm" className="me-2" />
+                <p className="mt-2">Starting restore...</p>
+              </div>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            {cloudRestoreStep !== 'preparing' &&
+              cloudRestoreStep !== 'restoring' && (
+                <Button variant="secondary" onClick={closeCloudRestore}>
+                  Cancel
+                </Button>
+              )}
+
+            {cloudRestoreStep === 'select-install' && (
+              <Button
+                variant="primary"
+                disabled={!selectedInstall}
+                onClick={() => setCloudRestoreStep('enter-password')}
+              >
+                Next
+              </Button>
+            )}
+
+            {cloudRestoreStep === 'enter-password' && (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => setCloudRestoreStep('select-install')}
+                >
+                  Back
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleCloudRestorePrepare}
+                >
+                  Prepare Restore
+                </Button>
+              </>
+            )}
+
+            {cloudRestoreStep === 'select-snapshot' && (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => setCloudRestoreStep('enter-password')}
+                >
+                  Back
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={!selectedCloudSnapshot}
+                  onClick={() => setCloudRestoreStep('confirm')}
+                >
+                  Next
+                </Button>
+              </>
+            )}
+
+            {cloudRestoreStep === 'confirm' && (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => setCloudRestoreStep('select-snapshot')}
+                >
+                  Back
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleCloudRestoreStart}
+                >
+                  {cloudRestoreMode === 'clone'
+                    ? 'Clone & Restore'
+                    : 'Start Restore'}
+                </Button>
+              </>
+            )}
+          </Modal.Footer>
+        </Modal>
 
         {/* Manual Auth Code Modal */}
         <Modal show={showManualAuth} onHide={() => setShowManualAuth(false)}>

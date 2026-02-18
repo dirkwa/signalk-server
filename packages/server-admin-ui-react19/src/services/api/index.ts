@@ -336,6 +336,41 @@ export const cloudApi = {
       return getKeeperApi().cloud.password()
     }
     return null
+  },
+
+  installs: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.installs()
+    }
+    return []
+  },
+
+  restorePrepare: async (folder: string, password?: string) => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.restorePrepare(folder, password)
+    }
+    throw new Error('Cloud restore not supported without Keeper')
+  },
+
+  restoreStart: async (snapshotId: string, mode: 'restore' | 'clone') => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.restoreStart(snapshotId, mode)
+    } else {
+      throw new Error('Cloud restore not supported without Keeper')
+    }
+  },
+
+  restoreStatus: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.restoreStatus()
+    }
+    return null
+  },
+
+  restoreReset: async () => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.restoreReset()
+    }
   }
 }
 

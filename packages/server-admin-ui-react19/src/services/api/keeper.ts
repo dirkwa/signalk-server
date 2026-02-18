@@ -21,7 +21,9 @@ import type {
   VersionSettings,
   CloudSyncStatus,
   CloudConnectResult,
-  PasswordStatusResult
+  PasswordStatusResult,
+  CloudInstall,
+  CloudRestorePrepareResult
 } from './types'
 
 export class KeeperApiError extends Error {
@@ -975,6 +977,66 @@ export function createKeeperApi(baseUrl: string) {
           `${apiUrl}/api/backups/password`
         )
         return handleResponse<PasswordStatusResult>(response)
+      },
+
+      installs: async (): Promise<CloudInstall[]> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/cloud/installs`
+        )
+        return handleResponse<CloudInstall[]>(response)
+      },
+
+      restorePrepare: async (
+        folder: string,
+        password?: string
+      ): Promise<CloudRestorePrepareResult> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/cloud/restore/prepare`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder, password: password || undefined })
+          }
+        )
+        return handleResponse<CloudRestorePrepareResult>(response)
+      },
+
+      restoreStart: async (
+        snapshotId: string,
+        mode: 'restore' | 'clone'
+      ): Promise<void> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/cloud/restore/start`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ snapshotId, mode })
+          }
+        )
+        await handleResponse<{ snapshotId: string; mode: string; status: string }>(response)
+      },
+
+      restoreStatus: async (): Promise<{
+        cloudPhase: string
+        cloudError: string | null
+        restore: { state: string; progress: number; statusMessage: string; error?: string } | null
+      }> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/cloud/restore/status`
+        )
+        return handleResponse<{
+          cloudPhase: string
+          cloudError: string | null
+          restore: { state: string; progress: number; statusMessage: string; error?: string } | null
+        }>(response)
+      },
+
+      restoreReset: async (): Promise<void> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/cloud/restore/reset`,
+          { method: 'POST' }
+        )
+        await handleResponse<{ message: string }>(response)
       }
     }
   }
