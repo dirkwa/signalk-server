@@ -1300,9 +1300,9 @@ const BackupRestore: React.FC = () => {
                                   cloudStatus.syncProgress.totalBytes
                                 )}{' '}
                                 to Google Drive
-                                {cloudStatus.syncProgress.processedBlobs !=
+                                {cloudStatus.syncProgress.processedBlobs !==
                                   null &&
-                                  cloudStatus.syncProgress.totalBlobs !=
+                                  cloudStatus.syncProgress.totalBlobs !==
                                     null && (
                                     <span className="text-muted">
                                       ({cloudStatus.syncProgress.processedBlobs}
