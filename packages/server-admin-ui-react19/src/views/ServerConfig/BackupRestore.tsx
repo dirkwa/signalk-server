@@ -90,7 +90,6 @@ const BackupRestore: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isCreatingBackup, setIsCreatingBackup] = useState(false)
-  const [includeHistoryInBackup, setIncludeHistoryInBackup] = useState(false)
   const [activeBackupTab, setActiveBackupTab] = useState<string>('all')
 
   // Password state
@@ -173,7 +172,7 @@ const BackupRestore: React.FC = () => {
 
   // Check if exclusions have been locally modified
   const currentExclusions = dataDirs
-    .filter((d) => d.excluded && d.type !== 'info')
+    .filter((d) => d.excluded)
     .map((d) => d.name + '/')
     .sort()
   const exclusionsChanged =
@@ -222,9 +221,7 @@ const BackupRestore: React.FC = () => {
       if (dirs) {
         setDataDirs(dirs)
         setSavedExclusions(
-          dirs
-            .filter((d) => d.excluded && d.type !== 'info')
-            .map((d) => d.name + '/')
+          dirs.filter((d) => d.excluded).map((d) => d.name + '/')
         )
       }
     } catch (err) {
@@ -242,7 +239,7 @@ const BackupRestore: React.FC = () => {
     setDataDirs((prev) =>
       prev.map((d) => ({
         ...d,
-        excluded: d.type !== 'info' && savedExclusions.includes(d.name + '/')
+        excluded: savedExclusions.includes(d.name + '/')
       }))
     )
   }
@@ -251,7 +248,7 @@ const BackupRestore: React.FC = () => {
     setShowExclusionConfirm(false)
     try {
       const newExclusions = dataDirs
-        .filter((d) => d.excluded && d.type !== 'info')
+        .filter((d) => d.excluded)
         .map((d) => d.name + '/')
       await backupApi.exclusions.update(newExclusions)
       setSavedExclusions(newExclusions)
@@ -560,17 +557,14 @@ const BackupRestore: React.FC = () => {
     setIsCreatingBackup(true)
     setError(null)
     try {
-      await backupApi.create({
-        type: 'full',
-        includeHistory: includeHistoryInBackup
-      })
+      await backupApi.create({ type: 'full' })
       await loadBackups()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create backup')
     } finally {
       setIsCreatingBackup(false)
     }
-  }, [includeHistoryInBackup])
+  }, [])
 
   const downloadBackup = useCallback((id: string) => {
     const url = backupApi.getDownloadUrl(id)
@@ -821,53 +815,37 @@ const BackupRestore: React.FC = () => {
                 Excluded directories are not included in backups. Charts and
                 plugins can be re-downloaded after restore.
               </Form.Text>
-              {dataDirs.map((dir) =>
-                dir.type === 'info' ? (
-                  <div key={dir.name} className="mb-1">
+              {dataDirs.map((dir) => (
+                <Form.Check
+                  key={dir.name}
+                  type="checkbox"
+                  id={`exclude-${dir.name}`}
+                  checked={dir.excluded}
+                  onChange={(e) =>
+                    handleExclusionToggle(dir.name, e.target.checked)
+                  }
+                  label={
                     <span>
                       {dir.name}{' '}
                       <span className="text-muted">
                         ({formatBytes(dir.size)})
                       </span>
-                      <span className="text-muted fst-italic">
-                        {' '}
-                        — included per backup when &quot;Include History&quot;
-                        is selected
-                      </span>
-                    </span>
-                  </div>
-                ) : (
-                  <Form.Check
-                    key={dir.name}
-                    type="checkbox"
-                    id={`exclude-${dir.name}`}
-                    checked={dir.excluded}
-                    onChange={(e) =>
-                      handleExclusionToggle(dir.name, e.target.checked)
-                    }
-                    label={
-                      <span>
-                        {dir.name}{' '}
-                        <span className="text-muted">
-                          ({formatBytes(dir.size)})
+                      {dir.name === 'node_modules' && (
+                        <span className="text-muted fst-italic">
+                          {' '}
+                          — reinstalled on restore
                         </span>
-                        {dir.name === 'node_modules' && (
-                          <span className="text-muted fst-italic">
-                            {' '}
-                            — reinstalled on restore
-                          </span>
-                        )}
-                        {dir.name.startsWith('charts') && (
-                          <span className="text-muted fst-italic">
-                            {' '}
-                            — re-downloadable
-                          </span>
-                        )}
-                      </span>
-                    }
-                  />
-                )
-              )}
+                      )}
+                      {dir.name.startsWith('charts') && (
+                        <span className="text-muted fst-italic">
+                          {' '}
+                          — re-downloadable
+                        </span>
+                      )}
+                    </span>
+                  }
+                />
+              ))}
               {exclusionsChanged && (
                 <>
                   <Alert variant="warning" className="mt-3 mb-0 py-2">
@@ -895,7 +873,7 @@ const BackupRestore: React.FC = () => {
                 </>
               )}
             </Card.Body>
-            <Card.Footer className="d-flex align-items-center gap-3">
+            <Card.Footer>
               <Button
                 variant="primary"
                 onClick={createKeeperBackup}
@@ -908,15 +886,6 @@ const BackupRestore: React.FC = () => {
                 )}{' '}
                 Create Manual Backup
               </Button>
-              {dataDirs.some((d) => d.type === 'info') && (
-                <Form.Check
-                  type="checkbox"
-                  id="include-history"
-                  label="Include History"
-                  checked={includeHistoryInBackup}
-                  onChange={(e) => setIncludeHistoryInBackup(e.target.checked)}
-                />
-              )}
             </Card.Footer>
           </Card>
         )}

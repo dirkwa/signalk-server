@@ -275,7 +275,6 @@ export function createKeeperApi(baseUrl: string) {
       create: async (options?: {
         type?: 'full' | 'config' | 'plugins'
         description?: string
-        includeHistory?: boolean
       }): Promise<KeeperBackup> => {
         // Keeper expects type to be 'manual' for user-initiated backups
         // Don't send the UI's type field, just description
@@ -284,8 +283,7 @@ export function createKeeperApi(baseUrl: string) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             description: options?.description,
-            type: 'manual',
-            includeHistory: options?.includeHistory ?? false
+            type: 'manual'
           })
         })
         return handleResponse<KeeperBackup>(response)
@@ -406,7 +404,7 @@ export function createKeeperApi(baseUrl: string) {
           name: string
           size: number
           excluded: boolean
-          type?: 'dir' | 'info'
+          type?: 'dir' | 'history'
         }>
       > => {
         const response = await keeperFetch(`${apiUrl}/api/backups/data-dirs`)
@@ -415,7 +413,7 @@ export function createKeeperApi(baseUrl: string) {
             name: string
             size: number
             excluded: boolean
-            type?: 'dir' | 'info'
+            type?: 'dir' | 'history'
           }>
         >(response)
       },
