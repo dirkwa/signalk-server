@@ -305,6 +305,13 @@ export interface EnableHistoryResult {
   credentials?: HistoryCredentials
 }
 
+export interface SyncProgress {
+  totalBytes: number
+  processedBlobs?: number
+  totalBlobs?: number
+  processedBytes?: number
+}
+
 export interface CloudSyncStatus {
   connected: boolean
   configured: boolean
@@ -315,6 +322,7 @@ export interface CloudSyncStatus {
   lastSyncError: string | null
   internetAvailable: boolean | null
   email?: string
+  syncProgress?: SyncProgress
 }
 
 export interface CloudConnectResult {

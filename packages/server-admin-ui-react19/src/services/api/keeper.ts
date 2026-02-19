@@ -400,11 +400,21 @@ export function createKeeperApi(baseUrl: string) {
       },
 
       dataDirs: async (): Promise<
-        Array<{ name: string; size: number; excluded: boolean }>
+        Array<{
+          name: string
+          size: number
+          excluded: boolean
+          type?: 'dir' | 'info'
+        }>
       > => {
         const response = await keeperFetch(`${apiUrl}/api/backups/data-dirs`)
         return handleResponse<
-          Array<{ name: string; size: number; excluded: boolean }>
+          Array<{
+            name: string
+            size: number
+            excluded: boolean
+            type?: 'dir' | 'info'
+          }>
         >(response)
       },
 

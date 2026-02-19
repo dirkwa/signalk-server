@@ -28,7 +28,6 @@ import { faWifi } from '@fortawesome/free-solid-svg-icons/faWifi'
 import { faEye } from '@fortawesome/free-solid-svg-icons/faEye'
 import { faEyeSlash } from '@fortawesome/free-solid-svg-icons/faEyeSlash'
 import { faCopy } from '@fortawesome/free-solid-svg-icons/faCopy'
-import { faKey } from '@fortawesome/free-solid-svg-icons/faKey'
 import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrowDown'
 import { faFolder } from '@fortawesome/free-solid-svg-icons/faFolder'
 import { useStore, useRestarting, useRuntimeConfig } from '../../store'
@@ -91,10 +90,6 @@ const BackupRestore: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isCreatingBackup, setIsCreatingBackup] = useState(false)
-  const [backupType, setBackupType] = useState<'full' | 'config' | 'plugins'>(
-    'full'
-  )
-  const [backupDescription, setBackupDescription] = useState('')
   const [activeBackupTab, setActiveBackupTab] = useState<string>('all')
 
   // Password state
@@ -165,8 +160,24 @@ const BackupRestore: React.FC = () => {
 
   // Backup exclusions state
   const [dataDirs, setDataDirs] = useState<
-    Array<{ name: string; size: number; excluded: boolean }>
+    Array<{
+      name: string
+      size: number
+      excluded: boolean
+      type?: 'dir' | 'info'
+    }>
   >([])
+  const [savedExclusions, setSavedExclusions] = useState<string[]>([])
+  const [showExclusionConfirm, setShowExclusionConfirm] = useState(false)
+
+  // Check if exclusions have been locally modified
+  const currentExclusions = dataDirs
+    .filter((d) => d.excluded && d.type !== 'info')
+    .map((d) => d.name + '/')
+    .sort()
+  const exclusionsChanged =
+    JSON.stringify(currentExclusions) !==
+    JSON.stringify([...savedExclusions].sort())
 
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
@@ -209,26 +220,45 @@ const BackupRestore: React.FC = () => {
       const dirs = await backupApi.dataDirs()
       if (dirs) {
         setDataDirs(dirs)
+        setSavedExclusions(
+          dirs
+            .filter((d) => d.excluded && d.type !== 'info')
+            .map((d) => d.name + '/')
+        )
       }
     } catch (err) {
       console.error('Failed to load data directories:', err)
     }
   }
 
-  const handleExclusionToggle = async (dirName: string, excluded: boolean) => {
-    // Optimistically update UI
+  const handleExclusionToggle = (dirName: string, excluded: boolean) => {
     setDataDirs((prev) =>
       prev.map((d) => (d.name === dirName ? { ...d, excluded } : d))
     )
+  }
+
+  const resetExclusions = () => {
+    setDataDirs((prev) =>
+      prev.map((d) => ({
+        ...d,
+        excluded: d.type !== 'info' && savedExclusions.includes(d.name + '/')
+      }))
+    )
+  }
+
+  const saveExclusions = async () => {
+    setShowExclusionConfirm(false)
     try {
       const newExclusions = dataDirs
-        .map((d) => (d.name === dirName ? { ...d, excluded } : d))
-        .filter((d) => d.excluded)
+        .filter((d) => d.excluded && d.type !== 'info')
         .map((d) => d.name + '/')
       await backupApi.exclusions.update(newExclusions)
+      setSavedExclusions(newExclusions)
+      await loadBackups()
     } catch (err) {
-      console.error('Failed to update exclusions:', err)
-      // Revert on failure
+      setError(
+        err instanceof Error ? err.message : 'Failed to update exclusions'
+      )
       loadDataDirs()
     }
   }
@@ -529,18 +559,14 @@ const BackupRestore: React.FC = () => {
     setIsCreatingBackup(true)
     setError(null)
     try {
-      await backupApi.create({
-        type: backupType,
-        description: backupDescription || undefined
-      })
-      setBackupDescription('')
+      await backupApi.create({ type: 'full' })
       await loadBackups()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create backup')
     } finally {
       setIsCreatingBackup(false)
     }
-  }, [backupType, backupDescription])
+  }, [])
 
   const downloadBackup = useCallback((id: string) => {
     const url = backupApi.getDownloadUrl(id)
@@ -780,58 +806,183 @@ const BackupRestore: React.FC = () => {
           </Alert>
         )}
 
-        {/* Create Backup Card */}
-        <Card className="mb-4">
-          <Card.Header>Create Backup</Card.Header>
-          <Card.Body>
-            <Form>
-              <Row className="mb-3">
-                <Form.Label column sm={2}>
-                  Type
-                </Form.Label>
-                <Col sm={10}>
-                  <Form.Select
-                    value={backupType}
+        {/* Backup Exclusions Card */}
+        {dataDirs.length > 0 && (
+          <Card className="mb-4">
+            <Card.Header>
+              <FontAwesomeIcon icon={faFolder} /> Backup Exclusions
+            </Card.Header>
+            <Card.Body>
+              <Form.Text className="text-muted d-block mb-2">
+                Excluded directories are not included in backups. Charts and
+                plugins can be re-downloaded after restore.
+              </Form.Text>
+              {dataDirs.map((dir) =>
+                dir.type === 'info' ? (
+                  <div key={dir.name} className="mb-1">
+                    <span>
+                      {dir.name}{' '}
+                      <span className="text-muted">
+                        ({formatBytes(dir.size)})
+                      </span>
+                      <span className="text-muted fst-italic">
+                        {' '}
+                        — included per backup when &quot;Include History&quot;
+                        is selected
+                      </span>
+                    </span>
+                  </div>
+                ) : (
+                  <Form.Check
+                    key={dir.name}
+                    type="checkbox"
+                    id={`exclude-${dir.name}`}
+                    checked={dir.excluded}
                     onChange={(e) =>
-                      setBackupType(
-                        e.target.value as 'full' | 'config' | 'plugins'
-                      )
+                      handleExclusionToggle(dir.name, e.target.checked)
                     }
-                  >
-                    <option value="full">Full (settings + plugins)</option>
-                    <option value="config">Configuration only</option>
-                    <option value="plugins">Plugins only</option>
-                  </Form.Select>
-                </Col>
-              </Row>
-              <Row className="mb-3">
-                <Form.Label column sm={2}>
-                  Description
-                </Form.Label>
-                <Col sm={10}>
-                  <Form.Control
-                    type="text"
-                    placeholder="Optional description"
-                    value={backupDescription}
-                    onChange={(e) => setBackupDescription(e.target.value)}
+                    label={
+                      <span>
+                        {dir.name}{' '}
+                        <span className="text-muted">
+                          ({formatBytes(dir.size)})
+                        </span>
+                        {dir.name === 'node_modules' && (
+                          <span className="text-muted fst-italic">
+                            {' '}
+                            — reinstalled on restore
+                          </span>
+                        )}
+                        {dir.name.startsWith('charts') && (
+                          <span className="text-muted fst-italic">
+                            {' '}
+                            — re-downloadable
+                          </span>
+                        )}
+                      </span>
+                    }
                   />
-                </Col>
-              </Row>
-            </Form>
+                )
+              )}
+              {exclusionsChanged && (
+                <>
+                  <Alert variant="warning" className="mt-3 mb-0 py-2">
+                    Changing exclusions will delete all existing backups to
+                    reclaim space. If cloud sync is enabled, you&apos;ll also
+                    need to delete the backup folder on Google Drive and sync
+                    again.
+                  </Alert>
+                  <div className="mt-2 d-flex gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setShowExclusionConfirm(true)}
+                    >
+                      Save Changes
+                    </Button>
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={resetExclusions}
+                    >
+                      Discard
+                    </Button>
+                  </div>
+                </>
+              )}
+            </Card.Body>
+            <Card.Footer>
+              <Button
+                variant="primary"
+                onClick={createKeeperBackup}
+                disabled={isCreatingBackup}
+              >
+                {isCreatingBackup ? (
+                  <FontAwesomeIcon icon={faCircleNotch} spin />
+                ) : (
+                  <FontAwesomeIcon icon={faCircleDot} />
+                )}{' '}
+                Create Manual Backup
+              </Button>
+            </Card.Footer>
+          </Card>
+        )}
+
+        {/* Backup Password Card */}
+        <Card className="mb-4">
+          <Card.Header>
+            <FontAwesomeIcon icon={faLock} /> Backup Password
+          </Card.Header>
+          <Card.Body>
+            <Row className="align-items-center">
+              <Col>
+                <p className="mb-1">
+                  <strong>Status:</strong>{' '}
+                  <Badge bg={hasCustomPassword ? 'success' : 'secondary'}>
+                    {hasCustomPassword ? 'Custom password' : 'Default password'}
+                  </Badge>
+                </p>
+                <Form.Text className="text-muted">
+                  All backups are password-protected. A default password is used
+                  unless you set a custom one.
+                </Form.Text>
+                {passwordStatus?.password && (
+                  <div className="mt-2 d-flex align-items-center gap-2">
+                    <strong>Recovery Password:</strong>
+                    <code>
+                      {showRecoveryPassword
+                        ? passwordStatus.password
+                        : '\u2022'.repeat(16)}
+                    </code>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="p-0"
+                      onClick={() =>
+                        setShowRecoveryPassword(!showRecoveryPassword)
+                      }
+                      title={
+                        showRecoveryPassword ? 'Hide password' : 'Show password'
+                      }
+                    >
+                      <FontAwesomeIcon
+                        icon={showRecoveryPassword ? faEyeSlash : faEye}
+                      />
+                    </Button>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="p-0"
+                      onClick={() => {
+                        if (passwordStatus?.password) {
+                          navigator.clipboard.writeText(passwordStatus.password)
+                        }
+                      }}
+                      title="Copy to clipboard"
+                    >
+                      <FontAwesomeIcon icon={faCopy} />
+                    </Button>
+                  </div>
+                )}
+                <Form.Text className="text-muted d-block mt-1">
+                  You need this password to restore backups on a new device.
+                </Form.Text>
+              </Col>
+            </Row>
           </Card.Body>
           <Card.Footer>
             <Button
               variant="primary"
-              onClick={createKeeperBackup}
-              disabled={isCreatingBackup}
+              className="me-2"
+              onClick={() => setPasswordModalOpen(true)}
             >
-              {isCreatingBackup ? (
-                <FontAwesomeIcon icon={faCircleNotch} spin />
-              ) : (
-                <FontAwesomeIcon icon={faCircleDot} />
-              )}{' '}
-              Create Backup
+              Change Password
             </Button>
+            {hasCustomPassword && (
+              <Button variant="warning" onClick={() => setResetModalOpen(true)}>
+                Reset to Default
+              </Button>
+            )}
           </Card.Footer>
         </Card>
 
@@ -991,137 +1142,6 @@ const BackupRestore: React.FC = () => {
           </Card.Footer>
         </Card>
 
-        {/* Upload Restore File Card */}
-        <Card className="mb-4">
-          <Card.Header>Restore from File</Card.Header>
-          <Card.Body>
-            <Form.Text className="text-muted">
-              Upload a backup file from another installation to restore
-              settings.
-            </Form.Text>
-            <br />
-            <Row className="mb-3">
-              <Col xs="12" md={fieldColWidthMd}>
-                <Form.Control
-                  type="file"
-                  name="backupFile"
-                  onChange={fileChanged}
-                  accept=".zip,.tar.gz,.tgz"
-                />
-              </Col>
-            </Row>
-            {restoreState === RESTORE_RUNNING && (
-              <div>
-                <Form.Text>Restoring... Please wait.</Form.Text>
-                <ProgressBar animated variant="success" now={100} />
-              </div>
-            )}
-          </Card.Body>
-          <Card.Footer>
-            <Button
-              variant="danger"
-              onClick={validate}
-              disabled={
-                restoreFile === null || restoreState === RESTORE_RUNNING
-              }
-            >
-              {restoreState === RESTORE_VALIDATING ? (
-                <FontAwesomeIcon icon={faCircleNotch} spin />
-              ) : (
-                <FontAwesomeIcon icon={faUpload} />
-              )}{' '}
-              Upload and Restore
-            </Button>
-          </Card.Footer>
-        </Card>
-
-        {/* Backup Password Card */}
-        <Card>
-          <Card.Header>
-            <FontAwesomeIcon icon={faLock} /> Backup Password
-          </Card.Header>
-          <Card.Body>
-            <Row className="align-items-center">
-              <Col>
-                <p className="mb-1">
-                  <strong>Status:</strong>{' '}
-                  <Badge bg={hasCustomPassword ? 'success' : 'secondary'}>
-                    {hasCustomPassword ? 'Custom password' : 'Default password'}
-                  </Badge>
-                </p>
-                <Form.Text className="text-muted">
-                  All backups are password-protected. A default password is used
-                  unless you set a custom one.
-                </Form.Text>
-              </Col>
-            </Row>
-          </Card.Body>
-          <Card.Footer>
-            <Button
-              variant="primary"
-              className="me-2"
-              onClick={() => setPasswordModalOpen(true)}
-            >
-              Change Password
-            </Button>
-            {hasCustomPassword && (
-              <Button variant="warning" onClick={() => setResetModalOpen(true)}>
-                Reset to Default
-              </Button>
-            )}
-          </Card.Footer>
-        </Card>
-
-        {/* Backup Exclusions Card */}
-        {dataDirs.length > 0 && (
-          <Card className="mt-4">
-            <Card.Header>
-              <FontAwesomeIcon icon={faFolder} /> Backup Exclusions
-            </Card.Header>
-            <Card.Body>
-              <Form.Text className="text-muted d-block mb-2">
-                Excluded directories are not included in backups. Charts and
-                plugins can be re-downloaded after restore.
-              </Form.Text>
-              {dataDirs.map((dir) => (
-                <Form.Check
-                  key={dir.name}
-                  type="checkbox"
-                  id={`exclude-${dir.name}`}
-                  checked={dir.excluded}
-                  onChange={(e) =>
-                    handleExclusionToggle(dir.name, e.target.checked)
-                  }
-                  label={
-                    <span>
-                      {dir.name}{' '}
-                      <span className="text-muted">
-                        ({formatBytes(dir.size)})
-                      </span>
-                      {dir.name === 'node_modules' && (
-                        <span className="text-muted fst-italic">
-                          {' '}
-                          — reinstalled on restore
-                        </span>
-                      )}
-                      {dir.name.startsWith('charts') && (
-                        <span className="text-muted fst-italic">
-                          {' '}
-                          — re-downloadable
-                        </span>
-                      )}
-                    </span>
-                  }
-                />
-              ))}
-              <Alert variant="info" className="mt-3 mb-0 py-2">
-                Changing exclusions will delete all existing backups and reclaim
-                storage space. A new backup should be created afterwards.
-              </Alert>
-            </Card.Body>
-          </Card>
-        )}
-
         {/* Cloud Backup Card */}
         <Card className="mt-4">
           <Card.Header>
@@ -1270,26 +1290,48 @@ const BackupRestore: React.FC = () => {
                   <Col>
                     <div className="d-flex align-items-center gap-3">
                       {cloudStatus.syncing ? (
-                        <span className="d-flex align-items-center gap-2">
-                          <FontAwesomeIcon icon={faCircleNotch} spin />{' '}
-                          Syncing...
-                          <Button
-                            variant="outline-danger"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await cloudApi.cancelSync()
-                                setCloudStatus((prev) =>
-                                  prev ? { ...prev, syncing: false } : prev
-                                )
-                              } catch (err) {
-                                console.error('Failed to cancel sync:', err)
-                              }
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </span>
+                        <div>
+                          <span className="d-flex align-items-center gap-2">
+                            <FontAwesomeIcon icon={faCircleNotch} spin />{' '}
+                            {cloudStatus.syncProgress ? (
+                              <>
+                                Syncing{' '}
+                                {formatBytes(
+                                  cloudStatus.syncProgress.totalBytes
+                                )}{' '}
+                                to Google Drive
+                                {cloudStatus.syncProgress.processedBlobs !=
+                                  null &&
+                                  cloudStatus.syncProgress.totalBlobs !=
+                                    null && (
+                                    <span className="text-muted">
+                                      ({cloudStatus.syncProgress.processedBlobs}
+                                      /{cloudStatus.syncProgress.totalBlobs}{' '}
+                                      blobs)
+                                    </span>
+                                  )}
+                              </>
+                            ) : (
+                              'Syncing...'
+                            )}
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await cloudApi.cancelSync()
+                                  setCloudStatus((prev) =>
+                                    prev ? { ...prev, syncing: false } : prev
+                                  )
+                                } catch (err) {
+                                  console.error('Failed to cancel sync:', err)
+                                }
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </span>
+                        </div>
                       ) : (
                         <Button
                           variant="outline-primary"
@@ -1323,64 +1365,6 @@ const BackupRestore: React.FC = () => {
                         {cloudStatus.lastSyncError}
                       </Alert>
                     )}
-                  </Col>
-                </Row>
-
-                {/* Recovery Password */}
-                <Row className="align-items-center">
-                  <Col sm={3}>
-                    <strong>
-                      <FontAwesomeIcon icon={faKey} className="me-1" />
-                      Recovery Password
-                    </strong>
-                  </Col>
-                  <Col>
-                    {passwordStatus?.password ? (
-                      <div className="d-flex align-items-center gap-2">
-                        <code>
-                          {showRecoveryPassword
-                            ? passwordStatus.password
-                            : '\u2022'.repeat(16)}
-                        </code>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="p-0"
-                          onClick={() =>
-                            setShowRecoveryPassword(!showRecoveryPassword)
-                          }
-                          title={
-                            showRecoveryPassword
-                              ? 'Hide password'
-                              : 'Show password'
-                          }
-                        >
-                          <FontAwesomeIcon
-                            icon={showRecoveryPassword ? faEyeSlash : faEye}
-                          />
-                        </Button>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="p-0"
-                          onClick={() => {
-                            if (passwordStatus?.password) {
-                              navigator.clipboard.writeText(
-                                passwordStatus.password
-                              )
-                            }
-                          }}
-                          title="Copy to clipboard"
-                        >
-                          <FontAwesomeIcon icon={faCopy} />
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-muted">No password set</span>
-                    )}
-                    <Form.Text className="text-muted d-block mt-1">
-                      You need this password to restore backups on a new device.
-                    </Form.Text>
                   </Col>
                 </Row>
 
@@ -1419,6 +1403,85 @@ const BackupRestore: React.FC = () => {
             )}
           </Card.Body>
         </Card>
+
+        {/* Restore from File Card */}
+        <Card className="mt-4">
+          <Card.Header>
+            <FontAwesomeIcon icon={faUpload} /> Restore from File
+          </Card.Header>
+          <Card.Body>
+            <Form.Text className="text-muted">
+              Upload a backup file from another installation to restore
+              settings.
+            </Form.Text>
+            <br />
+            <Row className="mb-3">
+              <Col xs="12" md={fieldColWidthMd}>
+                <Form.Control
+                  type="file"
+                  name="backupFile"
+                  onChange={fileChanged}
+                  accept=".zip,.tar.gz,.tgz"
+                />
+              </Col>
+            </Row>
+            {restoreState === RESTORE_RUNNING && (
+              <div>
+                <Form.Text>Restoring... Please wait.</Form.Text>
+                <ProgressBar animated variant="success" now={100} />
+              </div>
+            )}
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="danger"
+              onClick={validate}
+              disabled={
+                restoreFile === null || restoreState === RESTORE_RUNNING
+              }
+            >
+              {restoreState === RESTORE_VALIDATING ? (
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              ) : (
+                <FontAwesomeIcon icon={faUpload} />
+              )}{' '}
+              Upload and Restore
+            </Button>
+          </Card.Footer>
+        </Card>
+
+        {/* Exclusion Confirm Modal */}
+        <Modal
+          show={showExclusionConfirm}
+          onHide={() => setShowExclusionConfirm(false)}
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Confirm Exclusion Changes</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>
+              Changing backup exclusions will{' '}
+              <strong>delete all existing backups</strong> to reclaim storage
+              space.
+            </p>
+            <p>
+              If cloud sync is enabled, you will also need to manually delete
+              the backup folder on Google Drive and sync again.
+            </p>
+            <p>A new backup should be created after saving.</p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setShowExclusionConfirm(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={saveExclusions}>
+              Save Changes
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
         {/* Cloud Restore Wizard Modal */}
         <Modal
