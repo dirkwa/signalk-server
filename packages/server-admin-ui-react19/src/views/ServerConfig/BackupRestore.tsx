@@ -1456,14 +1456,13 @@ const BackupRestore: React.FC = () => {
           <Modal.Body>
             <p>
               Changing backup exclusions will{' '}
-              <strong>delete all existing backups</strong> to reclaim storage
-              space.
+              <strong>delete all existing backups</strong> and create a fresh
+              one with the new settings.
             </p>
             <p>
               If cloud sync is enabled, you will also need to manually delete
               the backup folder on Google Drive and sync again.
             </p>
-            <p>A new backup should be created after saving.</p>
           </Modal.Body>
           <Modal.Footer>
             <Button
