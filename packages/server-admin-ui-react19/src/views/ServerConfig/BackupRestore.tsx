@@ -90,6 +90,7 @@ const BackupRestore: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isCreatingBackup, setIsCreatingBackup] = useState(false)
+  const [includeHistoryInBackup, setIncludeHistoryInBackup] = useState(false)
   const [activeBackupTab, setActiveBackupTab] = useState<string>('all')
 
   // Password state
@@ -559,14 +560,17 @@ const BackupRestore: React.FC = () => {
     setIsCreatingBackup(true)
     setError(null)
     try {
-      await backupApi.create({ type: 'full' })
+      await backupApi.create({
+        type: 'full',
+        includeHistory: includeHistoryInBackup
+      })
       await loadBackups()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create backup')
     } finally {
       setIsCreatingBackup(false)
     }
-  }, [])
+  }, [includeHistoryInBackup])
 
   const downloadBackup = useCallback((id: string) => {
     const url = backupApi.getDownloadUrl(id)
@@ -891,7 +895,7 @@ const BackupRestore: React.FC = () => {
                 </>
               )}
             </Card.Body>
-            <Card.Footer>
+            <Card.Footer className="d-flex align-items-center gap-3">
               <Button
                 variant="primary"
                 onClick={createKeeperBackup}
@@ -904,6 +908,15 @@ const BackupRestore: React.FC = () => {
                 )}{' '}
                 Create Manual Backup
               </Button>
+              {dataDirs.some((d) => d.type === 'info') && (
+                <Form.Check
+                  type="checkbox"
+                  id="include-history"
+                  label="Include History"
+                  checked={includeHistoryInBackup}
+                  onChange={(e) => setIncludeHistoryInBackup(e.target.checked)}
+                />
+              )}
             </Card.Footer>
           </Card>
         )}
@@ -1301,9 +1314,9 @@ const BackupRestore: React.FC = () => {
                                 )}{' '}
                                 to Google Drive
                                 {cloudStatus.syncProgress.processedBlobs !==
-                                  null &&
+                                  undefined &&
                                   cloudStatus.syncProgress.totalBlobs !==
-                                    null && (
+                                    undefined && (
                                     <span className="text-muted">
                                       ({cloudStatus.syncProgress.processedBlobs}
                                       /{cloudStatus.syncProgress.totalBlobs}{' '}

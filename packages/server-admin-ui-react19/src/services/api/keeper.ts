@@ -275,6 +275,7 @@ export function createKeeperApi(baseUrl: string) {
       create: async (options?: {
         type?: 'full' | 'config' | 'plugins'
         description?: string
+        includeHistory?: boolean
       }): Promise<KeeperBackup> => {
         // Keeper expects type to be 'manual' for user-initiated backups
         // Don't send the UI's type field, just description
@@ -283,7 +284,8 @@ export function createKeeperApi(baseUrl: string) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             description: options?.description,
-            type: 'manual'
+            type: 'manual',
+            includeHistory: options?.includeHistory ?? false
           })
         })
         return handleResponse<KeeperBackup>(response)
