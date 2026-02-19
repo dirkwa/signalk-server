@@ -164,9 +164,10 @@ const BackupRestore: React.FC = () => {
       name: string
       size: number
       excluded: boolean
-      type?: 'dir' | 'info'
+      type?: 'dir' | 'history'
     }>
   >([])
+  const [dataDirsLoading, setDataDirsLoading] = useState(true)
   const [savedExclusions, setSavedExclusions] = useState<string[]>([])
   const [showExclusionConfirm, setShowExclusionConfirm] = useState(false)
 
@@ -226,6 +227,8 @@ const BackupRestore: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to load data directories:', err)
+    } finally {
+      setDataDirsLoading(false)
     }
   }
 
@@ -805,90 +808,100 @@ const BackupRestore: React.FC = () => {
         )}
 
         {/* Backup Exclusions Card */}
-        {dataDirs.length > 0 && (
-          <Card className="mb-4">
-            <Card.Header>
-              <FontAwesomeIcon icon={faFolder} /> Backup Exclusions
-            </Card.Header>
-            <Card.Body>
-              <Form.Text className="text-muted d-block mb-2">
-                Excluded directories are not included in backups. Charts and
-                plugins can be re-downloaded after restore.
+        <Card className="mb-4">
+          <Card.Header>
+            <FontAwesomeIcon icon={faFolder} /> Backup Exclusions
+          </Card.Header>
+          <Card.Body>
+            {dataDirsLoading ? (
+              <div className="text-center py-3">
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              </div>
+            ) : dataDirs.length === 0 ? (
+              <Form.Text className="text-muted">
+                No data directories found.
               </Form.Text>
-              {dataDirs.map((dir) => (
-                <Form.Check
-                  key={dir.name}
-                  type="checkbox"
-                  id={`exclude-${dir.name}`}
-                  checked={dir.excluded}
-                  onChange={(e) =>
-                    handleExclusionToggle(dir.name, e.target.checked)
-                  }
-                  label={
-                    <span>
-                      {dir.name}{' '}
-                      <span className="text-muted">
-                        ({formatBytes(dir.size)})
+            ) : (
+              <>
+                <Form.Text className="text-muted d-block mb-2">
+                  Excluded directories are not included in backups. Charts and
+                  plugins can be re-downloaded after restore.
+                </Form.Text>
+                {dataDirs.map((dir) => (
+                  <Form.Check
+                    key={dir.name}
+                    type="checkbox"
+                    id={`exclude-${dir.name}`}
+                    checked={dir.excluded}
+                    onChange={(e) =>
+                      handleExclusionToggle(dir.name, e.target.checked)
+                    }
+                    label={
+                      <span>
+                        {dir.name}{' '}
+                        <span className="text-muted">
+                          ({formatBytes(dir.size)})
+                        </span>
+                        {dir.name === 'node_modules' && (
+                          <span className="text-muted fst-italic">
+                            {' '}
+                            — reinstalled on restore
+                          </span>
+                        )}
+                        {dir.name.startsWith('charts') && (
+                          <span className="text-muted fst-italic">
+                            {' '}
+                            — re-downloadable
+                          </span>
+                        )}
                       </span>
-                      {dir.name === 'node_modules' && (
-                        <span className="text-muted fst-italic">
-                          {' '}
-                          — reinstalled on restore
-                        </span>
-                      )}
-                      {dir.name.startsWith('charts') && (
-                        <span className="text-muted fst-italic">
-                          {' '}
-                          — re-downloadable
-                        </span>
-                      )}
-                    </span>
-                  }
-                />
-              ))}
-              {exclusionsChanged && (
-                <>
-                  <Alert variant="warning" className="mt-3 mb-0 py-2">
-                    Changing exclusions will delete all existing backups to
-                    reclaim space. If cloud sync is enabled, you&apos;ll also
-                    need to delete the backup folder on Google Drive and sync
-                    again.
-                  </Alert>
-                  <div className="mt-2 d-flex gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setShowExclusionConfirm(true)}
-                    >
-                      Save Changes
-                    </Button>
-                    <Button
-                      variant="outline-secondary"
-                      size="sm"
-                      onClick={resetExclusions}
-                    >
-                      Discard
-                    </Button>
-                  </div>
-                </>
-              )}
-            </Card.Body>
-            <Card.Footer>
-              <Button
-                variant="primary"
-                onClick={createKeeperBackup}
-                disabled={isCreatingBackup}
-              >
-                {isCreatingBackup ? (
-                  <FontAwesomeIcon icon={faCircleNotch} spin />
-                ) : (
-                  <FontAwesomeIcon icon={faCircleDot} />
-                )}{' '}
-                Create Manual Backup
-              </Button>
-            </Card.Footer>
-          </Card>
-        )}
+                    }
+                  />
+                ))}
+                {exclusionsChanged && (
+                  <>
+                    <Alert variant="warning" className="mt-3 mb-0 py-2">
+                      Changing exclusions will delete all existing backups to
+                      reclaim space. If cloud sync is enabled, you&apos;ll also
+                      need to delete the backup folder on Google Drive and sync
+                      again.
+                    </Alert>
+                    <div className="mt-2 d-flex gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setShowExclusionConfirm(true)}
+                      >
+                        Save Changes
+                      </Button>
+                      <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        onClick={resetExclusions}
+                      >
+                        Discard
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="primary"
+              onClick={createKeeperBackup}
+              disabled={isCreatingBackup}
+            >
+              {isCreatingBackup ? (
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              ) : (
+                <FontAwesomeIcon icon={faCircleDot} />
+              )}{' '}
+              Create Manual Backup
+            </Button>
+          </Card.Footer>
+        </Card>
 
         {/* Backup Password Card */}
         <Card className="mb-4">
