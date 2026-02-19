@@ -1072,6 +1072,56 @@ const BackupRestore: React.FC = () => {
           </Card.Footer>
         </Card>
 
+        {/* Backup Exclusions Card */}
+        {dataDirs.length > 0 && (
+          <Card className="mt-4">
+            <Card.Header>
+              <FontAwesomeIcon icon={faFolder} /> Backup Exclusions
+            </Card.Header>
+            <Card.Body>
+              <Form.Text className="text-muted d-block mb-2">
+                Excluded directories are not included in backups. Charts and
+                plugins can be re-downloaded after restore.
+              </Form.Text>
+              {dataDirs.map((dir) => (
+                <Form.Check
+                  key={dir.name}
+                  type="checkbox"
+                  id={`exclude-${dir.name}`}
+                  checked={dir.excluded}
+                  onChange={(e) =>
+                    handleExclusionToggle(dir.name, e.target.checked)
+                  }
+                  label={
+                    <span>
+                      {dir.name}{' '}
+                      <span className="text-muted">
+                        ({formatBytes(dir.size)})
+                      </span>
+                      {dir.name === 'node_modules' && (
+                        <span className="text-muted fst-italic">
+                          {' '}
+                          — reinstalled on restore
+                        </span>
+                      )}
+                      {dir.name.startsWith('charts') && (
+                        <span className="text-muted fst-italic">
+                          {' '}
+                          — re-downloadable
+                        </span>
+                      )}
+                    </span>
+                  }
+                />
+              ))}
+              <Alert variant="info" className="mt-3 mb-0 py-2">
+                Changing exclusions will delete all existing backups and reclaim
+                storage space. A new backup should be created afterwards.
+              </Alert>
+            </Card.Body>
+          </Card>
+        )}
+
         {/* Cloud Backup Card */}
         <Card className="mt-4">
           <Card.Header>
@@ -1275,55 +1325,6 @@ const BackupRestore: React.FC = () => {
                     )}
                   </Col>
                 </Row>
-
-                {/* Backup Exclusions */}
-                {dataDirs.length > 0 && (
-                  <Row>
-                    <Col sm={3}>
-                      <strong>
-                        <FontAwesomeIcon icon={faFolder} className="me-1" />
-                        Backup Exclusions
-                      </strong>
-                    </Col>
-                    <Col>
-                      <Form.Text className="text-muted d-block mb-2">
-                        Excluded directories are not included in backups. Charts
-                        and plugins can be re-downloaded after restore.
-                      </Form.Text>
-                      {dataDirs.map((dir) => (
-                        <Form.Check
-                          key={dir.name}
-                          type="checkbox"
-                          id={`exclude-${dir.name}`}
-                          checked={dir.excluded}
-                          onChange={(e) =>
-                            handleExclusionToggle(dir.name, e.target.checked)
-                          }
-                          label={
-                            <span>
-                              {dir.name}{' '}
-                              <span className="text-muted">
-                                ({formatBytes(dir.size)})
-                              </span>
-                              {dir.name === 'node_modules' && (
-                                <span className="text-muted fst-italic">
-                                  {' '}
-                                  — reinstalled on restore
-                                </span>
-                              )}
-                              {dir.name.startsWith('charts') && (
-                                <span className="text-muted fst-italic">
-                                  {' '}
-                                  — re-downloadable
-                                </span>
-                              )}
-                            </span>
-                          }
-                        />
-                      ))}
-                    </Col>
-                  </Row>
-                )}
 
                 {/* Recovery Password */}
                 <Row className="align-items-center">
