@@ -201,7 +201,6 @@ const BackupRestore: React.FC = () => {
     }
   }, [useKeeper])
 
-  // Cleanup cloud restore polling on unmount
   useEffect(() => {
     return () => {
       if (cloudRestorePollRef.current) {
@@ -346,7 +345,6 @@ const BackupRestore: React.FC = () => {
     if (!callbackUrl.trim()) return
     try {
       await cloudApi.gdrive.forwardCallback(callbackUrl.trim())
-      // Auth state polling will pick up the completion
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to forward callback'
@@ -354,7 +352,6 @@ const BackupRestore: React.FC = () => {
     }
   }, [callbackUrl])
 
-  // Cleanup auth polling on unmount
   useEffect(() => {
     return () => {
       if (authPollRef.current) {
@@ -381,9 +378,7 @@ const BackupRestore: React.FC = () => {
   const handleCloudSync = async () => {
     try {
       await cloudApi.sync()
-      // Optimistically show syncing state immediately
       setCloudStatus((prev) => (prev ? { ...prev, syncing: true } : prev))
-      // Poll will pick up via the useEffect that watches cloudStatus.syncing
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start sync')
     }
@@ -479,7 +474,6 @@ const BackupRestore: React.FC = () => {
     try {
       await cloudApi.restoreStart(selectedCloudSnapshot, cloudRestoreMode)
       setShowCloudRestore(false)
-      // Start polling for restore progress
       setCloudRestoreActive(true)
       setCloudRestoreProgress(null)
 
@@ -493,7 +487,6 @@ const BackupRestore: React.FC = () => {
           if (status.restore) {
             setCloudRestoreProgress(status.restore)
 
-            // Terminal states: stop polling
             if (
               status.restore.state === 'completed' ||
               status.restore.state === 'failed' ||
@@ -504,7 +497,6 @@ const BackupRestore: React.FC = () => {
                 cloudRestorePollRef.current = null
               }
               if (status.restore.state === 'completed') {
-                // Restore done — server is restarting, page will reload
                 setTimeout(() => window.location.reload(), 3000)
               }
               cloudApi.restoreReset().catch(() => {})
@@ -513,7 +505,6 @@ const BackupRestore: React.FC = () => {
         } catch {
           consecutiveErrors++
           if (consecutiveErrors >= 5) {
-            // Keeper is likely restarting with SignalK — wait and reload
             if (cloudRestorePollRef.current) {
               clearInterval(cloudRestorePollRef.current)
               cloudRestorePollRef.current = null
@@ -523,13 +514,11 @@ const BackupRestore: React.FC = () => {
               progress: 75,
               statusMessage: 'SignalK is restarting, page will reload...'
             })
-            // Try reloading after a delay
             setTimeout(() => window.location.reload(), 15000)
           }
         }
       }, 2000)
 
-      // Safety: stop polling after 10 minutes
       setTimeout(
         () => {
           if (cloudRestorePollRef.current) {
@@ -2057,7 +2046,6 @@ const BackupRestore: React.FC = () => {
     )
   }
 
-  // Standard SignalK Server mode UI (original)
   return (
     <div>
       {restoreState === RESTORE_NONE && !restoreStatus.state && (

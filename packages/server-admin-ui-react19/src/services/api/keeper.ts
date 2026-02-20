@@ -89,7 +89,7 @@ export function createKeeperApi(baseUrl: string) {
     container: {
       status: async (): Promise<ContainerInfo> => {
         const response = await keeperFetch(`${apiUrl}/api/container`)
-        // Keeper returns slightly different structure, transform to expected format
+
         const rawContainer = await handleResponse<{
           id: string
           name: string
@@ -136,7 +136,7 @@ export function createKeeperApi(baseUrl: string) {
 
       stats: async (): Promise<ContainerStats> => {
         const response = await keeperFetch(`${apiUrl}/api/container/stats`)
-        // Keeper returns flat structure, transform to expected nested format
+
         const rawStats = await handleResponse<{
           cpuPercent: number
           memoryUsage: number
@@ -177,7 +177,7 @@ export function createKeeperApi(baseUrl: string) {
         const response = await keeperFetch(
           `${apiUrl}/api/container/logs?lines=${lines}&source=${source}`
         )
-        // Keeper returns { lines: [{ timestamp, message, level }], count }
+
         // Strip ANSI codes from messages
         const data = await handleResponse<{
           lines: Array<{ timestamp: string; message: string; level: string }>
@@ -218,7 +218,7 @@ export function createKeeperApi(baseUrl: string) {
     backups: {
       list: async (): Promise<BackupListResponse> => {
         const response = await keeperFetch(`${apiUrl}/api/backups`)
-        // Keeper returns flat array, transform to expected grouped format
+
         const rawBackups = await handleResponse<{
           backups: Array<{
             id: string
@@ -323,7 +323,7 @@ export function createKeeperApi(baseUrl: string) {
       scheduler: {
         status: async (): Promise<BackupSchedulerStatus> => {
           const response = await keeperFetch(`${apiUrl}/api/backups/scheduler`)
-          // Keeper returns different structure, transform to expected format
+
           const rawScheduler = await handleResponse<{
             enabled: boolean
             lastBackup?: string
@@ -468,7 +468,7 @@ export function createKeeperApi(baseUrl: string) {
     versions: {
       list: async (): Promise<VersionListResponse> => {
         const response = await keeperFetch(`${apiUrl}/api/versions`)
-        // Keeper returns different structure, transform to expected format
+
         const rawVersions = await handleResponse<{
           currentVersion: {
             tag: string
@@ -535,7 +535,7 @@ export function createKeeperApi(baseUrl: string) {
         totalSize: number
       }> => {
         const response = await keeperFetch(`${apiUrl}/api/versions/local`)
-        // Keeper returns different structure, transform to expected format
+
         const rawLocal = await handleResponse<{
           images: Array<{
             id: string
@@ -655,7 +655,7 @@ export function createKeeperApi(baseUrl: string) {
     system: {
       info: async (): Promise<SystemInfo> => {
         const response = await keeperFetch(`${apiUrl}/api/system`)
-        // Keeper returns different structure, transform to expected format
+
         const rawInfo = await handleResponse<{
           host: {
             platform: string
@@ -789,7 +789,7 @@ export function createKeeperApi(baseUrl: string) {
         const response = await keeperFetch(`${apiUrl}/api/doctor/preflight`, {
           method: 'POST'
         })
-        // Keeper returns different structure, transform to expected format
+
         const rawDoctor = await handleResponse<{
           passed: boolean
           checks: Array<{

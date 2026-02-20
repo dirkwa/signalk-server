@@ -306,8 +306,6 @@ module.exports = function (
         const useKeeper = containerRuntime === 'podman' && keeperUrl
 
         if (useKeeper) {
-          // Keeper-managed Podman container: ask Keeper to restart via Podman API
-          // This works regardless of how the container was created (local build, registry, etc.)
           try {
             await fetch(`${keeperUrl}/api/containers/signalk-server/restart`, {
               method: 'POST'
@@ -315,7 +313,6 @@ module.exports = function (
             // Keeper will restart us, but exit anyway in case the request fails silently
             setTimeout(() => process.exit(0), 5000)
           } catch {
-            // Keeper unreachable, fall back to process exit
             process.exit(0)
           }
         } else {
@@ -331,7 +328,6 @@ module.exports = function (
   // Proxy Keeper API requests: /skServer/keeper/* → KEEPER_URL/*
   const keeperProxyUrl = process.env.KEEPER_URL
   if (keeperProxyUrl) {
-    // Use SignalK's standard admin auth middleware (validates JWT + requires admin)
     app.securityStrategy.addAdminMiddleware(`${SERVERROUTESPREFIX}/keeper`)
 
     app.use(
