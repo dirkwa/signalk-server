@@ -128,6 +128,7 @@ const BackupRestore: React.FC = () => {
       folder: string
       info?: {
         installName?: string
+        installId?: string
         vesselName?: string
         hardware?: string
         lastUpdated?: string
@@ -1551,6 +1552,11 @@ const BackupRestore: React.FC = () => {
                         {install.info?.hardware && (
                           <span className="text-muted ms-2">
                             ({install.info.hardware})
+                          </span>
+                        )}
+                        {install.info?.installId && (
+                          <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
+                            #{install.info.installId}
                           </span>
                         )}
                         {install.info?.lastUpdated && (
