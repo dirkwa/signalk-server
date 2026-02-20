@@ -331,16 +331,8 @@ module.exports = function (
   // Proxy Keeper API requests: /skServer/keeper/* → KEEPER_URL/*
   const keeperProxyUrl = process.env.KEEPER_URL
   if (keeperProxyUrl) {
-    app.use(
-      `${SERVERROUTESPREFIX}/keeper`,
-      (req: Request, res: Response, next: NextFunction) => {
-        if (req.method !== 'GET' && !app.securityStrategy.allowConfigure(req)) {
-          res.status(401).json({ error: 'Admin access required' })
-          return
-        }
-        next()
-      }
-    )
+    // Use SignalK's standard admin auth middleware (validates JWT + requires admin)
+    app.securityStrategy.addAdminMiddleware(`${SERVERROUTESPREFIX}/keeper`)
 
     app.use(
       `${SERVERROUTESPREFIX}/keeper`,
