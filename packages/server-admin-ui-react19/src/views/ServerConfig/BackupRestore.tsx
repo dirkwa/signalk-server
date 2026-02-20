@@ -158,6 +158,16 @@ const BackupRestore: React.FC = () => {
   const [cloudRestoreError, setCloudRestoreError] = useState<string | null>(
     null
   )
+  const [cloudRestoreProgress, setCloudRestoreProgress] = useState<{
+    state: string
+    progress: number
+    statusMessage: string
+    error?: string
+  } | null>(null)
+  const [cloudRestoreActive, setCloudRestoreActive] = useState(false)
+  const cloudRestorePollRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  )
 
   // Backup exclusions state
   const [dataDirs, setDataDirs] = useState<
@@ -190,6 +200,15 @@ const BackupRestore: React.FC = () => {
       loadDataDirs()
     }
   }, [useKeeper])
+
+  // Cleanup cloud restore polling on unmount
+  useEffect(() => {
+    return () => {
+      if (cloudRestorePollRef.current) {
+        clearInterval(cloudRestorePollRef.current)
+      }
+    }
+  }, [])
 
   const loadPasswordStatus = async () => {
     try {
@@ -460,8 +479,66 @@ const BackupRestore: React.FC = () => {
     try {
       await cloudApi.restoreStart(selectedCloudSnapshot, cloudRestoreMode)
       setShowCloudRestore(false)
-      // The restore is now running - SignalK will restart
-      setRestoreState(RESTORE_RUNNING)
+      // Start polling for restore progress
+      setCloudRestoreActive(true)
+      setCloudRestoreProgress(null)
+
+      let consecutiveErrors = 0
+      cloudRestorePollRef.current = setInterval(async () => {
+        try {
+          const status = await cloudApi.restoreStatus()
+          if (!status) return
+          consecutiveErrors = 0
+
+          if (status.restore) {
+            setCloudRestoreProgress(status.restore)
+
+            // Terminal states: stop polling
+            if (
+              status.restore.state === 'completed' ||
+              status.restore.state === 'failed' ||
+              status.restore.state === 'rolled_back'
+            ) {
+              if (cloudRestorePollRef.current) {
+                clearInterval(cloudRestorePollRef.current)
+                cloudRestorePollRef.current = null
+              }
+              if (status.restore.state === 'completed') {
+                // Restore done — server is restarting, page will reload
+                setTimeout(() => window.location.reload(), 3000)
+              }
+              cloudApi.restoreReset().catch(() => {})
+            }
+          }
+        } catch {
+          consecutiveErrors++
+          if (consecutiveErrors >= 5) {
+            // Keeper is likely restarting with SignalK — wait and reload
+            if (cloudRestorePollRef.current) {
+              clearInterval(cloudRestorePollRef.current)
+              cloudRestorePollRef.current = null
+            }
+            setCloudRestoreProgress({
+              state: 'restarting',
+              progress: 75,
+              statusMessage: 'SignalK is restarting, page will reload...'
+            })
+            // Try reloading after a delay
+            setTimeout(() => window.location.reload(), 15000)
+          }
+        }
+      }, 2000)
+
+      // Safety: stop polling after 10 minutes
+      setTimeout(
+        () => {
+          if (cloudRestorePollRef.current) {
+            clearInterval(cloudRestorePollRef.current)
+            cloudRestorePollRef.current = null
+          }
+        },
+        10 * 60 * 1000
+      )
     } catch (err) {
       setCloudRestoreError(
         err instanceof Error ? err.message : 'Failed to start cloud restore'
@@ -1555,7 +1632,10 @@ const BackupRestore: React.FC = () => {
                           </span>
                         )}
                         {install.info?.installId && (
-                          <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
+                          <span
+                            className="text-muted ms-1"
+                            style={{ fontSize: '0.75rem' }}
+                          >
                             #{install.info.installId}
                           </span>
                         )}
@@ -1944,6 +2024,34 @@ const BackupRestore: React.FC = () => {
               {passwordLoading ? <Spinner size="sm" /> : 'Reset to Default'}
             </Button>
           </Modal.Footer>
+        </Modal>
+
+        {/* Cloud Restore Progress Modal */}
+        <Modal show={cloudRestoreActive} backdrop="static" keyboard={false}>
+          <Modal.Header>
+            <Modal.Title>Restoring from Cloud Backup</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <ProgressBar
+              animated={
+                cloudRestoreProgress?.state !== 'completed' &&
+                cloudRestoreProgress?.state !== 'failed'
+              }
+              variant={
+                cloudRestoreProgress?.state === 'failed' ? 'danger' : 'success'
+              }
+              now={cloudRestoreProgress?.progress || 5}
+              className="mb-3"
+            />
+            <p className="text-center mb-0">
+              {cloudRestoreProgress?.statusMessage || 'Starting restore...'}
+            </p>
+            {cloudRestoreProgress?.error && (
+              <Alert variant="danger" className="mt-2 mb-0">
+                {cloudRestoreProgress.error}
+              </Alert>
+            )}
+          </Modal.Body>
         </Modal>
       </div>
     )
