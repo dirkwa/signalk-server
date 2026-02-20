@@ -112,6 +112,7 @@ const BackupRestore: React.FC = () => {
   const [showCallbackFallback, setShowCallbackFallback] = useState(false)
   const authPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const authStartTimeRef = useRef<number>(0)
+  const authWindowRef = useRef<Window | null>(null)
 
   // Cloud restore state
   const [showCloudRestore, setShowCloudRestore] = useState(false)
@@ -285,9 +286,19 @@ const BackupRestore: React.FC = () => {
 
   const handleConnectGDrive = async () => {
     setCloudLoading(true)
+    // Pre-open popup synchronously to preserve user gesture (Safari blocks async popups)
+    authWindowRef.current = window.open(
+      'about:blank',
+      '_blank',
+      'width=600,height=700'
+    )
     try {
       const result = await cloudApi.gdrive.connect()
-      window.open(result.authUrl, '_blank', 'width=600,height=700')
+      if (authWindowRef.current && !authWindowRef.current.closed) {
+        authWindowRef.current.location.href = result.authUrl
+      } else {
+        window.open(result.authUrl, '_blank', 'width=600,height=700')
+      }
       // Start polling for auth completion
       setAuthPolling(true)
       setShowCallbackFallback(false)
@@ -318,6 +329,9 @@ const BackupRestore: React.FC = () => {
         }
       }, 2000)
     } catch (err) {
+      if (authWindowRef.current && !authWindowRef.current.closed) {
+        authWindowRef.current.close()
+      }
       setError(
         err instanceof Error ? err.message : 'Failed to connect Google Drive'
       )
