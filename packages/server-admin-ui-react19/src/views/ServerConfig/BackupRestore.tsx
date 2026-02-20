@@ -1588,7 +1588,11 @@ const BackupRestore: React.FC = () => {
                     type="password"
                     value={cloudRestorePassword}
                     onChange={(e) => setCloudRestorePassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleCloudRestorePrepare()
+                    }}
                     placeholder="Enter recovery password"
+                    autoFocus
                   />
                   <Form.Text className="text-muted">
                     If this is the same device and you haven&apos;t changed the
