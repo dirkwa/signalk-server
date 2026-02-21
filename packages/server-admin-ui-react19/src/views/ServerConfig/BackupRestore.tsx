@@ -379,12 +379,13 @@ const BackupRestore: React.FC = () => {
     try {
       await cloudApi.gdrive.disconnect()
       setDisconnectConfirm(false)
-      await loadCloudStatus()
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to disconnect Google Drive'
       )
     } finally {
+      // Always reload — the backend may have disconnected even if the proxy timed out
+      await loadCloudStatus()
       setCloudLoading(false)
     }
   }
