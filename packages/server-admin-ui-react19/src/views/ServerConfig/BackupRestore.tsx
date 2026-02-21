@@ -68,6 +68,10 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString()
 }
 
+const isLocalAccess = ['localhost', '127.0.0.1', '[::1]'].includes(
+  window.location.hostname
+)
+
 const BackupRestore: React.FC = () => {
   const restoreStatus = useStore(
     (state) => state.restoreStatus
@@ -1307,6 +1311,22 @@ const BackupRestore: React.FC = () => {
                   </div>
                 ) : (
                   <div>
+                    {!isLocalAccess && (
+                      <div
+                        className="text-muted mb-2"
+                        style={{ fontSize: '0.875rem' }}
+                      >
+                        For the best experience, open{' '}
+                        <a
+                          href="https://127.0.0.1"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          https://127.0.0.1
+                        </a>{' '}
+                        on the host machine to connect Google Drive.
+                      </div>
+                    )}
                     <Button
                       variant="primary"
                       size="sm"
