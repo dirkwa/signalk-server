@@ -71,6 +71,7 @@ function formatDate(dateStr: string): string {
 const isLocalAccess = ['localhost', '127.0.0.1', '[::1]'].includes(
   window.location.hostname
 )
+const isDesktopOS = /Macintosh|Windows/.test(navigator.userAgent)
 
 const BackupRestore: React.FC = () => {
   const restoreStatus = useStore(
@@ -290,23 +291,30 @@ const BackupRestore: React.FC = () => {
 
   const handleConnectGDrive = async () => {
     setCloudLoading(true)
-    // Pre-open popup synchronously to preserve user gesture (Safari blocks async popups)
+    // On desktop OS open a regular tab (address bar visible so user can copy
+    // the failed redirect URL). On Linux use a popup (redirect works directly).
     authWindowRef.current = window.open(
       'about:blank',
       '_blank',
-      'width=600,height=700'
+      isDesktopOS ? undefined : 'width=600,height=700'
     )
     try {
       const result = await cloudApi.gdrive.connect()
       if (authWindowRef.current && !authWindowRef.current.closed) {
         authWindowRef.current.location.href = result.authUrl
       } else {
-        window.open(result.authUrl, '_blank', 'width=600,height=700')
+        window.open(
+          result.authUrl,
+          '_blank',
+          isDesktopOS ? undefined : 'width=600,height=700'
+        )
       }
       // Start polling for auth completion
       setAuthPolling(true)
-      setShowCallbackFallback(false)
       setCallbackUrl('')
+      // On macOS/Windows the OAuth redirect to 127.0.0.1:53682 can't reach
+      // rclone inside the Podman VM, so show the callback fallback immediately
+      setShowCallbackFallback(isDesktopOS)
       authStartTimeRef.current = Date.now()
       if (authPollRef.current) clearInterval(authPollRef.current)
       authPollRef.current = setInterval(async () => {
@@ -325,7 +333,7 @@ const BackupRestore: React.FC = () => {
             setShowCallbackFallback(false)
             setError(state.error || 'Authorization failed')
           } else if (Date.now() - authStartTimeRef.current > 15000) {
-            // After 15s, show fallback for remote users
+            // After 15s, show fallback for remote users on Linux
             setShowCallbackFallback(true)
           }
         } catch {
@@ -1272,9 +1280,9 @@ const BackupRestore: React.FC = () => {
                         style={{ fontSize: '0.85rem' }}
                       >
                         <div className="text-muted mb-2">
-                          <strong>Remote access?</strong> If a page failed to
-                          load after signing in, copy the URL from that page and
-                          paste it here:
+                          After signing in with Google, the browser will show an
+                          error page. Copy the URL from the address bar of that
+                          page and paste it here:
                         </div>
                         <div className="d-flex gap-2">
                           <Form.Control
