@@ -1,7 +1,22 @@
-import React, { useEffect, Component, ReactNode, ComponentType } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  Component,
+  ReactNode,
+  ComponentType
+} from 'react'
+import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom'
 import Container from 'react-bootstrap/Container'
-import { useLoginStatus, type LoginStatus } from '../../store'
+import Alert from 'react-bootstrap/Alert'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation'
+import {
+  useLoginStatus,
+  usePlugins,
+  type LoginStatus,
+  type Plugin
+} from '../../store'
 
 import Header from '../../components/Header/Header'
 import Sidebar from '../../components/Sidebar/Sidebar'
@@ -111,10 +126,33 @@ function ProtectedRoute({
 
 export default function Full() {
   const location = useLocation()
+  const plugins = usePlugins()
+  const loginStatus = useLoginStatus()
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
     fetchAllData()
   }, [])
+
+  const unconfiguredCount = useMemo(() => {
+    return plugins.filter((plugin: Plugin) => {
+      const schema = (plugin as Record<string, unknown>).schema as
+        | { properties?: Record<string, unknown> }
+        | undefined
+      const data = (plugin as Record<string, unknown>).data as
+        | { configuration?: unknown }
+        | undefined
+      return (
+        schema?.properties &&
+        Object.keys(schema.properties).length > 0 &&
+        (data?.configuration === null || data?.configuration === undefined)
+      )
+    }).length
+  }, [plugins])
+
+  const isAdmin =
+    !loginStatus.authenticationRequired || loginStatus.userLevel === 'admin'
+  const showBanner = isAdmin && !bannerDismissed && unconfiguredCount > 0
 
   const suppressPadding =
     location.pathname.indexOf('/e/') === 0 ||
@@ -128,6 +166,23 @@ export default function Full() {
       <div className="app-body">
         <Sidebar location={location} />
         <main className="main">
+          {showBanner && (
+            <Alert
+              variant="warning"
+              dismissible
+              onClose={() => setBannerDismissed(true)}
+              className="mb-0 rounded-0 border-start-0 border-end-0"
+            >
+              <FontAwesomeIcon icon={faTriangleExclamation} className="me-2" />
+              {unconfiguredCount === 1
+                ? '1 plugin installed but not yet configured'
+                : `${unconfiguredCount} plugins installed but not yet configured`}
+              {' \u2014 '}
+              <Alert.Link as={Link} to="/serverConfiguration/plugins/-">
+                Open Plugin Config
+              </Alert.Link>
+            </Alert>
+          )}
           <Container fluid style={suppressPadding}>
             <Routes>
               <Route

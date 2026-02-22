@@ -108,7 +108,9 @@ export default function PluginConfigurationList() {
           case 'enabled':
             return !configurationRequired && plugin.data.enabled
           case 'disabled':
-            return configurationRequired || !plugin.data.enabled
+            return !configurationRequired && !plugin.data.enabled
+          case 'unconfigured':
+            return configurationRequired
           default:
             return true
         }
@@ -341,6 +343,7 @@ export default function PluginConfigurationList() {
                   <option value="all">All Plugins</option>
                   <option value="enabled">Enabled</option>
                   <option value="disabled">Disabled</option>
+                  <option value="unconfigured">Unconfigured</option>
                 </Form.Select>
               </Col>
             </Form.Group>
@@ -390,7 +393,10 @@ export default function PluginConfigurationList() {
                   if (wasmDisabledForPlugin) {
                     badgeClass = 'text-bg-danger'
                     badgeText = 'WASM disabled'
-                  } else if (plugin.data.enabled && !configurationRequired) {
+                  } else if (configurationRequired) {
+                    badgeClass = 'text-bg-danger'
+                    badgeText = 'Unconfigured'
+                  } else if (plugin.data.enabled) {
                     badgeClass = 'text-bg-success'
                     badgeText = 'Enabled'
                   }
