@@ -639,7 +639,7 @@ const ServerUpdate: React.FC = () => {
     return (
       <div className="animated fadeIn">
         <Card>
-          <Card.Header>Waiting for App store data to load...</Card.Header>
+          <CardHeader>Waiting for App store data to load...</CardHeader>
         </Card>
       </div>
     )
@@ -660,16 +660,16 @@ const ServerUpdate: React.FC = () => {
     <div className="animated fadeIn">
       {!appStore.canUpdateServer && (
         <Card className="border-warning">
-          <Card.Header>Server Update</Card.Header>
-          <Card.Body>
+          <CardHeader>Server Update</CardHeader>
+          <CardBody>
             This installation is not updatable from the admin user interface.
-          </Card.Body>
+          </CardBody>
         </Card>
       )}
       {appStore.isInDocker && (
         <Card className="border-warning">
-          <Card.Header>Running as a Docker container</Card.Header>
-          <Card.Body>
+          <CardHeader>Running as a Docker container</CardHeader>
+          <CardBody>
             <p>
               The server is running as a Docker container. You need to pull a
               new server version from Container registry to update.
@@ -688,7 +688,7 @@ const ServerUpdate: React.FC = () => {
               </a>{' '}
               .
             </p>
-          </Card.Body>
+          </CardBody>
         </Card>
       )}
       {appStore.canUpdateServer &&
@@ -696,10 +696,10 @@ const ServerUpdate: React.FC = () => {
         !isInstalling &&
         !isInstalled && (
           <Card>
-            <Card.Header>
+            <CardHeader>
               Server version {appStore.serverUpdate} is available
-            </Card.Header>
-            <Card.Body>
+            </CardHeader>
+            <CardBody>
               <a href="https://github.com/SignalK/signalk-server/releases/">
                 Release Notes for latest releases.
               </a>
@@ -708,38 +708,38 @@ const ServerUpdate: React.FC = () => {
               <Button
                 className="btn btn-danger"
                 size="sm"
-                variant="primary"
+                color="primary"
                 onClick={handleUpdate}
               >
                 Update
               </Button>
-            </Card.Body>
+            </CardBody>
           </Card>
         )}
       {isInstalling && (
         <Card>
-          <Card.Header>Server Update</Card.Header>
-          <Card.Body>The update is being installed</Card.Body>
+          <CardHeader>Server Update</CardHeader>
+          <CardBody>The update is being installed</CardBody>
         </Card>
       )}
       {isInstalled && (
         <Card>
-          <Card.Header>Server Update</Card.Header>
-          <Card.Body>
+          <CardHeader>Server Update</CardHeader>
+          <CardBody>
             The update has been installed, please restart the Signal K server.
-          </Card.Body>
+          </CardBody>
         </Card>
       )}
       {appStore.canUpdateServer && !appStore.serverUpdate && (
         <Card>
-          <Card.Header>Server Update</Card.Header>
-          <Card.Body>Your server is up to date.</Card.Body>
+          <CardHeader>Server Update</CardHeader>
+          <CardBody>Your server is up to date.</CardBody>
         </Card>
       )}
 
       <Card>
-        <Card.Header>Sponsoring</Card.Header>
-        <Card.Body>
+        <CardHeader>Sponsoring</CardHeader>
+        <CardBody>
           <p>
             If you find Signal K valuable to you consider sponsoring our work on
             developing it further.
@@ -757,7 +757,7 @@ const ServerUpdate: React.FC = () => {
             </a>{' '}
             for details.
           </p>
-        </Card.Body>
+        </CardBody>
       </Card>
     </div>
   )
