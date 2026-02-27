@@ -8,7 +8,17 @@ import {
 } from 'react'
 import parse from 'html-react-parser'
 import { useLogEntries, useRuntimeConfig } from '../../store'
-import { Card, Form, Col } from 'reactstrap'
+import {
+  Card,
+  CardBody,
+  CardHeader,
+  Input,
+  Form,
+  Col,
+  Label,
+  FormGroup,
+  FormText
+} from 'reactstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faAlignJustify } from '@fortawesome/free-solid-svg-icons/faAlignJustify'
 import LogFiles from './Logging'
@@ -135,11 +145,11 @@ function WebSocketLogs() {
   return (
     <div className="animated fadeIn">
       <Card>
-        <Card.Header>
+        <CardHeader>
           <FontAwesomeIcon icon={faAlignJustify} /> <strong>Server Log</strong>
-        </Card.Header>
+        </CardHeader>
 
-        <Card.Body>
+        <CardBody>
           <Form
             action=""
             method="post"
@@ -147,7 +157,7 @@ function WebSocketLogs() {
             className="form-horizontal"
             onSubmit={handleSubmit}
           >
-            <Form.Group as={Row}>
+            <FormGroup row>
               <Col>
                 <Creatable
                   isMulti
@@ -172,20 +182,17 @@ function WebSocketLogs() {
                     doHandleDebug(value)
                   }}
                 />
-                <Form.Text
-                  className="text-muted"
-                  style={{ marginBottom: '15px' }}
-                >
+                <FormText color="muted" style={{ marginBottom: '15px' }}>
                   Select the appropriate debug keys to activate debug logging
                   for various components on the server.
-                </Form.Text>
+                </FormText>
               </Col>
-            </Form.Group>
-            <Form.Group as={Row}>
+            </FormGroup>
+            <FormGroup row>
               <Col xs="6" md="6">
                 Persist debug settings over server restarts{' '}
-                <Form.Label className="switch switch-text switch-primary">
-                  <Form.Control
+                <Label className="switch switch-text switch-primary">
+                  <Input
                     type="checkbox"
                     id="Enabled"
                     name="debug"
@@ -195,12 +202,12 @@ function WebSocketLogs() {
                   />
                   <span className="switch-label" data-on="Yes" data-off="No" />
                   <span className="switch-handle" />
-                </Form.Label>
+                </Label>
               </Col>
               <Col xs="6" md="6">
                 Pause the log window{' '}
-                <Form.Label className="switch switch-text switch-primary">
-                  <Form.Control
+                <Label className="switch switch-text switch-primary">
+                  <Input
                     type="checkbox"
                     id="Pause"
                     name="pause"
@@ -210,12 +217,12 @@ function WebSocketLogs() {
                   />
                   <span className="switch-label" data-on="Yes" data-off="No" />
                   <span className="switch-handle" />
-                </Form.Label>
+                </Label>
               </Col>
-            </Form.Group>
+            </FormGroup>
             <LogList value={log} />
           </Form>
-        </Card.Body>
+        </CardBody>
       </Card>
       <LogFiles />
     </div>
