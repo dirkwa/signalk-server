@@ -7,13 +7,13 @@ import {
   CardBody,
   Button,
   ButtonGroup,
-  Spinner,
   Alert,
   Input,
   Row,
   Col
 } from 'reactstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
 import { faAlignJustify } from '@fortawesome/free-solid-svg-icons/faAlignJustify'
 import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay'
 import { faPause } from '@fortawesome/free-solid-svg-icons/faPause'
@@ -286,7 +286,7 @@ export default function ContainerLogs() {
     switch (copyStatus) {
       case 'copying':
         return {
-          icon: <Spinner size="sm" />,
+          icon: <FontAwesomeIcon icon={faCircleNotch} spin />,
           text: 'Copying...',
           color: 'secondary' as const
         }
@@ -351,7 +351,7 @@ export default function ContainerLogs() {
       <Card>
         <CardBody>
           <div className="d-flex justify-content-center">
-            <Spinner />
+            <FontAwesomeIcon icon={faCircleNotch} spin size="2x" />
           </div>
         </CardBody>
       </Card>
