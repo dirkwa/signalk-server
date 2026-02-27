@@ -1,23 +1,14 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-// react-bootstrap (used by upstream/standard UI sections)
+import Alert from 'react-bootstrap/Alert'
+import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Card from 'react-bootstrap/Card'
-// reactstrap (used by Keeper UI sections)
-import {
-  CardHeader,
-  CardBody,
-  CardFooter,
-  Table,
-  Badge,
-  Progress,
-  Alert,
-  Row,
-  Col,
-  FormGroup,
-  Input,
-  Label
-} from 'reactstrap'
+import Col from 'react-bootstrap/Col'
+import Form from 'react-bootstrap/Form'
+import ProgressBar from 'react-bootstrap/ProgressBar'
+import Row from 'react-bootstrap/Row'
+import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
 import { faDownload } from '@fortawesome/free-solid-svg-icons/faDownload'
@@ -292,7 +283,7 @@ const ServerUpdate: React.FC = () => {
 
   // Keeper mode UI
   if (useKeeper && shouldUseKeeper()) {
-    const getStatusColor = (state: string) => {
+    const getStatusVariant = (state: string) => {
       switch (state) {
         case 'complete':
           return 'success'
@@ -338,21 +329,21 @@ const ServerUpdate: React.FC = () => {
     const getChannelBadge = (version: ImageVersion) => {
       if (version.channel === 'beta') {
         return (
-          <Badge color="warning" className="ms-1">
+          <Badge bg="warning" className="ms-1">
             beta
           </Badge>
         )
       }
       if (version.channel === 'master') {
         return (
-          <Badge color="danger" className="ms-1">
+          <Badge bg="danger" className="ms-1">
             dev
           </Badge>
         )
       }
       if (version.tag === latestStableTag) {
         return (
-          <Badge color="info" className="ms-1">
+          <Badge bg="info" className="ms-1">
             latest
           </Badge>
         )
@@ -366,7 +357,7 @@ const ServerUpdate: React.FC = () => {
           {version.tag}
           {getChannelBadge(version)}
           {isCurrent && (
-            <Badge color="success" className="ms-2">
+            <Badge bg="success" className="ms-2">
               Current
             </Badge>
           )}
@@ -375,16 +366,16 @@ const ServerUpdate: React.FC = () => {
         <td>{version.size ? formatBytes(version.size) : ''}</td>
         <td>
           {version.isLocal ? (
-            <Badge color="primary">Local</Badge>
+            <Badge bg="primary">Local</Badge>
           ) : (
-            <Badge color="secondary">Remote</Badge>
+            <Badge bg="secondary">Remote</Badge>
           )}
         </td>
         <td>
           {!version.isLocal && (
             <Button
               size="sm"
-              color="info"
+              variant="info"
               className="me-1"
               onClick={() => handlePullVersion(version.tag)}
               disabled={isPulling !== null}
@@ -400,7 +391,7 @@ const ServerUpdate: React.FC = () => {
           {version.isLocal && !isCurrent && (
             <Button
               size="sm"
-              color="warning"
+              variant="warning"
               onClick={() => handleSwitchVersion(version.tag)}
               disabled={
                 updateStatus?.state !== 'idle' &&
@@ -423,7 +414,7 @@ const ServerUpdate: React.FC = () => {
     return (
       <div className="animated fadeIn">
         {error && (
-          <Alert color="danger" toggle={() => setError(null)}>
+          <Alert variant="danger" dismissible onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
@@ -431,84 +422,83 @@ const ServerUpdate: React.FC = () => {
         {/* Current Status Card */}
         {versions && (
           <Card className="mb-4">
-            <CardHeader>Current Version</CardHeader>
-            <CardBody>
+            <Card.Header>Current Version</Card.Header>
+            <Card.Body>
               <Row>
                 <Col md={4}>
-                  <FormGroup>
-                    <Label>Version</Label>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Version</Form.Label>
                     <div className="h5">{versions.current.tag}</div>
-                  </FormGroup>
+                  </Form.Group>
                 </Col>
                 <Col md={4}>
-                  <FormGroup>
-                    <Label>Image Created</Label>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Image Created</Form.Label>
                     <div>{formatDate(versions.current.created)}</div>
-                  </FormGroup>
+                  </Form.Group>
                 </Col>
                 <Col md={4}>
-                  <FormGroup>
-                    <Label>Digest</Label>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Digest</Form.Label>
                     <div className="text-muted small">
                       {versions.current.digest.slice(0, 20)}...
                     </div>
-                  </FormGroup>
+                  </Form.Group>
                 </Col>
               </Row>
-            </CardBody>
+            </Card.Body>
           </Card>
         )}
 
         {/* Update Progress Card */}
         {updateStatus && updateStatus.state !== 'idle' && (
           <Card className="mb-4">
-            <CardHeader>
+            <Card.Header>
               Update Progress
               <Badge
-                color={getStatusColor(updateStatus.state)}
+                bg={getStatusVariant(updateStatus.state)}
                 className="float-end"
               >
                 {updateStatus.state}
               </Badge>
-            </CardHeader>
-            <CardBody>
+            </Card.Header>
+            <Card.Body>
               <p>{getStatusText(updateStatus)}</p>
               {updateStatus.progress !== undefined &&
                 updateStatus.progress > 0 && (
-                  <Progress
+                  <ProgressBar
                     animated={
                       updateStatus.state !== 'complete' &&
                       updateStatus.state !== 'failed'
                     }
-                    color={getStatusColor(updateStatus.state)}
-                    value={updateStatus.progress}
-                  >
-                    {updateStatus.progress}%
-                  </Progress>
+                    variant={getStatusVariant(updateStatus.state)}
+                    now={updateStatus.progress}
+                    label={`${updateStatus.progress}%`}
+                  />
                 )}
               {updateStatus.currentStep && updateStatus.totalSteps && (
                 <small className="text-muted">
                   Step {updateStatus.currentStep} of {updateStatus.totalSteps}
                 </small>
               )}
-            </CardBody>
+            </Card.Body>
             {updateStatus.state === 'failed' && (
-              <CardFooter>
-                <Button color="warning" onClick={handleRollback}>
+              <Card.Footer>
+                <Button variant="warning" onClick={handleRollback}>
                   <FontAwesomeIcon icon={faUndo} /> Rollback
                 </Button>
-              </CardFooter>
+              </Card.Footer>
             )}
           </Card>
         )}
 
         {/* Available Versions Card */}
         <Card className="mb-4">
-          <CardHeader>
+          <Card.Header>
             Available Versions
             <Button
               size="sm"
-              color="secondary"
+              variant="secondary"
               className="float-end"
               onClick={loadVersions}
               disabled={isLoading}
@@ -520,36 +510,30 @@ const ServerUpdate: React.FC = () => {
               )}{' '}
               Refresh
             </Button>
-          </CardHeader>
-          <CardBody>
+          </Card.Header>
+          <Card.Body>
             {versionSettings && (
               <div className="mb-3 d-flex gap-4">
-                <FormGroup check inline>
-                  <Input
-                    type="checkbox"
-                    id="showBeta"
-                    checked={versionSettings.showBeta}
-                    onChange={(e) =>
-                      handleToggleSetting('showBeta', e.target.checked)
-                    }
-                  />
-                  <Label check for="showBeta">
-                    Show beta versions
-                  </Label>
-                </FormGroup>
-                <FormGroup check inline>
-                  <Input
-                    type="checkbox"
-                    id="showMaster"
-                    checked={versionSettings.showMaster}
-                    onChange={(e) =>
-                      handleToggleSetting('showMaster', e.target.checked)
-                    }
-                  />
-                  <Label check for="showMaster">
-                    Show development builds
-                  </Label>
-                </FormGroup>
+                <Form.Check
+                  inline
+                  type="checkbox"
+                  id="showBeta"
+                  label="Show beta versions"
+                  checked={versionSettings.showBeta}
+                  onChange={(e) =>
+                    handleToggleSetting('showBeta', e.target.checked)
+                  }
+                />
+                <Form.Check
+                  inline
+                  type="checkbox"
+                  id="showMaster"
+                  label="Show development builds"
+                  checked={versionSettings.showMaster}
+                  onChange={(e) =>
+                    handleToggleSetting('showMaster', e.target.checked)
+                  }
+                />
               </div>
             )}
             {isLoading ? (
@@ -590,11 +574,11 @@ const ServerUpdate: React.FC = () => {
             ) : (
               <p className="text-muted">Unable to load versions</p>
             )}
-          </CardBody>
+          </Card.Body>
           {versions && versions.available.length > 0 && (
-            <CardFooter>
+            <Card.Footer>
               <Button
-                color="primary"
+                variant="primary"
                 onClick={() => handleStartUpdate()}
                 disabled={
                   updateStatus?.state !== 'idle' &&
@@ -603,14 +587,14 @@ const ServerUpdate: React.FC = () => {
               >
                 <FontAwesomeIcon icon={faDownload} /> Update to Latest
               </Button>
-            </CardFooter>
+            </Card.Footer>
           )}
         </Card>
 
         {/* Sponsoring Card */}
         <Card>
-          <CardHeader>Sponsoring</CardHeader>
-          <CardBody>
+          <Card.Header>Sponsoring</Card.Header>
+          <Card.Body>
             <p>
               If you find Signal K valuable to you consider sponsoring our work
               on developing it further.
@@ -630,7 +614,7 @@ const ServerUpdate: React.FC = () => {
               </a>{' '}
               for details.
             </p>
-          </CardBody>
+          </Card.Body>
         </Card>
       </div>
     )
