@@ -24,8 +24,7 @@ import {
   Modal,
   ModalHeader,
   ModalBody,
-  ModalFooter,
-  Spinner
+  ModalFooter
 } from 'reactstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
@@ -796,7 +795,7 @@ const BackupRestore: React.FC = () => {
               onClick={handleChangePassword}
               disabled={!passwordsMatch || passwordLoading}
             >
-              {passwordLoading ? <Spinner size="sm" /> : 'Change Password'}
+              {passwordLoading ? <FontAwesomeIcon icon={faCircleNotch} spin /> : 'Change Password'}
             </Button>
           </ModalFooter>
         </Modal>
@@ -821,7 +820,7 @@ const BackupRestore: React.FC = () => {
               onClick={handleResetPassword}
               disabled={passwordLoading}
             >
-              {passwordLoading ? <Spinner size="sm" /> : 'Reset to Default'}
+              {passwordLoading ? <FontAwesomeIcon icon={faCircleNotch} spin /> : 'Reset to Default'}
             </Button>
           </ModalFooter>
         </Modal>
