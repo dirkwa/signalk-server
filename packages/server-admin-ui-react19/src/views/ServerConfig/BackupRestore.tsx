@@ -1,34 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react'
-// react-bootstrap (used by upstream/standard UI sections)
+import Alert from 'react-bootstrap/Alert'
+import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Card from 'react-bootstrap/Card'
 import Col from 'react-bootstrap/Col'
 import Form from 'react-bootstrap/Form'
-import Row from 'react-bootstrap/Row'
+import Modal from 'react-bootstrap/Modal'
+import Nav from 'react-bootstrap/Nav'
 import ProgressBar from 'react-bootstrap/ProgressBar'
-// reactstrap (used by Keeper UI sections)
-import {
-  CardHeader,
-  CardBody,
-  CardFooter,
-  Input,
-  FormGroup,
-  FormText,
-  Progress,
-  Table,
-  Badge,
-  Alert,
-  Nav,
-  NavItem,
-  NavLink,
-  TabContent,
-  TabPane,
-  Modal,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Label
-} from 'reactstrap'
+import Row from 'react-bootstrap/Row'
+import Tab from 'react-bootstrap/Tab'
+import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
 import { faCircleDot } from '@fortawesome/free-regular-svg-icons/faCircleDot'
@@ -352,7 +334,7 @@ const BackupRestore: React.FC = () => {
 
   const fieldColWidthMd = 10
 
-  const getBackupTypeColor = (type: string): string => {
+  const getBackupTypeVariant = (type: string): string => {
     switch (type) {
       case 'manual':
         return 'primary'
@@ -390,7 +372,7 @@ const BackupRestore: React.FC = () => {
               <td>{formatDate(backup.created)}</td>
               {showType && (
                 <td>
-                  <Badge color={getBackupTypeColor(backup.type)}>
+                  <Badge bg={getBackupTypeVariant(backup.type)}>
                     {backup.type}
                   </Badge>
                 </td>
@@ -400,7 +382,7 @@ const BackupRestore: React.FC = () => {
               <td>
                 <Button
                   size="sm"
-                  color="primary"
+                  variant="primary"
                   className="me-1"
                   onClick={() => downloadBackup(backup.id)}
                   title="Download"
@@ -409,7 +391,7 @@ const BackupRestore: React.FC = () => {
                 </Button>
                 <Button
                   size="sm"
-                  color="warning"
+                  variant="warning"
                   className="me-1"
                   onClick={() => restoreKeeperBackup(backup.id)}
                   title="Restore"
@@ -418,7 +400,7 @@ const BackupRestore: React.FC = () => {
                 </Button>
                 <Button
                   size="sm"
-                  color="danger"
+                  variant="danger"
                   onClick={() => deleteBackup(backup.id)}
                   title="Delete"
                 >
@@ -457,21 +439,22 @@ const BackupRestore: React.FC = () => {
     return (
       <div>
         {error && (
-          <Alert color="danger" toggle={() => setError(null)}>
+          <Alert variant="danger" dismissible onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
 
         {/* Create Backup Card */}
         <Card className="mb-4">
-          <CardHeader>Create Backup</CardHeader>
-          <CardBody>
+          <Card.Header>Create Backup</Card.Header>
+          <Card.Body>
             <Form>
-              <FormGroup row>
-                <Label sm={2}>Type</Label>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={2}>
+                  Type
+                </Form.Label>
                 <Col sm={10}>
-                  <Input
-                    type="select"
+                  <Form.Select
                     value={backupType}
                     onChange={(e) =>
                       setBackupType(
@@ -482,25 +465,27 @@ const BackupRestore: React.FC = () => {
                     <option value="full">Full (settings + plugins)</option>
                     <option value="config">Configuration only</option>
                     <option value="plugins">Plugins only</option>
-                  </Input>
+                  </Form.Select>
                 </Col>
-              </FormGroup>
-              <FormGroup row>
-                <Label sm={2}>Description</Label>
+              </Form.Group>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={2}>
+                  Description
+                </Form.Label>
                 <Col sm={10}>
-                  <Input
+                  <Form.Control
                     type="text"
                     placeholder="Optional description"
                     value={backupDescription}
                     onChange={(e) => setBackupDescription(e.target.value)}
                   />
                 </Col>
-              </FormGroup>
+              </Form.Group>
             </Form>
-          </CardBody>
-          <CardFooter>
+          </Card.Body>
+          <Card.Footer>
             <Button
-              color="primary"
+              variant="primary"
               onClick={createKeeperBackup}
               disabled={isCreatingBackup}
             >
@@ -511,51 +496,51 @@ const BackupRestore: React.FC = () => {
               )}{' '}
               Create Backup
             </Button>
-          </CardFooter>
+          </Card.Footer>
         </Card>
 
         {/* Backup Scheduler Card */}
         {schedulerStatus && (
           <Card className="mb-4">
-            <CardHeader>
+            <Card.Header>
               <FontAwesomeIcon icon={faClock} /> Automatic Backups
-            </CardHeader>
-            <CardBody>
+            </Card.Header>
+            <Card.Body>
               <Row>
                 <Col sm={6}>
-                  <FormGroup>
-                    <Label>Status</Label>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Status</Form.Label>
                     <div>
                       <Badge
-                        color={schedulerStatus.enabled ? 'success' : 'danger'}
+                        bg={schedulerStatus.enabled ? 'success' : 'danger'}
                       >
                         {schedulerStatus.enabled ? 'Enabled' : 'Disabled'}
                       </Badge>
                     </div>
-                  </FormGroup>
+                  </Form.Group>
                 </Col>
                 {schedulerStatus.enabled && (
                   <>
                     <Col sm={6}>
-                      <FormGroup>
-                        <Label>Next Run</Label>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Next Run</Form.Label>
                         <div>
                           {schedulerStatus.nextRun
                             ? formatDate(schedulerStatus.nextRun)
                             : 'Not scheduled'}
                         </div>
-                      </FormGroup>
+                      </Form.Group>
                     </Col>
                     <Col sm={6}>
-                      <FormGroup>
-                        <Label>Last Run</Label>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Last Run</Form.Label>
                         <div>
                           {schedulerStatus.lastRun
                             ? formatDate(schedulerStatus.lastRun)
                             : 'Never'}
                           {schedulerStatus.lastResult && (
                             <Badge
-                              color={
+                              bg={
                                 schedulerStatus.lastResult === 'success'
                                   ? 'success'
                                   : 'danger'
@@ -566,27 +551,27 @@ const BackupRestore: React.FC = () => {
                             </Badge>
                           )}
                         </div>
-                      </FormGroup>
+                      </Form.Group>
                     </Col>
                   </>
                 )}
               </Row>
-            </CardBody>
-            <CardFooter>
+            </Card.Body>
+            <Card.Footer>
               <Button
-                color={schedulerStatus.enabled ? 'warning' : 'success'}
+                variant={schedulerStatus.enabled ? 'warning' : 'success'}
                 onClick={toggleScheduler}
               >
                 {schedulerStatus.enabled ? 'Disable' : 'Enable'} Automatic
                 Backups
               </Button>
-            </CardFooter>
+            </Card.Footer>
           </Card>
         )}
 
         {/* Backup List Card */}
         <Card className="mb-4">
-          <CardHeader>
+          <Card.Header>
             Available Backups
             {backupList && (
               <span className="float-end text-muted">
@@ -594,15 +579,18 @@ const BackupRestore: React.FC = () => {
                 {formatBytes(backupList.availableSpace)}
               </span>
             )}
-          </CardHeader>
-          <CardBody>
+          </Card.Header>
+          <Card.Body>
             {isLoading ? (
               <div className="text-center">
                 <FontAwesomeIcon icon={faCircleNotch} spin size="2x" />
               </div>
             ) : backupList ? (
-              <>
-                <Nav tabs className="mb-3">
+              <Tab.Container
+                activeKey={activeBackupTab}
+                onSelect={(k) => setActiveBackupTab(k || 'all')}
+              >
+                <Nav variant="tabs" className="mb-3">
                   {[
                     { id: 'all', label: 'All' },
                     { id: 'manual', label: 'Manual' },
@@ -610,28 +598,24 @@ const BackupRestore: React.FC = () => {
                     { id: 'config', label: 'Config' },
                     { id: 'plugins', label: 'Plugins' }
                   ].map((tab) => (
-                    <NavItem key={tab.id}>
-                      <NavLink
-                        className={activeBackupTab === tab.id ? 'active' : ''}
-                        onClick={() => setActiveBackupTab(tab.id)}
-                        style={{ cursor: 'pointer' }}
-                      >
+                    <Nav.Item key={tab.id}>
+                      <Nav.Link eventKey={tab.id}>
                         {tab.label}
                         {getBackupCount(tab.id) > 0 && (
                           <Badge
-                            color={getBackupTypeColor(tab.id)}
+                            bg={getBackupTypeVariant(tab.id)}
                             pill
                             className="ms-2"
                           >
                             {getBackupCount(tab.id)}
                           </Badge>
                         )}
-                      </NavLink>
-                    </NavItem>
+                      </Nav.Link>
+                    </Nav.Item>
                   ))}
                 </Nav>
-                <TabContent activeTab={activeBackupTab}>
-                  <TabPane tabId="all">
+                <Tab.Content>
+                  <Tab.Pane eventKey="all">
                     {getAllBackups().length > 0 ? (
                       renderBackupTable(getAllBackups(), true)
                     ) : (
@@ -639,65 +623,65 @@ const BackupRestore: React.FC = () => {
                         No backups available
                       </p>
                     )}
-                  </TabPane>
-                  <TabPane tabId="manual">
+                  </Tab.Pane>
+                  <Tab.Pane eventKey="manual">
                     {renderBackupTable(backupList.backups.manual)}
-                  </TabPane>
-                  <TabPane tabId="full">
+                  </Tab.Pane>
+                  <Tab.Pane eventKey="full">
                     {renderBackupTable(backupList.backups.full)}
-                  </TabPane>
-                  <TabPane tabId="config">
+                  </Tab.Pane>
+                  <Tab.Pane eventKey="config">
                     {renderBackupTable(backupList.backups.config)}
-                  </TabPane>
-                  <TabPane tabId="plugins">
+                  </Tab.Pane>
+                  <Tab.Pane eventKey="plugins">
                     {renderBackupTable(backupList.backups.plugins)}
-                  </TabPane>
-                </TabContent>
-              </>
+                  </Tab.Pane>
+                </Tab.Content>
+              </Tab.Container>
             ) : (
               <p className="text-muted">Unable to load backups</p>
             )}
-          </CardBody>
-          <CardFooter>
+          </Card.Body>
+          <Card.Footer>
             <Button
-              color="secondary"
+              variant="secondary"
               onClick={loadBackups}
               disabled={isLoading}
             >
               Refresh
             </Button>
-          </CardFooter>
+          </Card.Footer>
         </Card>
 
         {/* Upload Restore File Card */}
         <Card className="mb-4">
-          <CardHeader>Restore from File</CardHeader>
-          <CardBody>
-            <FormText color="muted">
+          <Card.Header>Restore from File</Card.Header>
+          <Card.Body>
+            <Form.Text className="text-muted">
               Upload a backup file from another installation to restore
               settings.
-            </FormText>
+            </Form.Text>
             <br />
-            <FormGroup row>
+            <Form.Group as={Row} className="mb-3">
               <Col xs="12" md={fieldColWidthMd}>
-                <Input
+                <Form.Control
                   type="file"
                   name="backupFile"
                   onChange={fileChanged}
                   accept=".zip,.tar.gz,.tgz"
                 />
               </Col>
-            </FormGroup>
+            </Form.Group>
             {restoreState === RESTORE_RUNNING && (
               <div>
-                <FormText>Restoring... Please wait.</FormText>
-                <Progress animated color="success" value={100} />
+                <Form.Text>Restoring... Please wait.</Form.Text>
+                <ProgressBar animated variant="success" now={100} />
               </div>
             )}
-          </CardBody>
-          <CardFooter>
+          </Card.Body>
+          <Card.Footer>
             <Button
-              color="danger"
+              variant="danger"
               onClick={validate}
               disabled={
                 restoreFile === null || restoreState === RESTORE_RUNNING
@@ -710,91 +694,93 @@ const BackupRestore: React.FC = () => {
               )}{' '}
               Upload and Restore
             </Button>
-          </CardFooter>
+          </Card.Footer>
         </Card>
 
         {/* Backup Password Card */}
         <Card>
-          <CardHeader>
+          <Card.Header>
             <FontAwesomeIcon icon={faLock} /> Backup Password
-          </CardHeader>
-          <CardBody>
+          </Card.Header>
+          <Card.Body>
             <Row className="align-items-center">
               <Col>
                 <p className="mb-1">
                   <strong>Status:</strong>{' '}
-                  <Badge color={hasCustomPassword ? 'success' : 'secondary'}>
+                  <Badge bg={hasCustomPassword ? 'success' : 'secondary'}>
                     {hasCustomPassword ? 'Custom password' : 'Default password'}
                   </Badge>
                 </p>
-                <FormText color="muted">
+                <Form.Text className="text-muted">
                   All backups are password-protected. A default password is used
                   unless you set a custom one.
-                </FormText>
+                </Form.Text>
               </Col>
             </Row>
-          </CardBody>
-          <CardFooter>
+          </Card.Body>
+          <Card.Footer>
             <Button
-              color="primary"
+              variant="primary"
               className="me-2"
               onClick={() => setPasswordModalOpen(true)}
             >
               Change Password
             </Button>
             {hasCustomPassword && (
-              <Button color="warning" onClick={() => setResetModalOpen(true)}>
+              <Button variant="warning" onClick={() => setResetModalOpen(true)}>
                 Reset to Default
               </Button>
             )}
-          </CardFooter>
+          </Card.Footer>
         </Card>
 
         {/* Change Password Modal */}
         <Modal
-          isOpen={passwordModalOpen}
-          toggle={() => setPasswordModalOpen(false)}
+          show={passwordModalOpen}
+          onHide={() => setPasswordModalOpen(false)}
         >
-          <ModalHeader toggle={() => setPasswordModalOpen(false)}>
-            Change Backup Password
-          </ModalHeader>
-          <ModalBody>
-            <Alert color="warning">
+          <Modal.Header closeButton>
+            <Modal.Title>Change Backup Password</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Alert variant="warning">
               <strong>Warning:</strong> Changing the password will re-create the
               backup repository. Existing backups will be lost.
             </Alert>
-            <FormGroup>
-              <Label for="new-password">New Password</Label>
-              <Input
+            <Form.Group className="mb-3">
+              <Form.Label htmlFor="new-password">New Password</Form.Label>
+              <Form.Control
                 type="password"
                 id="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Minimum 8 characters"
               />
-            </FormGroup>
-            <FormGroup>
-              <Label for="confirm-password">Confirm Password</Label>
-              <Input
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label htmlFor="confirm-password">
+                Confirm Password
+              </Form.Label>
+              <Form.Control
                 type="password"
                 id="confirm-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter password"
-                valid={confirmPassword.length > 0 && passwordsMatch}
-                invalid={confirmPassword.length > 0 && !passwordsMatch}
+                isValid={confirmPassword.length > 0 && passwordsMatch}
+                isInvalid={confirmPassword.length > 0 && !passwordsMatch}
               />
-            </FormGroup>
-          </ModalBody>
-          <ModalFooter>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
             <Button
-              color="secondary"
+              variant="secondary"
               onClick={() => setPasswordModalOpen(false)}
             >
               Cancel
             </Button>
             <Button
-              color="danger"
+              variant="danger"
               onClick={handleChangePassword}
               disabled={!passwordsMatch || passwordLoading}
             >
@@ -804,26 +790,29 @@ const BackupRestore: React.FC = () => {
                 'Change Password'
               )}
             </Button>
-          </ModalFooter>
+          </Modal.Footer>
         </Modal>
 
         {/* Reset Password Modal */}
-        <Modal isOpen={resetModalOpen} toggle={() => setResetModalOpen(false)}>
-          <ModalHeader toggle={() => setResetModalOpen(false)}>
-            Reset to Default Password
-          </ModalHeader>
-          <ModalBody>
-            <Alert color="warning">
+        <Modal show={resetModalOpen} onHide={() => setResetModalOpen(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Reset to Default Password</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Alert variant="warning">
               This will reset to the default password and re-create the backup
               repository. Existing backups will be lost.
             </Alert>
-          </ModalBody>
-          <ModalFooter>
-            <Button color="secondary" onClick={() => setResetModalOpen(false)}>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setResetModalOpen(false)}
+            >
               Cancel
             </Button>
             <Button
-              color="warning"
+              variant="warning"
               onClick={handleResetPassword}
               disabled={passwordLoading}
             >
@@ -833,7 +822,7 @@ const BackupRestore: React.FC = () => {
                 'Reset to Default'
               )}
             </Button>
-          </ModalFooter>
+          </Modal.Footer>
         </Modal>
       </div>
     )
