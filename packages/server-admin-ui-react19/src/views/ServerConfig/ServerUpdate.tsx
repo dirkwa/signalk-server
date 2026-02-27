@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+// react-bootstrap (used by upstream/standard UI sections)
+import Button from 'react-bootstrap/Button'
+import Card from 'react-bootstrap/Card'
+// reactstrap (used by Keeper UI sections)
 import {
-  Button,
-  Card,
   CardHeader,
   CardBody,
   CardFooter,
@@ -634,12 +636,12 @@ const ServerUpdate: React.FC = () => {
     )
   }
 
-  // Standard SignalK Server mode UI (original)
+  // Standard SignalK Server mode UI (original — uses react-bootstrap)
   if (!appStore.storeAvailable) {
     return (
       <div className="animated fadeIn">
         <Card>
-          <CardHeader>Waiting for App store data to load...</CardHeader>
+          <Card.Header>Waiting for App store data to load...</Card.Header>
         </Card>
       </div>
     )
@@ -660,16 +662,16 @@ const ServerUpdate: React.FC = () => {
     <div className="animated fadeIn">
       {!appStore.canUpdateServer && (
         <Card className="border-warning">
-          <CardHeader>Server Update</CardHeader>
-          <CardBody>
+          <Card.Header>Server Update</Card.Header>
+          <Card.Body>
             This installation is not updatable from the admin user interface.
-          </CardBody>
+          </Card.Body>
         </Card>
       )}
       {appStore.isInDocker && (
         <Card className="border-warning">
-          <CardHeader>Running as a Docker container</CardHeader>
-          <CardBody>
+          <Card.Header>Running as a Docker container</Card.Header>
+          <Card.Body>
             <p>
               The server is running as a Docker container. You need to pull a
               new server version from Container registry to update.
@@ -688,7 +690,7 @@ const ServerUpdate: React.FC = () => {
               </a>{' '}
               .
             </p>
-          </CardBody>
+          </Card.Body>
         </Card>
       )}
       {appStore.canUpdateServer &&
@@ -696,10 +698,10 @@ const ServerUpdate: React.FC = () => {
         !isInstalling &&
         !isInstalled && (
           <Card>
-            <CardHeader>
+            <Card.Header>
               Server version {appStore.serverUpdate} is available
-            </CardHeader>
-            <CardBody>
+            </Card.Header>
+            <Card.Body>
               <a href="https://github.com/SignalK/signalk-server/releases/">
                 Release Notes for latest releases.
               </a>
@@ -708,38 +710,38 @@ const ServerUpdate: React.FC = () => {
               <Button
                 className="btn btn-danger"
                 size="sm"
-                color="primary"
+                variant="primary"
                 onClick={handleUpdate}
               >
                 Update
               </Button>
-            </CardBody>
+            </Card.Body>
           </Card>
         )}
       {isInstalling && (
         <Card>
-          <CardHeader>Server Update</CardHeader>
-          <CardBody>The update is being installed</CardBody>
+          <Card.Header>Server Update</Card.Header>
+          <Card.Body>The update is being installed</Card.Body>
         </Card>
       )}
       {isInstalled && (
         <Card>
-          <CardHeader>Server Update</CardHeader>
-          <CardBody>
+          <Card.Header>Server Update</Card.Header>
+          <Card.Body>
             The update has been installed, please restart the Signal K server.
-          </CardBody>
+          </Card.Body>
         </Card>
       )}
       {appStore.canUpdateServer && !appStore.serverUpdate && (
         <Card>
-          <CardHeader>Server Update</CardHeader>
-          <CardBody>Your server is up to date.</CardBody>
+          <Card.Header>Server Update</Card.Header>
+          <Card.Body>Your server is up to date.</Card.Body>
         </Card>
       )}
 
       <Card>
-        <CardHeader>Sponsoring</CardHeader>
-        <CardBody>
+        <Card.Header>Sponsoring</Card.Header>
+        <Card.Body>
           <p>
             If you find Signal K valuable to you consider sponsoring our work on
             developing it further.
@@ -757,7 +759,7 @@ const ServerUpdate: React.FC = () => {
             </a>{' '}
             for details.
           </p>
-        </CardBody>
+        </Card.Body>
       </Card>
     </div>
   )

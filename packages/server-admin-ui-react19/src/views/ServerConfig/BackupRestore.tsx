@@ -1,15 +1,17 @@
 import React, { useState, useCallback, useEffect } from 'react'
+// react-bootstrap (used by upstream/standard UI sections)
+import Button from 'react-bootstrap/Button'
+import Card from 'react-bootstrap/Card'
+import Col from 'react-bootstrap/Col'
+import Form from 'react-bootstrap/Form'
+import Row from 'react-bootstrap/Row'
+import ProgressBar from 'react-bootstrap/ProgressBar'
+// reactstrap (used by Keeper UI sections)
 import {
-  Button,
-  Card,
   CardHeader,
   CardBody,
   CardFooter,
   Input,
-  Form,
-  Col,
-  Row,
-  Label,
   FormGroup,
   FormText,
   Progress,
@@ -24,7 +26,8 @@ import {
   Modal,
   ModalHeader,
   ModalBody,
-  ModalFooter
+  ModalFooter,
+  Label
 } from 'reactstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
@@ -836,32 +839,32 @@ const BackupRestore: React.FC = () => {
     )
   }
 
-  // Standard SignalK Server mode UI (original)
+  // Standard SignalK Server mode UI (original — uses react-bootstrap)
   return (
     <div>
       {restoreState === RESTORE_NONE && !restoreStatus.state && (
         <Card>
-          <CardHeader>Backup Settings</CardHeader>
-          <CardBody>
+          <Card.Header>Backup Settings</Card.Header>
+          <Card.Body>
             <Form
               action=""
               method="post"
               encType="multipart/form-data"
               className="form-horizontal"
             >
-              <FormText color="muted">
+              <Form.Text className="text-muted">
                 This will backup your server and plugin settings.
-              </FormText>
+              </Form.Text>
               <br />
-              <FormGroup row>
+              <Form.Group as={Row}>
                 <Col xs="3" md="2">
-                  <Label htmlFor="backup-includePlugins">
+                  <Form.Label htmlFor="backup-includePlugins">
                     Include Plugins
-                  </Label>
+                  </Form.Label>
                 </Col>
                 <Col xs="2" md={fieldColWidthMd}>
-                  <Label className="switch switch-text switch-primary">
-                    <Input
+                  <Form.Label className="switch switch-text switch-primary">
+                    <Form.Control
                       type="checkbox"
                       id="backup-includePlugins"
                       name="enabled"
@@ -875,25 +878,25 @@ const BackupRestore: React.FC = () => {
                       data-off="No"
                     />
                     <span className="switch-handle" />
-                  </Label>
-                  <FormText color="muted">
+                  </Form.Label>
+                  <Form.Text className="text-muted">
                     Selecting Yes will increase the size of the backup, but will
                     allow for offline restore.
-                  </FormText>
+                  </Form.Text>
                 </Col>
-              </FormGroup>
+              </Form.Group>
             </Form>
-          </CardBody>
-          <CardFooter>
-            <Button size="sm" color="primary" onClick={backup}>
+          </Card.Body>
+          <Card.Footer>
+            <Button size="sm" variant="primary" onClick={backup}>
               <FontAwesomeIcon icon={faCircleDot} /> Backup
             </Button>{' '}
-          </CardFooter>
+          </Card.Footer>
         </Card>
       )}
       <Card>
-        <CardHeader>Restore Settings</CardHeader>
-        <CardBody>
+        <Card.Header>Restore Settings</Card.Header>
+        <Card.Body>
           <Form
             action=""
             method="post"
@@ -902,31 +905,31 @@ const BackupRestore: React.FC = () => {
           >
             {restoreState === RESTORE_NONE && !restoreStatus.state && (
               <div>
-                <FormText color="muted">
+                <Form.Text className="text-muted">
                   Please select the backup file from your device to use in
                   restoring the settings. Your existing settings will be
                   overwritten.
-                </FormText>
+                </Form.Text>
                 <br />
-                <FormGroup row>
+                <Form.Group as={Row}>
                   <Col xs="12" md={fieldColWidthMd}>
-                    <Input
+                    <Form.Control
                       type="file"
                       name="backupFile"
                       onChange={fileChanged}
                     />
                   </Col>
-                </FormGroup>
+                </Form.Group>
               </div>
             )}
             {restoreState === RESTORE_CONFIRM && (
-              <FormGroup>
+              <Form.Group>
                 <Col xs="12" md={fieldColWidthMd}>
                   {Object.keys(restoreContents).map((name) => {
                     return (
                       <div key={name}>
-                        <Label className="switch switch-text switch-primary">
-                          <Input
+                        <Form.Label className="switch switch-text switch-primary">
+                          <Form.Control
                             type="checkbox"
                             id={name}
                             name={name}
@@ -940,61 +943,61 @@ const BackupRestore: React.FC = () => {
                             data-off="No"
                           />
                           <span className="switch-handle" />
-                        </Label>{' '}
+                        </Form.Label>{' '}
                         {name}
                       </div>
                     )
                   })}
                 </Col>
-              </FormGroup>
+              </Form.Group>
             )}
             {restoreStatus &&
               restoreStatus.state &&
               restoreStatus.state !== 'Complete' && (
                 <div>
-                  <FormGroup row>
+                  <Form.Group as={Row}>
                     <Col xs="12" md={fieldColWidthMd}>
-                      <FormText>
+                      <Form.Text>
                         {restoreStatus.state} : {restoreStatus.message}
-                      </FormText>
+                      </Form.Text>
                     </Col>
-                  </FormGroup>
-                  <FormGroup row>
+                  </Form.Group>
+                  <Form.Group as={Row}>
                     <Col xs="12" md={fieldColWidthMd}>
-                      <Progress
+                      <ProgressBar
                         animated
-                        color="success"
-                        value={restoreStatus.percentComplete}
+                        variant="success"
+                        now={restoreStatus.percentComplete}
                       />
                     </Col>
-                  </FormGroup>
+                  </Form.Group>
                 </div>
               )}
             {restoreStatus.state && restoreStatus.state === 'Complete' && (
               <div>
-                <FormGroup row>
+                <Form.Group as={Row}>
                   <Col xs="12" md={fieldColWidthMd}>
-                    <FormText>Please Restart</FormText>
+                    <Form.Text>Please Restart</Form.Text>
                   </Col>
-                </FormGroup>
-                <FormGroup row>
+                </Form.Group>
+                <Form.Group as={Row}>
                   <Col xs="12" md={fieldColWidthMd}>
-                    <Button size="sm" color="danger" onClick={handleRestart}>
+                    <Button size="sm" variant="danger" onClick={handleRestart}>
                       <FontAwesomeIcon icon={faCircleNotch} spin={restarting} />{' '}
                       Restart
                     </Button>
                   </Col>
-                </FormGroup>
+                </Form.Group>
               </div>
             )}
           </Form>
-        </CardBody>
-        <CardFooter>
+        </Card.Body>
+        <Card.Footer>
           {restoreState === RESTORE_NONE && !restoreStatus.state && (
             <div>
               <Button
                 size="sm"
-                color="danger"
+                variant="danger"
                 onClick={validate}
                 disabled={restoreFile === null}
               >
@@ -1004,15 +1007,15 @@ const BackupRestore: React.FC = () => {
           )}
           {restoreState === RESTORE_CONFIRM && (
             <div>
-              <Button size="sm" color="primary" onClick={cancelRestore}>
+              <Button size="sm" variant="primary" onClick={cancelRestore}>
                 <FontAwesomeIcon icon={faCircleDot} /> Cancel
               </Button>{' '}
-              <Button size="sm" color="danger" onClick={restore}>
+              <Button size="sm" variant="danger" onClick={restore}>
                 <FontAwesomeIcon icon={faCircleDot} /> Confirm
               </Button>
             </div>
           )}
-        </CardFooter>
+        </Card.Footer>
       </Card>
     </div>
   )
