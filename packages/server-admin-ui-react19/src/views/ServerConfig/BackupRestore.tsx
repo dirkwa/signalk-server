@@ -954,10 +954,10 @@ const BackupRestore: React.FC = () => {
                   </Form.Group>
                   <Form.Group as={Row}>
                     <Col xs="12" md={fieldColWidthMd}>
-                      <ProgressBar
+                      <Progress
                         animated
-                        variant="success"
-                        now={restoreStatus.percentComplete}
+                        color="success"
+                        value={restoreStatus.percentComplete}
                       />
                     </Col>
                   </Form.Group>

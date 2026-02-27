@@ -8,17 +8,7 @@ import {
 } from 'react'
 import parse from 'html-react-parser'
 import { useLogEntries, useRuntimeConfig } from '../../store'
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  Input,
-  Form,
-  Col,
-  Label,
-  FormGroup,
-  FormText
-} from 'reactstrap'
+import { Card, Form, Col } from 'reactstrap'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faAlignJustify } from '@fortawesome/free-solid-svg-icons/faAlignJustify'
 import LogFiles from './Logging'
