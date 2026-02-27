@@ -795,7 +795,11 @@ const BackupRestore: React.FC = () => {
               onClick={handleChangePassword}
               disabled={!passwordsMatch || passwordLoading}
             >
-              {passwordLoading ? <FontAwesomeIcon icon={faCircleNotch} spin /> : 'Change Password'}
+              {passwordLoading ? (
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              ) : (
+                'Change Password'
+              )}
             </Button>
           </ModalFooter>
         </Modal>
@@ -820,7 +824,11 @@ const BackupRestore: React.FC = () => {
               onClick={handleResetPassword}
               disabled={passwordLoading}
             >
-              {passwordLoading ? <FontAwesomeIcon icon={faCircleNotch} spin /> : 'Reset to Default'}
+              {passwordLoading ? (
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              ) : (
+                'Reset to Default'
+              )}
             </Button>
           </ModalFooter>
         </Modal>
