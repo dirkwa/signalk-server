@@ -38,7 +38,6 @@ interface SelectOption {
 export default function ServerLogs() {
   const { useKeeper } = useRuntimeConfig()
 
-  // Use ContainerLogs component when running with Keeper
   if (useKeeper) {
     return <ContainerLogs />
   }

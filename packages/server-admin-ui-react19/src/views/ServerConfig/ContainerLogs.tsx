@@ -53,7 +53,6 @@ const LOG_SOURCES: LogSourceInfo[] = [
 
 const LINE_OPTIONS = [100, 250, 500, 1000, 2500, 5000]
 
-// ANSI to HTML converter for colorized terminal output
 const ansiConverter = new AnsiToHtml({
   fg: '#d4d4d4',
   bg: '#1e1e1e',
@@ -100,7 +99,6 @@ export default function ContainerLogs() {
   const logContainerRef = useRef<HTMLDivElement>(null)
   const keeperApi = getKeeperApi()
 
-  // Debounce filter input
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedFilter(filter)
@@ -108,7 +106,6 @@ export default function ContainerLogs() {
     return () => clearTimeout(timer)
   }, [filter])
 
-  // Fetch history status to determine available log sources
   useEffect(() => {
     if (!keeperApi) return
 
@@ -126,7 +123,6 @@ export default function ContainerLogs() {
     return () => clearInterval(interval)
   }, [keeperApi])
 
-  // Determine available log sources
   const availableSources = useMemo(() => {
     const sources: LogSourceInfo[] = [
       LOG_SOURCES[0], // SignalK always available
@@ -141,14 +137,12 @@ export default function ContainerLogs() {
     return sources
   }, [historyStatus])
 
-  // Effective log source - fallback to signalk if current becomes unavailable
   const effectiveLogSource = useMemo(() => {
     return availableSources.find((s) => s.id === logSource)
       ? logSource
       : 'signalk'
   }, [availableSources, logSource])
 
-  // Fetch logs
   const fetchLogs = useCallback(
     async (setLoadingState = false) => {
       if (!keeperApi) return
@@ -173,7 +167,6 @@ export default function ContainerLogs() {
     [keeperApi, lineCount, effectiveLogSource]
   )
 
-  // Initial fetch and auto-refresh
   useEffect(() => {
     fetchLogs(true)
 
@@ -184,14 +177,12 @@ export default function ContainerLogs() {
     return undefined
   }, [fetchLogs, isFollowing])
 
-  // Auto-scroll when following
   useEffect(() => {
     if (isFollowing && logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
     }
   }, [logsData, isFollowing])
 
-  // Filter logs
   const logs = useMemo(() => {
     if (!logsData?.lines) return []
     if (!debouncedFilter) return logsData.lines
@@ -205,7 +196,6 @@ export default function ContainerLogs() {
     )
   }, [logsData, debouncedFilter])
 
-  // Get selected text within log container
   const getSelectedText = useCallback((): string | null => {
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed || !logContainerRef.current) {
@@ -221,7 +211,6 @@ export default function ContainerLogs() {
     return selectedText.length > 0 ? selectedText : null
   }, [])
 
-  // Track selection changes
   useEffect(() => {
     const handleSelectionChange = () => {
       const selectedText = getSelectedText()
@@ -233,7 +222,6 @@ export default function ContainerLogs() {
       document.removeEventListener('selectionchange', handleSelectionChange)
   }, [getSelectedText])
 
-  // Copy logs to clipboard
   const copyLogs = useCallback(async () => {
     setCopyStatus('copying')
 
@@ -277,7 +265,6 @@ export default function ContainerLogs() {
     }
   }, [logs, getSelectedText])
 
-  // Get copy button content
   const getCopyButtonContent = () => {
     switch (copyStatus) {
       case 'copying':
@@ -322,7 +309,6 @@ export default function ContainerLogs() {
 
   const copyButtonContent = getCopyButtonContent()
 
-  // Get level color class
   const getLevelClass = (level: string): string => {
     switch (level.toLowerCase()) {
       case 'error':
