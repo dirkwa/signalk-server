@@ -315,7 +315,6 @@ const SystemHealth: React.FC = () => {
     return <Badge bg={variants[state] || 'secondary'}>{state}</Badge>
   }
 
-  // Not in Keeper mode - show message
   if (!useKeeper || !shouldUseKeeper()) {
     return (
       <div className="animated fadeIn">
@@ -575,14 +574,12 @@ const SystemHealth: React.FC = () => {
         </Card.Footer>
       </Card>
 
-      {/* Container Status */}
       {containerInfo && (
         <Card className="mb-4">
           <Card.Header>
             <FontAwesomeIcon icon={faServer} className="me-2" />
             Container Status
             <span className="float-end">
-              {/* Running container badges */}
               <Badge bg="primary" className="me-1">
                 SignalK
               </Badge>
@@ -844,7 +841,6 @@ const SystemHealth: React.FC = () => {
         </Card>
       )}
 
-      {/* System Info */}
       {systemInfo && (
         <Card className="mb-4">
           <Card.Header>System Information</Card.Header>

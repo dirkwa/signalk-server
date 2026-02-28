@@ -49,7 +49,6 @@ const History: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Form state for enabling
   const [retentionDays, setRetentionDays] = useState(365)
   const [restartMessage, setRestartMessage] = useState<string | null>(null)
 
@@ -67,7 +66,6 @@ const History: React.FC = () => {
         setRetentionDays(settingsResult.retentionDays)
       }
 
-      // Load credentials if enabled
       if (statusResult?.status === 'running') {
         try {
           const creds = await historyApi.credentials()
@@ -261,7 +259,6 @@ const History: React.FC = () => {
     )
   }
 
-  // Not in Keeper mode
   if (!useKeeper || !shouldUseKeeper()) {
     return (
       <div className="animated fadeIn">
@@ -473,7 +470,6 @@ const History: React.FC = () => {
         </Card>
       )}
 
-      {/* Enable Card */}
       {isDisabled && (
         <Card className="mb-4">
           <Card.Header>Enable History</Card.Header>
@@ -709,7 +705,6 @@ const History: React.FC = () => {
         </Card>
       )}
 
-      {/* Disable Card */}
       {isRunning && (
         <Card className="border-danger">
           <Card.Header className="text-danger">Disable History</Card.Header>

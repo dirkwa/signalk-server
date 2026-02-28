@@ -18,7 +18,13 @@ import type {
   HistoryCredentials,
   EnableHistoryRequest,
   EnableHistoryResult,
-  VersionSettings
+  VersionSettings,
+  CloudSyncStatus,
+  CloudConnectResult,
+  CloudAuthState,
+  PasswordStatusResult,
+  CloudInstall,
+  CloudRestorePrepareResult
 } from './types'
 
 export class KeeperApiError extends Error {
@@ -83,7 +89,6 @@ export function createKeeperApi(baseUrl: string) {
     container: {
       status: async (): Promise<ContainerInfo> => {
         const response = await keeperFetch(`${apiUrl}/api/container`)
-        // Keeper returns slightly different structure, transform to expected format
         const rawContainer = await handleResponse<{
           id: string
           name: string
@@ -130,7 +135,6 @@ export function createKeeperApi(baseUrl: string) {
 
       stats: async (): Promise<ContainerStats> => {
         const response = await keeperFetch(`${apiUrl}/api/container/stats`)
-        // Keeper returns flat structure, transform to expected nested format
         const rawStats = await handleResponse<{
           cpuPercent: number
           memoryUsage: number
@@ -171,8 +175,7 @@ export function createKeeperApi(baseUrl: string) {
         const response = await keeperFetch(
           `${apiUrl}/api/container/logs?lines=${lines}&source=${source}`
         )
-        // Keeper returns { lines: [{ timestamp, message, level }], count }
-        // Strip ANSI codes from messages
+        // Strip ANSI escape codes that the terminal renderer would handle
         const data = await handleResponse<{
           lines: Array<{ timestamp: string; message: string; level: string }>
           count: number
@@ -181,7 +184,6 @@ export function createKeeperApi(baseUrl: string) {
           ...data,
           lines: data.lines.map((l) => ({
             ...l,
-            // Strip ANSI escape codes
             message: l.message.replace(/\x1b\[[0-9;]*m/g, '')
           }))
         }
@@ -212,7 +214,6 @@ export function createKeeperApi(baseUrl: string) {
     backups: {
       list: async (): Promise<BackupListResponse> => {
         const response = await keeperFetch(`${apiUrl}/api/backups`)
-        // Keeper returns flat array, transform to expected grouped format
         const rawBackups = await handleResponse<{
           backups: Array<{
             id: string
@@ -228,7 +229,6 @@ export function createKeeperApi(baseUrl: string) {
           }
         }>(response)
 
-        // Transform each backup to expected format
         const transformBackup = (
           b: (typeof rawBackups.backups)[0]
         ): KeeperBackup => ({
@@ -317,7 +317,6 @@ export function createKeeperApi(baseUrl: string) {
       scheduler: {
         status: async (): Promise<BackupSchedulerStatus> => {
           const response = await keeperFetch(`${apiUrl}/api/backups/scheduler`)
-          // Keeper returns different structure, transform to expected format
           const rawScheduler = await handleResponse<{
             enabled: boolean
             lastBackup?: string
@@ -393,6 +392,45 @@ export function createKeeperApi(baseUrl: string) {
         }>(response)
       },
 
+      dataDirs: async (): Promise<
+        Array<{
+          name: string
+          size: number
+          excluded: boolean
+          type?: 'dir' | 'history'
+        }>
+      > => {
+        const response = await keeperFetch(`${apiUrl}/api/backups/data-dirs`)
+        return handleResponse<
+          Array<{
+            name: string
+            size: number
+            excluded: boolean
+            type?: 'dir' | 'history'
+          }>
+        >(response)
+      },
+
+      exclusions: {
+        get: async (): Promise<string[]> => {
+          const response = await keeperFetch(`${apiUrl}/api/backups/exclusions`)
+          const data = await handleResponse<{ exclusions: string[] }>(response)
+          return data.exclusions
+        },
+
+        update: async (exclusions: string[]): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/backups/exclusions`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ exclusions })
+            }
+          )
+          await handleResponse<{ exclusions: string[] }>(response)
+        }
+      },
+
       password: {
         status: async (): Promise<{ hasCustomPassword: boolean }> => {
           const response = await keeperFetch(`${apiUrl}/api/backups/password`)
@@ -423,7 +461,6 @@ export function createKeeperApi(baseUrl: string) {
     versions: {
       list: async (): Promise<VersionListResponse> => {
         const response = await keeperFetch(`${apiUrl}/api/versions`)
-        // Keeper returns different structure, transform to expected format
         const rawVersions = await handleResponse<{
           currentVersion: {
             tag: string
@@ -452,7 +489,6 @@ export function createKeeperApi(baseUrl: string) {
           }>
         }>(localResponse)
 
-        // Transform local images
         const localImages: ImageVersion[] = rawLocal.images.map((img) => {
           const tag = img.tags[0]?.split(':')[1] || 'unknown'
           return {
@@ -490,7 +526,6 @@ export function createKeeperApi(baseUrl: string) {
         totalSize: number
       }> => {
         const response = await keeperFetch(`${apiUrl}/api/versions/local`)
-        // Keeper returns different structure, transform to expected format
         const rawLocal = await handleResponse<{
           images: Array<{
             id: string
@@ -610,7 +645,6 @@ export function createKeeperApi(baseUrl: string) {
     system: {
       info: async (): Promise<SystemInfo> => {
         const response = await keeperFetch(`${apiUrl}/api/system`)
-        // Keeper returns different structure, transform to expected format
         const rawInfo = await handleResponse<{
           host: {
             platform: string
@@ -744,7 +778,6 @@ export function createKeeperApi(baseUrl: string) {
         const response = await keeperFetch(`${apiUrl}/api/doctor/preflight`, {
           method: 'POST'
         })
-        // Keeper returns different structure, transform to expected format
         const rawDoctor = await handleResponse<{
           passed: boolean
           checks: Array<{
@@ -909,6 +942,159 @@ export function createKeeperApi(baseUrl: string) {
           )
           return handleResponse<HistorySystemStatus>(response)
         }
+      }
+    },
+
+    cloud: {
+      status: async (): Promise<CloudSyncStatus> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/status`)
+        return handleResponse<CloudSyncStatus>(response)
+      },
+
+      gdrive: {
+        connect: async (): Promise<CloudConnectResult> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/connect`,
+            { method: 'POST' }
+          )
+          return handleResponse<CloudConnectResult>(response)
+        },
+
+        disconnect: async (): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/disconnect`,
+            { method: 'POST' }
+          )
+          await handleResponse<{ message: string }>(response)
+        },
+
+        authState: async (): Promise<CloudAuthState> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/auth-state`
+          )
+          return handleResponse<CloudAuthState>(response)
+        },
+
+        cancel: async (): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/cancel`,
+            { method: 'POST' }
+          )
+          await handleResponse<{ message: string }>(response)
+        },
+
+        forwardCallback: async (url: string): Promise<void> => {
+          const response = await keeperFetch(
+            `${apiUrl}/api/cloud/gdrive/auth-callback`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url })
+            }
+          )
+          await handleResponse<{ message: string }>(response)
+        }
+      },
+
+      sync: async (): Promise<void> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/sync`, {
+          method: 'POST'
+        })
+        await handleResponse<{ message: string }>(response)
+      },
+
+      cancelSync: async (): Promise<void> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/sync/cancel`, {
+          method: 'POST'
+        })
+        await handleResponse<{ message: string }>(response)
+      },
+
+      updateConfig: async (config: {
+        syncMode?: string
+        syncFrequency?: string
+      }): Promise<void> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        })
+        await handleResponse<unknown>(response)
+      },
+
+      password: async (): Promise<PasswordStatusResult> => {
+        const response = await keeperFetch(`${apiUrl}/api/backups/password`)
+        return handleResponse<PasswordStatusResult>(response)
+      },
+
+      installs: async (): Promise<CloudInstall[]> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/installs`)
+        return handleResponse<CloudInstall[]>(response)
+      },
+
+      restorePrepare: async (
+        folder: string,
+        password?: string
+      ): Promise<CloudRestorePrepareResult> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/cloud/restore/prepare`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder, password: password || undefined })
+          }
+        )
+        return handleResponse<CloudRestorePrepareResult>(response)
+      },
+
+      restoreStart: async (
+        snapshotId: string,
+        mode: 'restore' | 'clone'
+      ): Promise<void> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/cloud/restore/start`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ snapshotId, mode })
+          }
+        )
+        await handleResponse<{
+          snapshotId: string
+          mode: string
+          status: string
+        }>(response)
+      },
+
+      restoreStatus: async (): Promise<{
+        cloudPhase: string
+        cloudError: string | null
+        restore: {
+          state: string
+          progress: number
+          statusMessage: string
+          error?: string
+        } | null
+      }> => {
+        const response = await keeperFetch(`${apiUrl}/api/cloud/restore/status`)
+        return handleResponse<{
+          cloudPhase: string
+          cloudError: string | null
+          restore: {
+            state: string
+            progress: number
+            statusMessage: string
+            error?: string
+          } | null
+        }>(response)
+      },
+
+      restoreReset: async (): Promise<void> => {
+        const response = await keeperFetch(
+          `${apiUrl}/api/cloud/restore/reset`,
+          { method: 'POST' }
+        )
+        await handleResponse<{ message: string }>(response)
       }
     }
   }

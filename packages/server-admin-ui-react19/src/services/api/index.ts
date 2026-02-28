@@ -173,6 +173,30 @@ export const backupApi = {
     return null
   },
 
+  dataDirs: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().backups.dataDirs()
+    }
+    return null
+  },
+
+  exclusions: {
+    get: async () => {
+      if (shouldUseKeeper()) {
+        return getKeeperApi().backups.exclusions.get()
+      }
+      return null
+    },
+
+    update: async (exclusions: string[]) => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().backups.exclusions.update(exclusions)
+      } else {
+        throw new Error('Backup exclusions not supported without Keeper')
+      }
+    }
+  },
+
   password: {
     status: async () => {
       if (shouldUseKeeper()) {
@@ -276,6 +300,124 @@ export const updateApi = {
       return getKeeperApi().versions.updateSettings(settings)
     }
     return null
+  }
+}
+
+export const cloudApi = {
+  status: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.status()
+    }
+    return null
+  },
+
+  gdrive: {
+    connect: async () => {
+      if (shouldUseKeeper()) {
+        return getKeeperApi().cloud.gdrive.connect()
+      }
+      throw new Error('Cloud backup not supported without Keeper')
+    },
+
+    disconnect: async () => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().cloud.gdrive.disconnect()
+      } else {
+        throw new Error('Cloud backup not supported without Keeper')
+      }
+    },
+
+    authState: async () => {
+      if (shouldUseKeeper()) {
+        return getKeeperApi().cloud.gdrive.authState()
+      }
+      throw new Error('Cloud backup not supported without Keeper')
+    },
+
+    cancel: async () => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().cloud.gdrive.cancel()
+      } else {
+        throw new Error('Cloud backup not supported without Keeper')
+      }
+    },
+
+    forwardCallback: async (url: string) => {
+      if (shouldUseKeeper()) {
+        await getKeeperApi().cloud.gdrive.forwardCallback(url)
+      } else {
+        throw new Error('Cloud backup not supported without Keeper')
+      }
+    }
+  },
+
+  sync: async () => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.sync()
+    } else {
+      throw new Error('Cloud backup not supported without Keeper')
+    }
+  },
+
+  cancelSync: async () => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.cancelSync()
+    } else {
+      throw new Error('Cloud backup not supported without Keeper')
+    }
+  },
+
+  updateConfig: async (config: {
+    syncMode?: string
+    syncFrequency?: string
+  }) => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.updateConfig(config)
+    } else {
+      throw new Error('Cloud backup not supported without Keeper')
+    }
+  },
+
+  password: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.password()
+    }
+    return null
+  },
+
+  installs: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.installs()
+    }
+    return []
+  },
+
+  restorePrepare: async (folder: string, password?: string) => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.restorePrepare(folder, password)
+    }
+    throw new Error('Cloud restore not supported without Keeper')
+  },
+
+  restoreStart: async (snapshotId: string, mode: 'restore' | 'clone') => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.restoreStart(snapshotId, mode)
+    } else {
+      throw new Error('Cloud restore not supported without Keeper')
+    }
+  },
+
+  restoreStatus: async () => {
+    if (shouldUseKeeper()) {
+      return getKeeperApi().cloud.restoreStatus()
+    }
+    return null
+  },
+
+  restoreReset: async () => {
+    if (shouldUseKeeper()) {
+      await getKeeperApi().cloud.restoreReset()
+    }
   }
 }
 

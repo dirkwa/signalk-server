@@ -304,3 +304,61 @@ export interface EnableHistoryResult {
   error?: string
   credentials?: HistoryCredentials
 }
+
+export interface SyncProgress {
+  totalBytes: number
+  processedBlobs?: number
+  totalBlobs?: number
+  processedBytes?: number
+}
+
+export interface CloudSyncStatus {
+  connected: boolean
+  configured: boolean
+  syncing: boolean
+  syncMode: 'manual' | 'after_backup' | 'scheduled' | null
+  syncFrequency: 'daily' | 'weekly' | null
+  lastSync: string | null
+  lastSyncError: string | null
+  internetAvailable: boolean | null
+  email?: string
+  syncProgress?: SyncProgress
+}
+
+export interface CloudConnectResult {
+  authUrl: string
+}
+
+export interface CloudAuthState {
+  state: 'idle' | 'waiting' | 'completed' | 'failed'
+  authUrl: string | null
+  error: string | null
+}
+
+export interface PasswordStatusResult {
+  hasCustomPassword: boolean
+  password?: string
+}
+
+export interface CloudInstall {
+  folder: string
+  info?: {
+    installName?: string
+    vesselName?: string
+    hardware?: string
+    lastUpdated?: string
+  }
+}
+
+export interface CloudRestorePrepareResult {
+  phase: string
+  snapshots: Array<{
+    id: string
+    createdAt: string
+    version: { tag: string; fullRef: string }
+    type: string
+    size: number
+    description?: string
+  }>
+  error?: string
+}

@@ -58,7 +58,6 @@ const ServerUpdate: React.FC = () => {
   const appStore = useAppStore() as AppStore
   const { useKeeper } = useRuntimeConfig()
 
-  // Keeper-specific state
   const [versions, setVersions] = useState<VersionListResponse | null>(null)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [versionSettings, setVersionSettings] =
@@ -95,7 +94,6 @@ const ServerUpdate: React.FC = () => {
     }
   }
 
-  // Load versions on mount
   useEffect(() => {
     if (useKeeper && shouldUseKeeper()) {
       loadVersions()
@@ -104,14 +102,12 @@ const ServerUpdate: React.FC = () => {
     }
 
     return () => {
-      // Cleanup SSE connection
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
       }
     }
   }, [useKeeper])
 
-  // Subscribe to update progress when update is in progress
   useEffect(() => {
     const state = updateStatus?.state
     if (
@@ -267,7 +263,6 @@ const ServerUpdate: React.FC = () => {
     }
   }
 
-  // Standard update handler for non-Keeper mode
   const handleUpdate = useCallback(() => {
     if (confirm('Are you sure you want to update the server?')) {
       navigate('/appstore/updates')
@@ -281,7 +276,6 @@ const ServerUpdate: React.FC = () => {
     }
   }, [appStore.serverUpdate, navigate])
 
-  // Keeper mode UI
   if (useKeeper && shouldUseKeeper()) {
     const getStatusVariant = (state: string) => {
       switch (state) {
@@ -419,7 +413,6 @@ const ServerUpdate: React.FC = () => {
           </Alert>
         )}
 
-        {/* Current Status Card */}
         {versions && (
           <Card className="mb-4">
             <Card.Header>Current Version</Card.Header>
@@ -450,7 +443,6 @@ const ServerUpdate: React.FC = () => {
           </Card>
         )}
 
-        {/* Update Progress Card */}
         {updateStatus && updateStatus.state !== 'idle' && (
           <Card className="mb-4">
             <Card.Header>
@@ -492,7 +484,6 @@ const ServerUpdate: React.FC = () => {
           </Card>
         )}
 
-        {/* Available Versions Card */}
         <Card className="mb-4">
           <Card.Header>
             Available Versions
@@ -591,7 +582,6 @@ const ServerUpdate: React.FC = () => {
           )}
         </Card>
 
-        {/* Sponsoring Card */}
         <Card>
           <Card.Header>Sponsoring</Card.Header>
           <Card.Body>
@@ -620,7 +610,7 @@ const ServerUpdate: React.FC = () => {
     )
   }
 
-  // Standard SignalK Server mode UI (original — uses react-bootstrap)
+  // Standard SignalK Server mode UI
   if (!appStore.storeAvailable) {
     return (
       <div className="animated fadeIn">
