@@ -41,6 +41,7 @@ import {
 } from '../LatestValuesAccumulator'
 import { getExternalPort } from '../ports'
 import { Delta, hasValues } from '@signalk/server-api'
+import { getDefaultCategory, resolveDisplayUnits } from '../unitpreferences'
 
 const debug = createDebug('signalk-server:interfaces:ws')
 const debugConnection = createDebug('signalk-server:interfaces:ws:connections')
@@ -94,6 +95,7 @@ interface Spark {
   onDisconnects: Array<() => void>
   hasServerEvents?: boolean
   isHistory?: boolean
+  displayUnitsPaths: Array<{ context: string; path: string }>
   write: (data: unknown) => void
   end: (message?: unknown, options?: { reconnect?: boolean }) => void
   on: (event: string, handler: (data: unknown) => void) => void
@@ -397,6 +399,7 @@ function wsInterface(app: WsApp): WsApi {
 
           spark.sendMetaDeltas = spark.query.sendMeta === 'all'
           spark.sentMetaData = {}
+          spark.displayUnitsPaths = []
 
           spark.backpressure = {
             active: false,
@@ -862,7 +865,24 @@ function handleValuesMeta(
       } else {
         this.spark.sentMetaData[partialContextPathKey] = true
         const meta = getMetadata(partialContextPathKey)
-        if (meta) {
+        const defaultCategory = getDefaultCategory(path)
+        const displayUnits = defaultCategory
+          ? resolveDisplayUnits(
+              { category: defaultCategory },
+              undefined,
+              this.spark.request.skPrincipal?.identifier
+            )
+          : null
+        if (displayUnits) {
+          this.spark.displayUnitsPaths.push({
+            context: this.context,
+            path: path
+          })
+        }
+        const metaValue = displayUnits
+          ? { ...(meta || {}), displayUnits }
+          : meta
+        if (metaValue) {
           this.spark.write({
             context: this.context,
             updates: [
@@ -871,7 +891,7 @@ function handleValuesMeta(
                 meta: [
                   {
                     path: path,
-                    value: meta
+                    value: metaValue
                   }
                 ]
               }
@@ -1072,6 +1092,29 @@ function handleRealtimeConnection(
   spark.onDisconnects.push(() => {
     app.signalk.removeListener('delta', onChange)
   })
+
+  const resendDisplayUnits = () => {
+    if (!spark.sendMetaDeltas) return
+    const timestamp = new Date().toISOString()
+    for (const { context, path } of spark.displayUnitsPaths) {
+      const category = getDefaultCategory(path)
+      if (!category) continue
+      const displayUnits = resolveDisplayUnits(
+        { category },
+        undefined,
+        spark.request.skPrincipal?.identifier
+      )
+      if (!displayUnits) continue
+      spark.write({
+        context,
+        updates: [{ timestamp, meta: [{ path, value: { displayUnits } }] }]
+      })
+    }
+  }
+  app.on('unitpreferencesChanged', resendDisplayUnits)
+  spark.onDisconnects.push(() =>
+    app.removeListener('unitpreferencesChanged', resendDisplayUnits)
+  )
 
   if (spark.request.query?.sendCachedValues !== 'false') {
     sendLatestDeltas(app, app.deltaCache, app.selfContext, spark)
