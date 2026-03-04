@@ -1,0 +1,227 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "0.1.0",
+    "title": "BLE API",
+    "description": "Signal K BLE Provider API endpoints.  Provides a unified view of BLE devices across multiple providers (local adapters, remote gateways) with advertisement streaming and GATT subscription management.",
+    "termsOfService": "http://signalk.org/terms/",
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "externalDocs": {
+    "url": "http://signalk.org/specification/",
+    "description": "Signal K specification."
+  },
+  "servers": [
+    {
+      "url": "/signalk/v2/api/vessels/self/ble"
+    }
+  ],
+  "tags": [
+    {
+      "name": "BLE",
+      "description": "BLE device and advertisement operations."
+    },
+    {
+      "name": "Provider",
+      "description": "Operations to view registered BLE providers."
+    }
+  ],
+  "components": {
+    "schemas": {
+      "BLEDeviceInfo": {
+        "type": "object",
+        "properties": {
+          "mac": { "type": "string", "example": "AA:BB:CC:DD:EE:FF" },
+          "name": { "type": "string", "example": "SmartShunt 500A" },
+          "rssi": { "type": "number", "example": -52 },
+          "lastSeen": {
+            "type": "number",
+            "description": "Unix timestamp (ms)"
+          },
+          "connectable": { "type": "boolean" },
+          "seenBy": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "providerId": { "type": "string" },
+                "rssi": { "type": "number" },
+                "lastSeen": { "type": "number" }
+              }
+            }
+          },
+          "gattClaimedBy": { "type": "string", "nullable": true }
+        }
+      },
+      "BLEAdvertisement": {
+        "type": "object",
+        "properties": {
+          "mac": { "type": "string" },
+          "name": { "type": "string" },
+          "rssi": { "type": "number" },
+          "manufacturerData": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "serviceData": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "serviceUuids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "providerId": { "type": "string" },
+          "timestamp": { "type": "number" },
+          "connectable": { "type": "boolean" },
+          "txPower": { "type": "number" },
+          "addressType": { "type": "string", "enum": ["public", "random"] }
+        }
+      },
+      "BLEProviders": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "supportsGATT": { "type": "boolean" },
+            "gattSlots": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "number" },
+                "available": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "JAUTHENTICATION"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [{ "cookieAuth": [] }, { "bearerAuth": [] }],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["BLE"],
+        "summary": "BLE API overview",
+        "responses": {
+          "200": {
+            "description": "API endpoint descriptions"
+          }
+        }
+      }
+    },
+    "/_providers": {
+      "get": {
+        "tags": ["Provider"],
+        "summary": "List registered BLE providers",
+        "responses": {
+          "200": {
+            "description": "Map of provider IDs to provider info",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BLEProviders" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices": {
+      "get": {
+        "tags": ["BLE"],
+        "summary": "List all visible BLE devices",
+        "description": "Returns all visible devices across all providers, deduplicated by MAC address.  Devices not seen for 120 seconds are pruned.",
+        "responses": {
+          "200": {
+            "description": "Array of BLE device info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/BLEDeviceInfo" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/{mac}": {
+      "get": {
+        "tags": ["BLE"],
+        "summary": "Get a single BLE device",
+        "parameters": [
+          {
+            "name": "mac",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Device MAC address (AA:BB:CC:DD:EE:FF)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BLE device info",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BLEDeviceInfo" }
+              }
+            }
+          },
+          "404": { "description": "Device not found" }
+        }
+      }
+    },
+    "/devices/{mac}/gatt": {
+      "get": {
+        "tags": ["BLE"],
+        "summary": "Get GATT claim status for a device",
+        "parameters": [
+          {
+            "name": "mac",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GATT claim info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "claimedBy": { "type": "string", "nullable": true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/advertisements": {
+      "get": {
+        "tags": ["BLE"],
+        "summary": "WebSocket stream of BLE advertisements",
+        "description": "Upgrade to WebSocket to receive a real-time stream of BLEAdvertisement JSON objects from all registered providers."
+      }
+    }
+  }
+}
