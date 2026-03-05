@@ -7,10 +7,12 @@ import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBluetooth } from '@fortawesome/free-brands-svg-icons/faBluetooth'
 import { faCircle } from '@fortawesome/free-solid-svg-icons/faCircle'
+import { faMicrochip } from '@fortawesome/free-solid-svg-icons/faMicrochip'
 import { faTowerBroadcast } from '@fortawesome/free-solid-svg-icons/faTowerBroadcast'
 import { faLink } from '@fortawesome/free-solid-svg-icons/faLink'
 
 const BLE_API = '/signalk/v2/api/vessels/self/ble'
+const PLUGIN_API = '/plugins/bt-sensors-plugin-sk'
 
 interface SeenByEntry {
   providerId: string
@@ -37,6 +39,19 @@ interface ProviderInfo {
   }
 }
 
+interface GatewayInfo {
+  gatewayId: string
+  ipAddress?: string
+  firmware?: string
+  online: boolean
+  connectedAt: number
+  disconnectedAt?: number
+  uptime: number
+  freeHeap: number
+  gattSlots: { total: number; available: number }
+  deviceCount: number
+}
+
 type ProvidersMap = Record<string, ProviderInfo>
 
 function formatAge(lastSeen: number): string {
@@ -44,6 +59,21 @@ function formatAge(lastSeen: number): string {
   if (seconds < 5) return 'just now'
   if (seconds < 60) return `${seconds}s ago`
   return `${Math.floor(seconds / 60)}m ago`
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h < 24) return `${h}h ${m}m`
+  const d = Math.floor(h / 24)
+  return `${d}d ${h % 24}h`
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  return `${Math.round(bytes / 1024)} KB`
 }
 
 function rssiColor(rssi: number): string {
@@ -56,6 +86,7 @@ function rssiColor(rssi: number): string {
 export default function BLEManager() {
   const [devices, setDevices] = useState<BLEDeviceInfo[]>([])
   const [providers, setProviders] = useState<ProvidersMap>({})
+  const [gateways, setGateways] = useState<GatewayInfo[]>([])
   const [wsConnected, setWsConnected] = useState(false)
   const [advCount, setAdvCount] = useState(0)
   const wsRef = useRef<WebSocket | null>(null)
@@ -87,16 +118,31 @@ export default function BLEManager() {
     }
   }, [])
 
-  // Poll devices every 5 seconds
+  const fetchGateways = useCallback(async () => {
+    try {
+      const response = await fetch(`${PLUGIN_API}/gateways`, {
+        credentials: 'include',
+      })
+      if (response.ok) {
+        setGateways(await response.json())
+      }
+    } catch (e) {
+      // Plugin may not be installed — ignore
+    }
+  }, [])
+
+  // Poll every 5 seconds
   useEffect(() => {
     fetchProviders()
     fetchDevices()
+    fetchGateways()
     const interval = setInterval(() => {
       fetchProviders()
       fetchDevices()
+      fetchGateways()
     }, 5000)
     return () => clearInterval(interval)
-  }, [fetchProviders, fetchDevices])
+  }, [fetchProviders, fetchDevices, fetchGateways])
 
   // WebSocket for advertisement count
   useEffect(() => {
@@ -131,7 +177,17 @@ export default function BLEManager() {
     <div className="animated fadeIn">
       {/* Status overview */}
       <Row className="mb-3">
-        <Col sm="4">
+        <Col sm="3">
+          <Card className="text-center">
+            <Card.Body className="py-3">
+              <div className="h5 mb-0">{gateways.filter((g) => g.online).length}</div>
+              <small className="text-body-secondary text-uppercase fw-bold">
+                Gateways
+              </small>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col sm="3">
           <Card className="text-center">
             <Card.Body className="py-3">
               <div className="h5 mb-0">{providerEntries.length}</div>
@@ -141,7 +197,7 @@ export default function BLEManager() {
             </Card.Body>
           </Card>
         </Col>
-        <Col sm="4">
+        <Col sm="3">
           <Card className="text-center">
             <Card.Body className="py-3">
               <div className="h5 mb-0">{devices.length}</div>
@@ -151,7 +207,7 @@ export default function BLEManager() {
             </Card.Body>
           </Card>
         </Col>
-        <Col sm="4">
+        <Col sm="3">
           <Card className="text-center">
             <Card.Body className="py-3">
               <div className="h5 mb-0">
@@ -169,6 +225,69 @@ export default function BLEManager() {
           </Card>
         </Col>
       </Row>
+
+      {/* Gateways */}
+      {gateways.length > 0 && (
+        <Card className="mb-3">
+          <Card.Header>
+            <FontAwesomeIcon icon={faMicrochip} />{' '}
+            <strong>BLE Gateways</strong>
+            <Badge bg="primary" className="ms-2">
+              {gateways.filter((g) => g.online).length}/{gateways.length}
+            </Badge>
+          </Card.Header>
+          <Card.Body>
+            <Table hover responsive striped size="sm">
+              <thead>
+                <tr>
+                  <th>Hostname</th>
+                  <th>IP Address</th>
+                  <th>Status</th>
+                  <th>Firmware</th>
+                  <th>Uptime</th>
+                  <th>Free Heap</th>
+                  <th>GATT</th>
+                  <th>Devices</th>
+                  <th>WS Connected</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gateways.map((gw) => (
+                  <tr key={gw.gatewayId}>
+                    <td>
+                      <strong>{gw.gatewayId}</strong>
+                    </td>
+                    <td>
+                      <code>{gw.ipAddress || '-'}</code>
+                    </td>
+                    <td>
+                      <Badge bg={gw.online ? 'success' : 'danger'}>
+                        {gw.online ? 'Online' : 'Offline'}
+                      </Badge>
+                    </td>
+                    <td>{gw.firmware || '-'}</td>
+                    <td>{gw.uptime > 0 ? formatDuration(gw.uptime) : '-'}</td>
+                    <td>{gw.freeHeap > 0 ? formatBytes(gw.freeHeap) : '-'}</td>
+                    <td>
+                      {gw.gattSlots.total > 0
+                        ? `${gw.gattSlots.total - gw.gattSlots.available}/${gw.gattSlots.total}`
+                        : '-'}
+                    </td>
+                    <td>{gw.deviceCount}</td>
+                    <td>
+                      {gw.online
+                        ? formatAge(gw.connectedAt)
+                        : gw.disconnectedAt
+                          ? formatAge(gw.disconnectedAt)
+                          : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Card.Body>
+        </Card>
+      )}
 
       {/* Providers */}
       <Card className="mb-3">
