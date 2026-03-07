@@ -95,7 +95,7 @@ export default function BLEManager() {
   const fetchProviders = useCallback(async () => {
     try {
       const response = await fetch(`${BLE_API}/_providers`, {
-        credentials: 'include',
+        credentials: 'include'
       })
       if (response.ok) {
         setProviders(await response.json())
@@ -108,7 +108,7 @@ export default function BLEManager() {
   const fetchDevices = useCallback(async () => {
     try {
       const response = await fetch(`${BLE_API}/devices`, {
-        credentials: 'include',
+        credentials: 'include'
       })
       if (response.ok) {
         setDevices(await response.json())
@@ -121,26 +121,25 @@ export default function BLEManager() {
   const fetchGateways = useCallback(async () => {
     try {
       const response = await fetch(`${PLUGIN_API}/gateways`, {
-        credentials: 'include',
+        credentials: 'include'
       })
       if (response.ok) {
         setGateways(await response.json())
       }
-    } catch (e) {
+    } catch (_e) {
       // Plugin may not be installed — ignore
     }
   }, [])
 
-  // Poll every 5 seconds
+  // Poll every 5 seconds (initial fetch + interval)
   useEffect(() => {
-    fetchProviders()
-    fetchDevices()
-    fetchGateways()
-    const interval = setInterval(() => {
+    const poll = () => {
       fetchProviders()
       fetchDevices()
       fetchGateways()
-    }, 5000)
+    }
+    const interval = setInterval(poll, 5000)
+    poll()
     return () => clearInterval(interval)
   }, [fetchProviders, fetchDevices, fetchGateways])
 
@@ -180,7 +179,9 @@ export default function BLEManager() {
         <Col sm="3">
           <Card className="text-center">
             <Card.Body className="py-3">
-              <div className="h5 mb-0">{gateways.filter((g) => g.online).length}</div>
+              <div className="h5 mb-0">
+                {gateways.filter((g) => g.online).length}
+              </div>
               <small className="text-body-secondary text-uppercase fw-bold">
                 Gateways
               </small>
@@ -230,8 +231,7 @@ export default function BLEManager() {
       {gateways.length > 0 && (
         <Card className="mb-3">
           <Card.Header>
-            <FontAwesomeIcon icon={faMicrochip} />{' '}
-            <strong>BLE Gateways</strong>
+            <FontAwesomeIcon icon={faMicrochip} /> <strong>BLE Gateways</strong>
             <Badge bg="primary" className="ms-2">
               {gateways.filter((g) => g.online).length}/{gateways.length}
             </Badge>
@@ -341,8 +341,7 @@ export default function BLEManager() {
       {/* Devices */}
       <Card>
         <Card.Header>
-          <FontAwesomeIcon icon={faBluetooth} />{' '}
-          <strong>BLE Devices</strong>
+          <FontAwesomeIcon icon={faBluetooth} /> <strong>BLE Devices</strong>
           {devices.length > 0 && (
             <Badge bg="primary" className="ms-2">
               {devices.length}
