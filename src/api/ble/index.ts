@@ -4,8 +4,10 @@ const debug = createDebug('signalk-server:api:ble')
 
 import { IRouter, Request, Response } from 'express'
 import { WithSecurityStrategy } from '../../security'
-import { SignalKMessageHub } from '../../app'
+import { SignalKMessageHub, WithConfig } from '../../app'
 import WebSocket from 'ws'
+import { writeSettingsFile } from '../../config/config'
+import { LocalBLEProvider } from './localProvider'
 
 import {
   BLEProvider,
@@ -25,14 +27,26 @@ const BLE_API_PATH = `/signalk/v2/api/vessels/self/ble`
 const DEVICE_STALE_MS = 120_000
 
 interface BLEApplication
-  extends WithSecurityStrategy, SignalKMessageHub, IRouter {
+  extends WithSecurityStrategy, SignalKMessageHub, WithConfig, IRouter {
   server?: any // HTTP server for WebSocket upgrade
+}
+
+interface BLESettings {
+  localBluetoothManaged: boolean
+  localAdapter: string
+  localMaxGATTSlots: number
 }
 
 interface GATTClaim {
   pluginId: string
   providerId: string
   handle: GATTSubscriptionHandle
+}
+
+const DEFAULT_BLE_SETTINGS: BLESettings = {
+  localBluetoothManaged: false,
+  localAdapter: 'hci0',
+  localMaxGATTSlots: 3
 }
 
 export class BLEApi implements IBLEApi {
@@ -43,13 +57,73 @@ export class BLEApi implements IBLEApi {
   private advertisementCallbacks: Set<(adv: BLEAdvertisement) => void> =
     new Set()
   private wsClients: Set<WebSocket> = new Set()
+  private localProvider: LocalBLEProvider | null = null
+  private localProviderError: string | null = null
+  private settings: BLESettings
 
-  constructor(private app: BLEApplication) {}
+  get localBluetoothManaged(): boolean {
+    return this.settings.localBluetoothManaged && this.localProvider !== null
+  }
+
+  constructor(private app: BLEApplication) {
+    // Read or initialize settings
+    const appSettings = (this.app.config?.settings as any) ?? {}
+    if (!appSettings.bleApi) {
+      appSettings.bleApi = { ...DEFAULT_BLE_SETTINGS }
+    }
+    this.settings = {
+      ...DEFAULT_BLE_SETTINGS,
+      ...appSettings.bleApi
+    }
+  }
 
   async start() {
     this.initApiEndpoints()
     this.initWebSocketEndpoint()
+
+    // Initialize local BLE provider if setting is enabled
+    if (this.settings.localBluetoothManaged) {
+      await this.initLocalProvider()
+    }
+
     return Promise.resolve()
+  }
+
+  private async initLocalProvider() {
+    try {
+      const provider = new LocalBLEProvider(
+        this.settings.localAdapter,
+        this.settings.localMaxGATTSlots
+      )
+      await provider.init()
+      this.localProvider = provider
+      this.localProviderError = null
+
+      // Register as a built-in provider
+      this.register('_localBLE', {
+        name: 'Local Bluetooth',
+        methods: provider.getMethods()
+      })
+
+      // Start scanning
+      await provider.startDiscovery()
+      debug('Local BLE provider registered and scanning')
+    } catch (e: any) {
+      const msg = `Local BLE provider unavailable: ${e.message} — continuing without local Bluetooth`
+      debug(msg)
+      console.log(`[BLE API] ${msg}`)
+      this.localProvider = null
+      this.localProviderError = e.message
+    }
+  }
+
+  private async shutdownLocalProvider() {
+    if (this.localProvider) {
+      this.unRegister('_localBLE')
+      this.localProvider.shutdown()
+      this.localProvider = null
+      debug('Local BLE provider shut down')
+    }
   }
 
   // -------------------------------------------------------------------
@@ -392,6 +466,74 @@ export class BLEApi implements IBLEApi {
         const claim = this.gattClaims.get(mac)
         res.json({
           claimedBy: claim?.pluginId ?? null
+        })
+      }
+    )
+
+    // BLE settings
+    this.app.get(
+      `${BLE_API_PATH}/settings`,
+      async (_req: Request, res: Response) => {
+        res.json({
+          localBluetoothManaged: this.settings.localBluetoothManaged,
+          localBluetoothActive: this.localProvider !== null,
+          localBluetoothError: this.localProviderError,
+          localAdapter: this.settings.localAdapter,
+          localMaxGATTSlots: this.settings.localMaxGATTSlots
+        })
+      }
+    )
+
+    this.app.put(
+      `${BLE_API_PATH}/settings`,
+      async (req: Request, res: Response) => {
+        const body = req.body
+        let changed = false
+
+        if (typeof body.localBluetoothManaged === 'boolean') {
+          this.settings.localBluetoothManaged = body.localBluetoothManaged
+          changed = true
+        }
+        if (typeof body.localAdapter === 'string') {
+          this.settings.localAdapter = body.localAdapter
+          changed = true
+        }
+        if (typeof body.localMaxGATTSlots === 'number') {
+          this.settings.localMaxGATTSlots = body.localMaxGATTSlots
+          changed = true
+        }
+
+        if (changed) {
+          // Persist to settings.json
+          const appSettings = this.app.config.settings as any
+          appSettings.bleApi = { ...this.settings }
+          writeSettingsFile(
+            this.app as any,
+            this.app.config.settings,
+            (err: any) => {
+              if (err) {
+                debug(`Error saving BLE settings: ${err.message}`)
+              }
+            }
+          )
+
+          // Apply local provider change
+          if (this.settings.localBluetoothManaged && !this.localProvider) {
+            await this.initLocalProvider()
+          } else if (
+            !this.settings.localBluetoothManaged &&
+            this.localProvider
+          ) {
+            await this.shutdownLocalProvider()
+          }
+        }
+
+        res.json({
+          localBluetoothManaged: this.settings.localBluetoothManaged,
+          localBluetoothActive: this.localProvider !== null,
+          localBluetoothError: this.localProviderError,
+          localAdapter: this.settings.localAdapter,
+          localMaxGATTSlots: this.settings.localMaxGATTSlots
         })
       }
     )
