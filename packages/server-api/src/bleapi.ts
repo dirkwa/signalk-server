@@ -59,7 +59,7 @@ export interface GATTSubscriptionDescriptor {
   /** Characteristic UUIDs to subscribe for notifications */
   notify?: string[]
   /** Characteristics to poll at intervals */
-  poll?: { uuid: string; intervalMs: number }[]
+  poll?: { uuid: string; intervalMs: number; writeBeforeRead?: string }[]
   /** One-time writes after connection (hex-encoded data) */
   init?: { uuid: string; data: string }[]
   /** Periodic writes (hex-encoded data) */
@@ -229,6 +229,9 @@ export interface BLEProviderRegistry {
 
 /** @category BLE API */
 export interface BLEApi {
+  /** Whether the server manages the local Bluetooth adapter */
+  readonly localBluetoothManaged: boolean
+
   register(pluginId: string, provider: BLEProvider): void
   unRegister(pluginId: string): void
 

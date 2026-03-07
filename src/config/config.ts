@@ -87,6 +87,11 @@ export interface Config {
     courseApi?: {
       apiOnly?: boolean
     }
+    bleApi?: {
+      localBluetoothManaged?: boolean
+      localAdapter?: string
+      localMaxGATTSlots?: number
+    }
   }
   defaults: object
 }
