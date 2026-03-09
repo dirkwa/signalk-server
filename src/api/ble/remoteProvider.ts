@@ -13,9 +13,8 @@ import {
 // How long to keep a recently-disconnected gateway in the list
 const OFFLINE_SNAPSHOT_MS = 60_000
 
-// Ping interval and timeout for WebSocket keepalive
+// Ping interval for WebSocket keepalive
 const PING_INTERVAL_MS = 30_000
-const PING_TIMEOUT_MS = 10_000
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,9 +86,15 @@ class RemoteGATTSession {
         if (!session) return
         session.connected = true
         for (const cb of session.connectCallbacks) {
-          try { cb() } catch { /* ignore */ }
+          try {
+            cb()
+          } catch {
+            /* ignore */
+          }
         }
-        debug(`[${this.gatewayId}] session ${sessionId} connected to ${msg.mac}`)
+        debug(
+          `[${this.gatewayId}] session ${sessionId} connected to ${msg.mac}`
+        )
         break
       }
       case 'gatt_data': {
@@ -100,8 +105,8 @@ class RemoteGATTSession {
             msg.uuid as string,
             Buffer.from(msg.data as string, 'hex')
           )
-        } catch (e: any) {
-          debug(`[${this.gatewayId}] data callback error: ${e.message}`)
+        } catch (e: unknown) {
+          debug(`[${this.gatewayId}] data callback error: ${(e as Error).message}`)
         }
         break
       }
@@ -110,9 +115,15 @@ class RemoteGATTSession {
         if (!session) return
         session.connected = false
         for (const cb of session.disconnectCallbacks) {
-          try { cb() } catch { /* ignore */ }
+          try {
+            cb()
+          } catch {
+            /* ignore */
+          }
         }
-        debug(`[${this.gatewayId}] session ${sessionId} disconnected: ${msg.reason}`)
+        debug(
+          `[${this.gatewayId}] session ${sessionId} disconnected: ${msg.reason}`
+        )
         break
       }
       case 'gatt_error': {
@@ -120,7 +131,11 @@ class RemoteGATTSession {
         if (!session) return
         session.connected = false
         for (const cb of session.disconnectCallbacks) {
-          try { cb() } catch { /* ignore */ }
+          try {
+            cb()
+          } catch {
+            /* ignore */
+          }
         }
         this.sessions.delete(sessionId)
         this.activeSlots = Math.max(0, this.activeSlots - 1)
@@ -181,36 +196,53 @@ class RemoteGATTSession {
     this.sessions.set(sessionId, session)
     this.activeSlots++
 
-    const self = this
     const handle: GATTSubscriptionHandle = {
       write: async (charUuid: string, data: Buffer) => {
-        self.ws.send(JSON.stringify({
-          type: 'gatt_write',
-          session_id: sessionId,
-          uuid: charUuid,
-          data: data.toString('hex')
-        }))
+        this.ws.send(
+          JSON.stringify({
+            type: 'gatt_write',
+            session_id: sessionId,
+            uuid: charUuid,
+            data: data.toString('hex')
+          })
+        )
       },
       close: async () => {
-        self.ws.send(JSON.stringify({ type: 'gatt_close', session_id: sessionId }))
-        self.sessions.delete(sessionId)
-        self.activeSlots = Math.max(0, self.activeSlots - 1)
+        this.ws.send(
+          JSON.stringify({ type: 'gatt_close', session_id: sessionId })
+        )
+        this.sessions.delete(sessionId)
+        this.activeSlots = Math.max(0, this.activeSlots - 1)
       },
-      get connected() { return session.connected },
-      onDisconnect: (cb) => { session.disconnectCallbacks.push(cb) },
-      onConnect: (cb) => { session.connectCallbacks.push(cb) }
+      get connected() {
+        return session.connected
+      },
+      onDisconnect: (cb) => {
+        session.disconnectCallbacks.push(cb)
+      },
+      onConnect: (cb) => {
+        session.connectCallbacks.push(cb)
+      }
     }
 
-    debug(`[${this.gatewayId}] subscribeGATT session=${sessionId} mac=${descriptor.mac}`)
+    debug(
+      `[${this.gatewayId}] subscribeGATT session=${sessionId} mac=${descriptor.mac}`
+    )
     return handle
   }
 
   handleDisconnect() {
-    debug(`[${this.gatewayId}] WS disconnected, firing ${this.sessions.size} session callbacks`)
+    debug(
+      `[${this.gatewayId}] WS disconnected, firing ${this.sessions.size} session callbacks`
+    )
     for (const session of this.sessions.values()) {
       session.connected = false
       for (const cb of session.disconnectCallbacks) {
-        try { cb() } catch { /* ignore */ }
+        try {
+          cb()
+        } catch {
+          /* ignore */
+        }
       }
     }
     this.sessions.clear()
@@ -242,8 +274,8 @@ type RegisterFn = (id: string, provider: BLEProvider) => void
 type UnregisterFn = (id: string) => void
 
 interface RemoteGatewayApp extends IRouter {
-  server?: any
-  securityStrategy?: any
+  server?: import('http').Server
+  securityStrategy?: object
 }
 
 export class RemoteGatewayProvider {
@@ -321,8 +353,10 @@ export class RemoteGatewayProvider {
       }
 
       for (const cb of callbacks) {
-        try { cb(adv) } catch (e: any) {
-          debug(`adv callback error: ${e.message}`)
+        try {
+          cb(adv)
+        } catch (e: unknown) {
+          debug(`adv callback error: ${(e as Error).message}`)
         }
       }
     }
@@ -332,8 +366,7 @@ export class RemoteGatewayProvider {
   }
 
   private _registerGatewayProvider(gatewayId: string) {
-    const providerId = `ble:gateway:${gatewayId}`
-    debug(`Registering provider for gateway: ${providerId}`)
+    debug(`Registering provider for gateway: ble:gateway:${gatewayId}`)
 
     if (!this.advCallbacks.has(gatewayId)) {
       this.advCallbacks.set(gatewayId, new Set())
@@ -342,29 +375,27 @@ export class RemoteGatewayProvider {
       this.seenMacs.set(gatewayId, new Set())
     }
 
-    const self = this
     const provider: BLEProvider = {
       name: `BLE Gateway: ${gatewayId}`,
       methods: {
         startDiscovery: async () => {},
         stopDiscovery: async () => {},
-        getDevices: async () =>
-          Array.from(self.seenMacs.get(gatewayId) ?? []),
+        getDevices: async () => Array.from(this.seenMacs.get(gatewayId) ?? []),
         onAdvertisement: (cb) => {
-          const callbacks = self.advCallbacks.get(gatewayId)!
+          const callbacks = this.advCallbacks.get(gatewayId)!
           callbacks.add(cb)
           return () => callbacks.delete(cb)
         },
         supportsGATT: () => {
-          const session = self.sessions.get(gatewayId)
+          const session = this.sessions.get(gatewayId)
           return session ? session.maxSlots > 0 : false
         },
         availableGATTSlots: () => {
-          const session = self.sessions.get(gatewayId)
+          const session = this.sessions.get(gatewayId)
           return session ? session.availableGATTSlots() : 0
         },
         subscribeGATT: async (descriptor, callback) => {
-          const session = self.sessions.get(gatewayId)
+          const session = this.sessions.get(gatewayId)
           if (!session) {
             throw new Error(
               `Gateway ${gatewayId} has no active WebSocket connection`
@@ -375,7 +406,7 @@ export class RemoteGatewayProvider {
       }
     }
 
-    this.registerProvider(providerId, provider)
+    this.registerProvider(`ble:gateway:${gatewayId}`, provider)
   }
 
   private _unregisterGatewayProvider(gatewayId: string) {
@@ -388,10 +419,9 @@ export class RemoteGatewayProvider {
     const wsPath = `/signalk/v2/api/ble/gateway/ws`
     const wss = new WebSocket.Server({ noServer: true })
 
-    wss.on('connection', (ws: WebSocket, request: any) => {
+    wss.on('connection', (ws: WebSocket, request: import('http').IncomingMessage) => {
       debug('Gateway WebSocket connected')
-      const gatewayIp: string | null =
-        request?.socket?.remoteAddress ?? null
+      const gatewayIp: string | null = request.socket?.remoteAddress ?? null
 
       let session: RemoteGATTSession | null = null
       let pongReceived = true
@@ -426,7 +456,11 @@ export class RemoteGatewayProvider {
               oldSession.handleDisconnect()
               this.sessions.delete(oldId)
               this._unregisterGatewayProvider(oldId)
-              try { oldSession.ws.terminate() } catch { /* ignore */ }
+              try {
+                oldSession.ws.terminate()
+              } catch {
+                /* ignore */
+              }
             }
           }
 
@@ -437,13 +471,14 @@ export class RemoteGatewayProvider {
           this.snapshots.delete(gatewayId)
 
           // Register provider if not yet known (WS-first, before any HTTP POST)
-          const providerId = `ble:gateway:${gatewayId}`
           if (!this.advCallbacks.has(gatewayId)) {
             this._registerGatewayProvider(gatewayId)
           }
 
           // Send acknowledgement — firmware will close stale GATT sessions on WS reconnect
-          ws.send(JSON.stringify({ type: 'hello_ack', server_time: Date.now() }))
+          ws.send(
+            JSON.stringify({ type: 'hello_ack', server_time: Date.now() })
+          )
           debug(`Gateway ${gatewayId} registered via WebSocket`)
 
           // Keepalive
@@ -459,8 +494,9 @@ export class RemoteGatewayProvider {
           }, PING_INTERVAL_MS)
 
           // Timeout for first pong
-          ws.on('pong', () => { pongReceived = true })
-
+          ws.on('pong', () => {
+            pongReceived = true
+          })
         } else if (session) {
           session.handleMessage(msg)
         }
@@ -504,8 +540,12 @@ export class RemoteGatewayProvider {
         setTimeout(tryAttach, 1000)
         return
       }
-      server.on('upgrade', (request: any, socket: any, head: any) => {
-        const url = new URL(request.url, `http://${request.headers.host}`)
+      server.on('upgrade', (
+        request: import('http').IncomingMessage,
+        socket: import('net').Socket,
+        head: Buffer
+      ) => {
+        const url = new URL(request.url ?? '/', `http://${request.headers.host}`)
         if (url.pathname === wsPath) {
           wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
             wss.emit('connection', ws, request)
