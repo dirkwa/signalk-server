@@ -12,7 +12,7 @@ import { faTowerBroadcast } from '@fortawesome/free-solid-svg-icons/faTowerBroad
 import { faLink } from '@fortawesome/free-solid-svg-icons/faLink'
 
 const BLE_API = '/signalk/v2/api/vessels/self/ble'
-const PLUGIN_API = '/plugins/bt-sensors-plugin-sk'
+const GATEWAY_API = '/signalk/v2/api/ble'
 
 interface SeenByEntry {
   providerId: string
@@ -120,14 +120,14 @@ export default function BLEManager() {
 
   const fetchGateways = useCallback(async () => {
     try {
-      const response = await fetch(`${PLUGIN_API}/gateways`, {
+      const response = await fetch(`${GATEWAY_API}/gateways`, {
         credentials: 'include'
       })
       if (response.ok) {
         setGateways(await response.json())
       }
     } catch (_e) {
-      // Plugin may not be installed — ignore
+      // ignore
     }
   }, [])
 
@@ -228,15 +228,22 @@ export default function BLEManager() {
       </Row>
 
       {/* Gateways */}
-      {gateways.length > 0 && (
-        <Card className="mb-3">
-          <Card.Header>
-            <FontAwesomeIcon icon={faMicrochip} /> <strong>BLE Gateways</strong>
+      <Card className="mb-3">
+        <Card.Header>
+          <FontAwesomeIcon icon={faMicrochip} /> <strong>BLE Gateways</strong>
+          {gateways.length > 0 && (
             <Badge bg="primary" className="ms-2">
               {gateways.filter((g) => g.online).length}/{gateways.length}
             </Badge>
-          </Card.Header>
-          <Card.Body>
+          )}
+        </Card.Header>
+        <Card.Body>
+          {gateways.length === 0 ? (
+            <p className="text-body-secondary mb-0">
+              No gateways connected. Flash an ESP32 gateway with the BLE
+              gateway firmware and power it on to get started.
+            </p>
+          ) : (
             <Table hover responsive striped size="sm">
               <thead>
                 <tr>
@@ -285,9 +292,9 @@ export default function BLEManager() {
                 ))}
               </tbody>
             </Table>
-          </Card.Body>
-        </Card>
-      )}
+          )}
+        </Card.Body>
+      </Card>
 
       {/* Providers */}
       <Card className="mb-3">
@@ -298,7 +305,7 @@ export default function BLEManager() {
         <Card.Body>
           {!hasProviders ? (
             <p className="text-body-secondary mb-0">
-              No BLE providers registered. Install a BLE provider plugin to get
+              No BLE providers registered. Connect a gateway above to get
               started.
             </p>
           ) : (
@@ -353,7 +360,7 @@ export default function BLEManager() {
             <p className="text-body-secondary mb-0">
               {hasProviders
                 ? 'No BLE devices detected yet. Waiting for advertisements...'
-                : 'No devices. Register a BLE provider plugin first.'}
+                : 'No devices. Connect a gateway first.'}
             </p>
           ) : (
             <Table hover responsive striped size="sm">
