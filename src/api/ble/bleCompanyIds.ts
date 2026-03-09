@@ -21,6 +21,8 @@ const BLE_COMPANY_IDS: Record<number, string> = {
   0x0822: 'Aranet',
   0x08D3: 'Xiaomi',
   0x048F: 'Switchbot',
+  0x0969: 'Switchbot',          // SwitchBot T&H (company ID used in advertisements)
+  0x094F: 'Mikrotik',           // MikroTik asset tags
 }
 
 /**
