@@ -371,7 +371,7 @@ export default function BLEManager() {
                       <code>{adapterName}</code>
                     </td>
                     <td>
-                      <Badge bg="danger">Failed</Badge>
+                      <Badge bg="secondary">Not available</Badge>
                     </td>
                     <td className="text-body-secondary">{error}</td>
                   </tr>
