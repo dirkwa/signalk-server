@@ -8,6 +8,7 @@ import { SignalKMessageHub, WithConfig } from '../../app'
 import WebSocket from 'ws'
 import { writeSettingsFile } from '../../config/config'
 import { LocalBLEProvider } from './localProvider'
+import { RemoteGatewayProvider } from './remoteProvider'
 
 import {
   BLEProvider,
@@ -60,6 +61,7 @@ export class BLEApi implements IBLEApi {
   private localProvider: LocalBLEProvider | null = null
   private localProviderError: string | null = null
   private settings: BLESettings
+  private remoteGatewayProvider: RemoteGatewayProvider | null = null
 
   get localBluetoothManaged(): boolean {
     return this.settings.localBluetoothManaged
@@ -80,6 +82,14 @@ export class BLEApi implements IBLEApi {
   async start() {
     this.initApiEndpoints()
     this.initWebSocketEndpoint()
+
+    // Initialize remote gateway provider (always on — handles ESP32 gateways)
+    this.remoteGatewayProvider = new RemoteGatewayProvider(
+      this.app,
+      this.register.bind(this),
+      this.unRegister.bind(this)
+    )
+    this.remoteGatewayProvider.attach(this.app)
 
     // Initialize local BLE provider if setting is enabled
     if (this.settings.localBluetoothManaged) {

@@ -27,6 +27,10 @@
     {
       "name": "Provider",
       "description": "Operations to view registered BLE providers."
+    },
+    {
+      "name": "Gateway",
+      "description": "ESP32 remote BLE gateway management."
     }
   ],
   "components": {
@@ -79,6 +83,30 @@
           "connectable": { "type": "boolean" },
           "txPower": { "type": "number" },
           "addressType": { "type": "string", "enum": ["public", "random"] }
+        }
+      },
+      "GatewayInfo": {
+        "type": "object",
+        "properties": {
+          "gatewayId": { "type": "string", "example": "signalk-ble-gw" },
+          "providerId": { "type": "string", "example": "ble:gateway:signalk-ble-gw" },
+          "online": { "type": "boolean" },
+          "ipAddress": { "type": "string", "nullable": true, "example": "192.168.0.120" },
+          "mac": { "type": "string", "nullable": true, "example": "F0:24:F9:F5:BD:4E" },
+          "hostname": { "type": "string", "nullable": true, "example": "signalk-ble-gw" },
+          "firmware": { "type": "string", "nullable": true, "example": "1.0.0" },
+          "connectedAt": { "type": "number", "description": "Unix timestamp (ms) when gateway connected" },
+          "disconnectedAt": { "type": "number", "description": "Unix timestamp (ms) when gateway disconnected (offline only)" },
+          "uptime": { "type": "number", "description": "Gateway uptime in seconds" },
+          "freeHeap": { "type": "number", "description": "Free heap memory in bytes" },
+          "gattSlots": {
+            "type": "object",
+            "properties": {
+              "total": { "type": "number" },
+              "available": { "type": "number" }
+            }
+          },
+          "deviceCount": { "type": "number", "description": "Number of unique BLE devices seen by this gateway" }
         }
       },
       "BLEProviders": {
@@ -209,6 +237,73 @@
                   "properties": {
                     "claimedBy": { "type": "string", "nullable": true }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gateway/advertisements": {
+      "post": {
+        "tags": ["Gateway"],
+        "summary": "Receive BLE advertisement batch from ESP32 gateway",
+        "description": "ESP32 gateways POST advertisement batches to this endpoint. Full path: /signalk/v2/api/ble/gateway/advertisements",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["gateway_id", "devices"],
+                "properties": {
+                  "gateway_id": { "type": "string" },
+                  "devices": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "mac": { "type": "string" },
+                        "rssi": { "type": "number" },
+                        "name": { "type": "string" },
+                        "manufacturer_data": {
+                          "type": "object",
+                          "additionalProperties": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Accepted" },
+          "400": { "description": "Invalid body" }
+        }
+      }
+    },
+    "/gateway/ws": {
+      "get": {
+        "tags": ["Gateway"],
+        "summary": "WebSocket GATT command channel for ESP32 gateways",
+        "description": "Upgrade to WebSocket for GATT subscribe/data/disconnect messaging. Full path: /signalk/v2/api/ble/gateway/ws"
+      }
+    },
+    "/gateways": {
+      "get": {
+        "tags": ["Gateway"],
+        "summary": "List all registered BLE gateways",
+        "description": "Returns online gateways and recently-disconnected gateways (up to 60s after disconnect). Full path: /signalk/v2/api/ble/gateways",
+        "responses": {
+          "200": {
+            "description": "Array of gateway info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/GatewayInfo" }
                 }
               }
             }
