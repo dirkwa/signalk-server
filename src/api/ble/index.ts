@@ -62,7 +62,7 @@ export class BLEApi implements IBLEApi {
   private settings: BLESettings
 
   get localBluetoothManaged(): boolean {
-    return this.settings.localBluetoothManaged && this.localProvider !== null
+    return this.settings.localBluetoothManaged
   }
 
   constructor(private app: BLEApplication) {
