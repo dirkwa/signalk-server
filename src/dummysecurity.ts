@@ -134,7 +134,12 @@ export default function () {
 
     configFromArguments: false,
     securityConfig: undefined,
-    requestAccess: () => undefined
+    requestAccess: () =>
+      Promise.resolve({
+        state: 'COMPLETED',
+        statusCode: 404,
+        message: 'Access requests not available. Server security may not be enabled.'
+      })
   }
   //force cast via unknown so that we don't need to
   //implement all dummy methods that are never called
