@@ -373,7 +373,7 @@ export default function BLEManager() {
                     <td>
                       <Badge bg="secondary">Not available</Badge>
                     </td>
-                    <td className="text-body-secondary">{error}</td>
+                    <td>-</td>
                   </tr>
                 ))}
               </tbody>
