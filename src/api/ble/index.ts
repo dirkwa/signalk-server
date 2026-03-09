@@ -9,6 +9,7 @@ import WebSocket from 'ws'
 import { writeSettingsFile } from '../../config/config'
 import { LocalBLEProvider } from './localProvider'
 import { RemoteGatewayProvider } from './remoteProvider'
+import { bleVendorName } from './bleCompanyIds'
 
 import {
   BLEProvider,
@@ -235,8 +236,15 @@ export class BLEApi implements IBLEApi {
       })
     }
 
-    // Update aggregate fields
-    if (adv.name) device.name = adv.name
+    // Update aggregate fields — prefer GAP local name, fall back to vendor lookup
+    if (adv.name) {
+      device.name = adv.name
+    } else if (!device.name) {
+      const companyId = Object.keys(adv.manufacturerData ?? {})[0]
+      if (companyId !== undefined) {
+        device.name = bleVendorName(parseInt(companyId)) ?? undefined
+      }
+    }
     if (adv.connectable) device.connectable = true
     device.rssi = Math.max(...device.seenBy.map((s) => s.rssi))
     device.lastSeen = Math.max(...device.seenBy.map((s) => s.lastSeen))
