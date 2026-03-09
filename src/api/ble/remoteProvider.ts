@@ -106,7 +106,9 @@ class RemoteGATTSession {
             Buffer.from(msg.data as string, 'hex')
           )
         } catch (e: unknown) {
-          debug(`[${this.gatewayId}] data callback error: ${(e as Error).message}`)
+          debug(
+            `[${this.gatewayId}] data callback error: ${(e as Error).message}`
+          )
         }
         break
       }
@@ -419,120 +421,128 @@ export class RemoteGatewayProvider {
     const wsPath = `/signalk/v2/api/ble/gateway/ws`
     const wss = new WebSocket.Server({ noServer: true })
 
-    wss.on('connection', (ws: WebSocket, request: import('http').IncomingMessage) => {
-      debug('Gateway WebSocket connected')
-      const gatewayIp: string | null = request.socket?.remoteAddress ?? null
+    wss.on(
+      'connection',
+      (ws: WebSocket, request: import('http').IncomingMessage) => {
+        debug('Gateway WebSocket connected')
+        const gatewayIp: string | null = request.socket?.remoteAddress ?? null
 
-      let session: RemoteGATTSession | null = null
-      let pongReceived = true
-      let pingTimer: ReturnType<typeof setInterval> | null = null
+        let session: RemoteGATTSession | null = null
+        let pongReceived = true
+        let pingTimer: ReturnType<typeof setInterval> | null = null
 
-      ws.on('message', (raw: Buffer) => {
-        let msg: Record<string, unknown>
-        try {
-          msg = JSON.parse(raw.toString())
-        } catch {
-          debug('Gateway WS: invalid JSON')
-          return
-        }
-
-        if (msg.type === 'hello' && !session) {
-          const gatewayId = msg.gateway_id as string
-          if (!gatewayId) {
-            debug('Gateway WS: hello missing gateway_id')
+        ws.on('message', (raw: Buffer) => {
+          let msg: Record<string, unknown>
+          try {
+            msg = JSON.parse(raw.toString())
+          } catch {
+            debug('Gateway WS: invalid JSON')
             return
           }
 
-          // Close any stale session for same gateway or same IP
-          const existing = this.sessions.get(gatewayId)
-          if (existing) {
-            existing.handleDisconnect()
-            this.sessions.delete(gatewayId)
-          }
-          // Same IP → different gateway_id (reflash with new name)
-          for (const [oldId, oldSession] of this.sessions) {
-            if (oldSession.ipAddress === gatewayIp && oldId !== gatewayId) {
-              debug(`Closing stale gateway ${oldId} (same IP as ${gatewayId})`)
-              oldSession.handleDisconnect()
-              this.sessions.delete(oldId)
-              this._unregisterGatewayProvider(oldId)
-              try {
-                oldSession.ws.terminate()
-              } catch {
-                /* ignore */
-              }
-            }
-          }
-
-          session = new RemoteGATTSession(gatewayId, ws)
-          if (gatewayIp) session.ipAddress = gatewayIp
-          session.handleHello(msg)
-          this.sessions.set(gatewayId, session)
-          this.snapshots.delete(gatewayId)
-
-          // Register provider if not yet known (WS-first, before any HTTP POST)
-          if (!this.advCallbacks.has(gatewayId)) {
-            this._registerGatewayProvider(gatewayId)
-          }
-
-          // Send acknowledgement — firmware will close stale GATT sessions on WS reconnect
-          ws.send(
-            JSON.stringify({ type: 'hello_ack', server_time: Date.now() })
-          )
-          debug(`Gateway ${gatewayId} registered via WebSocket`)
-
-          // Keepalive
-          pingTimer = setInterval(() => {
-            if (ws.readyState !== WebSocket.OPEN) return
-            if (!pongReceived) {
-              debug(`No pong from ${gatewayId} — terminating`)
-              ws.terminate()
+          if (msg.type === 'hello' && !session) {
+            const gatewayId = msg.gateway_id as string
+            if (!gatewayId) {
+              debug('Gateway WS: hello missing gateway_id')
               return
             }
-            pongReceived = false
-            ws.ping()
-          }, PING_INTERVAL_MS)
 
-          // Timeout for first pong
-          ws.on('pong', () => {
-            pongReceived = true
-          })
-        } else if (session) {
-          session.handleMessage(msg)
-        }
-      })
+            // Close any stale session for same gateway or same IP
+            const existing = this.sessions.get(gatewayId)
+            if (existing) {
+              existing.handleDisconnect()
+              this.sessions.delete(gatewayId)
+            }
+            // Same IP → different gateway_id (reflash with new name)
+            for (const [oldId, oldSession] of this.sessions) {
+              if (oldSession.ipAddress === gatewayIp && oldId !== gatewayId) {
+                debug(
+                  `Closing stale gateway ${oldId} (same IP as ${gatewayId})`
+                )
+                oldSession.handleDisconnect()
+                this.sessions.delete(oldId)
+                this._unregisterGatewayProvider(oldId)
+                try {
+                  oldSession.ws.terminate()
+                } catch {
+                  /* ignore */
+                }
+              }
+            }
 
-      ws.on('close', () => {
-        if (pingTimer) clearInterval(pingTimer)
-        if (!session) return
+            session = new RemoteGATTSession(gatewayId, ws)
+            if (gatewayIp) session.ipAddress = gatewayIp
+            session.handleHello(msg)
+            this.sessions.set(gatewayId, session)
+            this.snapshots.delete(gatewayId)
 
-        const { gatewayId } = session
-        debug(`Gateway ${gatewayId} WebSocket closed`)
+            // Register provider if not yet known (WS-first, before any HTTP POST)
+            if (!this.advCallbacks.has(gatewayId)) {
+              this._registerGatewayProvider(gatewayId)
+            }
 
-        this.snapshots.set(gatewayId, {
-          gatewayId,
-          ipAddress: session.ipAddress,
-          mac: session.mac,
-          hostname: session.hostname,
-          firmware: session.firmware,
-          maxSlots: session.maxSlots,
-          connectedAt: session.connectedAt,
-          disconnectedAt: Date.now(),
-          lastUptime: session.uptime,
-          lastFreeHeap: session.freeHeap
+            // Send acknowledgement — firmware will close stale GATT sessions on WS reconnect
+            ws.send(
+              JSON.stringify({ type: 'hello_ack', server_time: Date.now() })
+            )
+            debug(`Gateway ${gatewayId} registered via WebSocket`)
+
+            // Keepalive
+            pingTimer = setInterval(() => {
+              if (ws.readyState !== WebSocket.OPEN) return
+              if (!pongReceived) {
+                debug(`No pong from ${gatewayId} — terminating`)
+                ws.terminate()
+                return
+              }
+              pongReceived = false
+              ws.ping()
+            }, PING_INTERVAL_MS)
+
+            // Timeout for first pong
+            ws.on('pong', () => {
+              pongReceived = true
+            })
+          } else if (session) {
+            session.handleMessage(msg)
+          }
         })
-        setTimeout(() => this.snapshots.delete(gatewayId), OFFLINE_SNAPSHOT_MS)
 
-        session.handleDisconnect()
-        this.sessions.delete(gatewayId)
-        // Don't unregister provider — keeps it in the providers list with 0 slots
-        // so the UI shows it as offline rather than disappearing entirely
-      })
+        ws.on('close', () => {
+          if (pingTimer) clearInterval(pingTimer)
+          if (!session) return
 
-      ws.on('error', (err) => {
-        debug(`Gateway WS error: ${err.message}`)
-      })
-    })
+          const { gatewayId } = session
+          debug(`Gateway ${gatewayId} WebSocket closed`)
+
+          this.snapshots.set(gatewayId, {
+            gatewayId,
+            ipAddress: session.ipAddress,
+            mac: session.mac,
+            hostname: session.hostname,
+            firmware: session.firmware,
+            maxSlots: session.maxSlots,
+            connectedAt: session.connectedAt,
+            disconnectedAt: Date.now(),
+            lastUptime: session.uptime,
+            lastFreeHeap: session.freeHeap
+          })
+          setTimeout(
+            () => this.snapshots.delete(gatewayId),
+            OFFLINE_SNAPSHOT_MS
+          )
+
+          session.handleDisconnect()
+          this.sessions.delete(gatewayId)
+          // Don't unregister provider — keeps it in the providers list with 0 slots
+          // so the UI shows it as offline rather than disappearing entirely
+        })
+
+        ws.on('error', (err) => {
+          debug(`Gateway WS error: ${err.message}`)
+        })
+      }
+    )
 
     const tryAttach = () => {
       const server = this.app.server
@@ -540,18 +550,24 @@ export class RemoteGatewayProvider {
         setTimeout(tryAttach, 1000)
         return
       }
-      server.on('upgrade', (
-        request: import('http').IncomingMessage,
-        socket: import('net').Socket,
-        head: Buffer
-      ) => {
-        const url = new URL(request.url ?? '/', `http://${request.headers.host}`)
-        if (url.pathname === wsPath) {
-          wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
-            wss.emit('connection', ws, request)
-          })
+      server.on(
+        'upgrade',
+        (
+          request: import('http').IncomingMessage,
+          socket: import('net').Socket,
+          head: Buffer
+        ) => {
+          const url = new URL(
+            request.url ?? '/',
+            `http://${request.headers.host}`
+          )
+          if (url.pathname === wsPath) {
+            wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
+              wss.emit('connection', ws, request)
+            })
+          }
         }
-      })
+      )
       debug(`Gateway WebSocket endpoint ready at ${wsPath}`)
     }
     tryAttach()
