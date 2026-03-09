@@ -237,9 +237,13 @@ export interface BLEApi {
 
   /**
    * Subscribe to a merged advertisement stream from all providers.
+   * pluginId is used to track consumer plugins in the BLE Manager UI.
    * Returns an unsubscribe function.
    */
-  onAdvertisement(callback: (adv: BLEAdvertisement) => void): () => void
+  onAdvertisement(
+    pluginId: string,
+    callback: (adv: BLEAdvertisement) => void
+  ): () => void
 
   /** All visible devices, deduplicated by MAC */
   getDevices(): Promise<BLEDeviceInfo[]>
@@ -287,6 +291,18 @@ export interface BLEProviders {
       transport?: string
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Consumer info for /consumers endpoint
+// ---------------------------------------------------------------------------
+
+/** @category BLE API */
+export interface BLEConsumerInfo {
+  pluginId: string
+  advertisementSubscriber: boolean
+  /** MAC addresses of devices with active GATT claims held by this consumer */
+  gattClaims: string[]
 }
 
 // ---------------------------------------------------------------------------

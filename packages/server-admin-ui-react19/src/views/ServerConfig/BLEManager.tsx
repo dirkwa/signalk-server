@@ -7,9 +7,9 @@ import Table from 'react-bootstrap/Table'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBluetooth } from '@fortawesome/free-brands-svg-icons/faBluetooth'
 import { faCircle } from '@fortawesome/free-solid-svg-icons/faCircle'
-import { faMicrochip } from '@fortawesome/free-solid-svg-icons/faMicrochip'
 import { faTowerBroadcast } from '@fortawesome/free-solid-svg-icons/faTowerBroadcast'
 import { faLink } from '@fortawesome/free-solid-svg-icons/faLink'
+import { faPlug } from '@fortawesome/free-solid-svg-icons/faPlug'
 
 const BLE_API = '/signalk/v2/api/vessels/self/ble'
 const GATEWAY_API = '/signalk/v2/api/ble'
@@ -30,13 +30,10 @@ interface BLEDeviceInfo {
   gattClaimedBy?: string | null
 }
 
-interface ProviderInfo {
-  name: string
-  supportsGATT: boolean
-  gattSlots: {
-    total: number
-    available: number
-  }
+interface ConsumerInfo {
+  pluginId: string
+  advertisementSubscriber: boolean
+  gattClaims: string[]
 }
 
 interface GatewayInfo {
@@ -51,8 +48,6 @@ interface GatewayInfo {
   gattSlots: { total: number; available: number }
   deviceCount: number
 }
-
-type ProvidersMap = Record<string, ProviderInfo>
 
 function formatAge(lastSeen: number): string {
   const seconds = Math.round((Date.now() - lastSeen) / 1000)
@@ -85,25 +80,12 @@ function rssiColor(rssi: number): string {
 
 export default function BLEManager() {
   const [devices, setDevices] = useState<BLEDeviceInfo[]>([])
-  const [providers, setProviders] = useState<ProvidersMap>({})
+  const [consumers, setConsumers] = useState<ConsumerInfo[]>([])
   const [gateways, setGateways] = useState<GatewayInfo[]>([])
   const [wsConnected, setWsConnected] = useState(false)
   const [advCount, setAdvCount] = useState(0)
   const wsRef = useRef<WebSocket | null>(null)
   const advCountRef = useRef(0)
-
-  const fetchProviders = useCallback(async () => {
-    try {
-      const response = await fetch(`${BLE_API}/_providers`, {
-        credentials: 'include'
-      })
-      if (response.ok) {
-        setProviders(await response.json())
-      }
-    } catch (e) {
-      console.error('Failed to fetch BLE providers:', e)
-    }
-  }, [])
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -115,6 +97,19 @@ export default function BLEManager() {
       }
     } catch (e) {
       console.error('Failed to fetch BLE devices:', e)
+    }
+  }, [])
+
+  const fetchConsumers = useCallback(async () => {
+    try {
+      const response = await fetch(`${BLE_API}/consumers`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        setConsumers(await response.json())
+      }
+    } catch (_e) {
+      // ignore
     }
   }, [])
 
@@ -134,14 +129,14 @@ export default function BLEManager() {
   // Poll every 5 seconds (initial fetch + interval)
   useEffect(() => {
     const poll = () => {
-      fetchProviders()
       fetchDevices()
+      fetchConsumers()
       fetchGateways()
     }
     const interval = setInterval(poll, 5000)
     poll()
     return () => clearInterval(interval)
-  }, [fetchProviders, fetchDevices, fetchGateways])
+  }, [fetchDevices, fetchConsumers, fetchGateways])
 
   // WebSocket for advertisement count
   useEffect(() => {
@@ -169,8 +164,8 @@ export default function BLEManager() {
     }
   }, [])
 
-  const providerEntries = Object.entries(providers)
-  const hasProviders = providerEntries.length > 0
+  const hasGateways = gateways.length > 0
+  const hasConsumers = consumers.length > 0
 
   return (
     <div className="animated fadeIn">
@@ -191,9 +186,9 @@ export default function BLEManager() {
         <Col sm="3">
           <Card className="text-center">
             <Card.Body className="py-3">
-              <div className="h5 mb-0">{providerEntries.length}</div>
+              <div className="h5 mb-0">{consumers.length}</div>
               <small className="text-body-secondary text-uppercase fw-bold">
-                Providers
+                Consumers
               </small>
             </Card.Body>
           </Card>
@@ -230,15 +225,16 @@ export default function BLEManager() {
       {/* Gateways */}
       <Card className="mb-3">
         <Card.Header>
-          <FontAwesomeIcon icon={faMicrochip} /> <strong>BLE Gateways</strong>
-          {gateways.length > 0 && (
+          <FontAwesomeIcon icon={faTowerBroadcast} />{' '}
+          <strong>BLE Gateways</strong>
+          {hasGateways && (
             <Badge bg="primary" className="ms-2">
               {gateways.filter((g) => g.online).length}/{gateways.length}
             </Badge>
           )}
         </Card.Header>
         <Card.Body>
-          {gateways.length === 0 ? (
+          {!hasGateways ? (
             <p className="text-body-secondary mb-0">
               No gateways connected. Flash an ESP32 gateway with the BLE
               gateway firmware and power it on to get started.
@@ -296,46 +292,58 @@ export default function BLEManager() {
         </Card.Body>
       </Card>
 
-      {/* Providers */}
+      {/* Consumer Plugins */}
       <Card className="mb-3">
         <Card.Header>
-          <FontAwesomeIcon icon={faTowerBroadcast} />{' '}
-          <strong>BLE Providers</strong>
+          <FontAwesomeIcon icon={faPlug} />{' '}
+          <strong>Consumer Plugins</strong>
+          {hasConsumers && (
+            <Badge bg="primary" className="ms-2">
+              {consumers.length}
+            </Badge>
+          )}
         </Card.Header>
         <Card.Body>
-          {!hasProviders ? (
+          {!hasConsumers ? (
             <p className="text-body-secondary mb-0">
-              No BLE providers registered. Connect a gateway above to get
-              started.
+              No consumer plugins registered. Install a BLE consumer plugin
+              such as bt-sensors-plugin-sk.
             </p>
           ) : (
             <Table hover responsive striped size="sm">
               <thead>
                 <tr>
                   <th>Plugin ID</th>
-                  <th>Name</th>
-                  <th>GATT Support</th>
-                  <th>GATT Slots</th>
+                  <th>Advertisements</th>
+                  <th>GATT Claims</th>
                 </tr>
               </thead>
               <tbody>
-                {providerEntries.map(([id, info]) => (
-                  <tr key={id}>
+                {consumers.map((c) => (
+                  <tr key={c.pluginId}>
                     <td>
-                      <code>{id}</code>
+                      <code>{c.pluginId}</code>
                     </td>
-                    <td>{info.name}</td>
                     <td>
-                      {info.supportsGATT ? (
+                      {c.advertisementSubscriber ? (
                         <Badge bg="success">Yes</Badge>
                       ) : (
                         <Badge bg="secondary">No</Badge>
                       )}
                     </td>
                     <td>
-                      {info.supportsGATT
-                        ? `${info.gattSlots.available} available`
-                        : '-'}
+                      {c.gattClaims.length === 0
+                        ? '-'
+                        : c.gattClaims.map((mac) => (
+                            <Badge
+                              key={mac}
+                              bg="warning"
+                              text="dark"
+                              className="me-1"
+                            >
+                              <FontAwesomeIcon icon={faLink} /> {mac}
+                            </Badge>
+                          ))}
                     </td>
                   </tr>
                 ))}
@@ -358,9 +366,9 @@ export default function BLEManager() {
         <Card.Body>
           {devices.length === 0 ? (
             <p className="text-body-secondary mb-0">
-              {hasProviders
+              {hasGateways
                 ? 'No BLE devices detected yet. Waiting for advertisements...'
-                : 'No devices. Connect a gateway first.'}
+                : 'No BLE devices detected. Enable local Bluetooth in settings or connect a gateway to start scanning.'}
             </p>
           ) : (
             <Table hover responsive striped size="sm">

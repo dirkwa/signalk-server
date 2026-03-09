@@ -15,6 +15,7 @@ import {
   BLEProviders,
   BLEAdvertisement,
   BLEDeviceInfo,
+  BLEConsumerInfo,
   BLEApi as IBLEApi,
   GATTSubscriptionDescriptor,
   GATTSubscriptionHandle,
@@ -55,8 +56,10 @@ export class BLEApi implements IBLEApi {
   private providerUnsubscribers: Map<string, () => void> = new Map()
   private deviceTable: Map<string, BLEDeviceInfo> = new Map()
   private gattClaims: Map<string, GATTClaim> = new Map()
-  private advertisementCallbacks: Set<(adv: BLEAdvertisement) => void> =
-    new Set()
+  private advertisementCallbacks: Map<
+    string,
+    (adv: BLEAdvertisement) => void
+  > = new Map()
   private wsClients: Set<WebSocket> = new Set()
   private localProvider: LocalBLEProvider | null = null
   private localProviderError: string | null = null
@@ -190,10 +193,13 @@ export class BLEApi implements IBLEApi {
   // Advertisement handling
   // -------------------------------------------------------------------
 
-  onAdvertisement(callback: (adv: BLEAdvertisement) => void): () => void {
-    this.advertisementCallbacks.add(callback)
+  onAdvertisement(
+    pluginId: string,
+    callback: (adv: BLEAdvertisement) => void
+  ): () => void {
+    this.advertisementCallbacks.set(pluginId, callback)
     return () => {
-      this.advertisementCallbacks.delete(callback)
+      this.advertisementCallbacks.delete(pluginId)
     }
   }
 
@@ -240,7 +246,7 @@ export class BLEApi implements IBLEApi {
     device.gattClaimedBy = claim?.pluginId
 
     // Fan out to callbacks
-    for (const cb of this.advertisementCallbacks) {
+    for (const cb of this.advertisementCallbacks.values()) {
       try {
         cb(adv)
       } catch (e: any) {
@@ -477,6 +483,36 @@ export class BLEApi implements IBLEApi {
         res.json({
           claimedBy: claim?.pluginId ?? null
         })
+      }
+    )
+
+    // Consumer plugins
+    this.app.get(
+      `${BLE_API_PATH}/consumers`,
+      async (_req: Request, res: Response) => {
+        const consumerMap = new Map<string, BLEConsumerInfo>()
+
+        for (const pluginId of this.advertisementCallbacks.keys()) {
+          consumerMap.set(pluginId, {
+            pluginId,
+            advertisementSubscriber: true,
+            gattClaims: []
+          })
+        }
+        for (const [mac, claim] of this.gattClaims) {
+          let entry = consumerMap.get(claim.pluginId)
+          if (!entry) {
+            entry = {
+              pluginId: claim.pluginId,
+              advertisementSubscriber: false,
+              gattClaims: []
+            }
+            consumerMap.set(claim.pluginId, entry)
+          }
+          entry.gattClaims.push(mac)
+        }
+
+        res.json(Array.from(consumerMap.values()))
       }
     )
 
