@@ -89,16 +89,47 @@
         "type": "object",
         "properties": {
           "gatewayId": { "type": "string", "example": "signalk-ble-gw" },
-          "providerId": { "type": "string", "example": "ble:gateway:signalk-ble-gw" },
+          "providerId": {
+            "type": "string",
+            "example": "ble:gateway:signalk-ble-gw"
+          },
           "online": { "type": "boolean" },
-          "ipAddress": { "type": "string", "nullable": true, "example": "192.168.0.120" },
-          "mac": { "type": "string", "nullable": true, "example": "F0:24:F9:F5:BD:4E" },
-          "hostname": { "type": "string", "nullable": true, "example": "signalk-ble-gw" },
-          "firmware": { "type": "string", "nullable": true, "example": "1.0.0" },
-          "connectedAt": { "type": "number", "description": "Unix timestamp (ms) when gateway connected" },
-          "disconnectedAt": { "type": "number", "description": "Unix timestamp (ms) when gateway disconnected (offline only)" },
-          "uptime": { "type": "number", "description": "Gateway uptime in seconds" },
-          "freeHeap": { "type": "number", "description": "Free heap memory in bytes" },
+          "ipAddress": {
+            "type": "string",
+            "nullable": true,
+            "example": "192.168.0.120"
+          },
+          "mac": {
+            "type": "string",
+            "nullable": true,
+            "example": "F0:24:F9:F5:BD:4E"
+          },
+          "hostname": {
+            "type": "string",
+            "nullable": true,
+            "example": "signalk-ble-gw"
+          },
+          "firmware": {
+            "type": "string",
+            "nullable": true,
+            "example": "1.0.0"
+          },
+          "connectedAt": {
+            "type": "number",
+            "description": "Unix timestamp (ms) when gateway connected"
+          },
+          "disconnectedAt": {
+            "type": "number",
+            "description": "Unix timestamp (ms) when gateway disconnected (offline only)"
+          },
+          "uptime": {
+            "type": "number",
+            "description": "Gateway uptime in seconds"
+          },
+          "freeHeap": {
+            "type": "number",
+            "description": "Free heap memory in bytes"
+          },
           "gattSlots": {
             "type": "object",
             "properties": {
@@ -106,7 +137,10 @@
               "available": { "type": "number" }
             }
           },
-          "deviceCount": { "type": "number", "description": "Number of unique BLE devices seen by this gateway" }
+          "deviceCount": {
+            "type": "number",
+            "description": "Number of unique BLE devices seen by this gateway"
+          }
         }
       },
       "BLEProviders": {
