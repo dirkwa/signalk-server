@@ -310,6 +310,8 @@ export class BLEApi implements IBLEApi {
   private pruneStaleDevices() {
     const cutoff = Date.now() - DEVICE_STALE_MS
     for (const [mac, device] of this.deviceTable) {
+      // Never prune a device that has an active GATT claim
+      if (this.gattClaims.has(mac)) continue
       if (device.lastSeen < cutoff) {
         this.deviceTable.delete(mac)
       }
@@ -347,9 +349,28 @@ export class BLEApi implements IBLEApi {
     this.gattClaims.set(mac, { pluginId, providerId, handle })
     debug(`GATT claim: ${mac} → ${pluginId} via ${providerId}`)
 
+    // Ensure the device exists in the table — GATT devices may stop advertising
+    // once connected, so they would otherwise be pruned.
+    if (!this.deviceTable.has(mac)) {
+      this.deviceTable.set(mac, {
+        mac,
+        rssi: 0,
+        lastSeen: Date.now(),
+        connectable: true,
+        seenBy: [{ providerId, rssi: 0, lastSeen: Date.now() }]
+      })
+    }
+    // Keep lastSeen fresh for the duration of the claim so the device
+    // is not pruned while GATT is active (GATT devices stop advertising).
+    const keepAliveTimer = setInterval(() => {
+      const d = this.deviceTable.get(mac)
+      if (d) d.lastSeen = Date.now()
+    }, DEVICE_STALE_MS / 2)
+
     // Wire up cleanup on close
     const origClose = handle.close.bind(handle)
     handle.close = async () => {
+      clearInterval(keepAliveTimer)
       this.gattClaims.delete(mac)
       debug(`GATT released: ${mac} (was ${pluginId})`)
       return origClose()
