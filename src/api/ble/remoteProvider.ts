@@ -274,6 +274,7 @@ interface GatewayInfo {
 
 type RegisterFn = (id: string, provider: BLEProvider) => void
 type UnregisterFn = (id: string) => void
+type ReleaseGATTClaimsFn = (providerId: string) => void
 
 interface RemoteGatewayApp extends IRouter {
   server?: import('http').Server
@@ -292,7 +293,8 @@ export class RemoteGatewayProvider {
   constructor(
     private readonly app: RemoteGatewayApp,
     private readonly registerProvider: RegisterFn,
-    private readonly unregisterProvider: UnregisterFn
+    private readonly unregisterProvider: UnregisterFn,
+    private readonly releaseGATTClaims: ReleaseGATTClaimsFn
   ) {}
 
   attach(router: IRouter) {
@@ -532,6 +534,9 @@ export class RemoteGatewayProvider {
             OFFLINE_SNAPSHOT_MS
           )
 
+          // Release GATT claims held through this gateway before firing disconnect callbacks,
+          // so plugins can immediately re-claim via another provider.
+          this.releaseGATTClaims(`ble:gateway:${gatewayId}`)
           session.handleDisconnect()
           this.sessions.delete(gatewayId)
           // Don't unregister provider — keeps it in the providers list with 0 slots

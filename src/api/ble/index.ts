@@ -91,7 +91,8 @@ export class BLEApi implements IBLEApi {
     this.remoteGatewayProvider = new RemoteGatewayProvider(
       this.app,
       this.register.bind(this),
-      this.unRegister.bind(this)
+      this.unRegister.bind(this),
+      this.releaseGATTClaimsForProvider.bind(this)
     )
     this.remoteGatewayProvider.attach(this.app)
 
@@ -396,6 +397,23 @@ export class BLEApi implements IBLEApi {
       result.set(mac, claim.pluginId)
     }
     return result
+  }
+
+  /**
+   * Release all GATT claims held through the given providerId.
+   * Called when a gateway WS disconnects so plugins can re-subscribe
+   * via another provider (or the same one when it reconnects).
+   */
+  releaseGATTClaimsForProvider(providerId: string) {
+    for (const [mac, claim] of this.gattClaims) {
+      if (claim.providerId === providerId) {
+        // Remove claim first so close() doesn't double-delete
+        this.gattClaims.delete(mac)
+        // Close silently — the underlying WS is already dead
+        claim.handle.close().catch(() => {})
+        debug(`GATT claim released (gateway offline): ${mac} was ${claim.pluginId} via ${providerId}`)
+      }
+    }
   }
 
   private selectGATTProvider(mac: string): string | undefined {
