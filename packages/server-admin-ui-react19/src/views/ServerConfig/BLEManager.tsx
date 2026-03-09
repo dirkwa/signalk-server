@@ -365,7 +365,7 @@ export default function BLEManager() {
                     </tr>
                   )
                 })}
-                {Object.entries(adapterErrors).map(([adapterName, _error]) => (
+                {Object.keys(adapterErrors).map((adapterName) => (
                   <tr key={adapterName}>
                     <td>
                       <code>{adapterName}</code>
