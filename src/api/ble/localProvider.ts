@@ -86,12 +86,14 @@ export class LocalBLEProvider {
   private scanning = false
   private adapterReady = false
 
-  readonly providerId = '_localBLE'
+  readonly providerId: string
 
   constructor(
     private adapterName: string = 'hci0',
-    maxSlots: number = 3
+    maxSlots: number = 3,
+    providerId: string = '_localBLE:hci0'
   ) {
+    this.providerId = providerId
     this.maxGATTSlots = maxSlots
   }
 

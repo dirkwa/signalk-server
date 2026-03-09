@@ -36,7 +36,7 @@ interface BLEApplication
 
 interface BLESettings {
   localBluetoothManaged: boolean
-  localAdapter: string
+  localAdapters: string[] // [] = auto-enumerate all available adapters
   localMaxGATTSlots: number
 }
 
@@ -48,7 +48,7 @@ interface GATTClaim {
 
 const DEFAULT_BLE_SETTINGS: BLESettings = {
   localBluetoothManaged: false,
-  localAdapter: 'hci0',
+  localAdapters: [],
   localMaxGATTSlots: 3
 }
 
@@ -57,18 +57,20 @@ export class BLEApi implements IBLEApi {
   private providerUnsubscribers: Map<string, () => void> = new Map()
   private deviceTable: Map<string, BLEDeviceInfo> = new Map()
   private gattClaims: Map<string, GATTClaim> = new Map()
-  private advertisementCallbacks: Map<
-    string,
-    (adv: BLEAdvertisement) => void
-  > = new Map()
+  private advertisementCallbacks: Map<string, (adv: BLEAdvertisement) => void> =
+    new Map()
   private wsClients: Set<WebSocket> = new Set()
-  private localProvider: LocalBLEProvider | null = null
-  private localProviderError: string | null = null
+  private localProviders: Map<string, LocalBLEProvider> = new Map() // key = providerId
+  private localProviderErrors: Map<string, string> = new Map() // key = adapterName
   private settings: BLESettings
   private remoteGatewayProvider: RemoteGatewayProvider | null = null
 
   get localBluetoothManaged(): boolean {
     return this.settings.localBluetoothManaged
+  }
+
+  get localAdapters(): string[] {
+    return this.settings.localAdapters
   }
 
   constructor(private app: BLEApplication) {
@@ -96,49 +98,69 @@ export class BLEApi implements IBLEApi {
     )
     this.remoteGatewayProvider.attach(this.app)
 
-    // Initialize local BLE provider if setting is enabled
+    // Initialize local BLE providers if setting is enabled
     if (this.settings.localBluetoothManaged) {
-      await this.initLocalProvider()
+      await this.initLocalProviders()
     }
 
     return Promise.resolve()
   }
 
-  private async initLocalProvider() {
+  private async getAvailableAdapters(): Promise<string[]> {
     try {
-      const provider = new LocalBLEProvider(
-        this.settings.localAdapter,
-        this.settings.localMaxGATTSlots
-      )
-      await provider.init()
-      this.localProvider = provider
-      this.localProviderError = null
-
-      // Register as a built-in provider
-      this.register('_localBLE', {
-        name: 'Local Bluetooth',
-        methods: provider.getMethods()
-      })
-
-      // Start scanning
-      await provider.startDiscovery()
-      debug('Local BLE provider registered and scanning')
-    } catch (e: any) {
-      const msg = `Local BLE provider unavailable: ${e.message} — continuing without local Bluetooth`
-      debug(msg)
-      console.log(`[BLE API] ${msg}`)
-      this.localProvider = null
-      this.localProviderError = e.message
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createBluetooth } = require('@naugehyde/node-ble')
+      const { bluetooth, destroy } = createBluetooth()
+      const adapters = await bluetooth.activeAdapters()
+      destroy()
+      return adapters.map((a: any) => a.adapter as string)
+    } catch {
+      return []
     }
   }
 
-  private async shutdownLocalProvider() {
-    if (this.localProvider) {
-      this.unRegister('_localBLE')
-      this.localProvider.shutdown()
-      this.localProvider = null
-      debug('Local BLE provider shut down')
+  private async initLocalProviders() {
+    let adapterNames = this.settings.localAdapters
+    if (adapterNames.length === 0) {
+      adapterNames = await this.getAvailableAdapters()
+      if (adapterNames.length === 0) adapterNames = ['hci0']
     }
+
+    for (const adapterName of adapterNames) {
+      const providerId = `_localBLE:${adapterName}`
+      if (this.localProviders.has(providerId)) continue
+      try {
+        const provider = new LocalBLEProvider(
+          adapterName,
+          this.settings.localMaxGATTSlots,
+          providerId
+        )
+        await provider.init()
+        this.localProviders.set(providerId, provider)
+        this.localProviderErrors.delete(adapterName)
+        this.register(providerId, {
+          name: `Local Bluetooth (${adapterName})`,
+          methods: provider.getMethods()
+        })
+        await provider.startDiscovery()
+        debug(`Local BLE provider registered and scanning: ${providerId}`)
+      } catch (e: any) {
+        const msg = `Local BLE adapter ${adapterName} unavailable: ${e.message}`
+        debug(msg)
+        console.log(`[BLE API] ${msg}`)
+        this.localProviderErrors.set(adapterName, e.message)
+      }
+    }
+  }
+
+  private async shutdownLocalProviders() {
+    for (const [providerId, provider] of this.localProviders) {
+      this.unRegister(providerId)
+      provider.shutdown()
+      debug(`Local BLE provider shut down: ${providerId}`)
+    }
+    this.localProviders.clear()
+    this.localProviderErrors.clear()
   }
 
   // -------------------------------------------------------------------
@@ -404,6 +426,20 @@ export class BLEApi implements IBLEApi {
    * Called when a gateway WS disconnects so plugins can re-subscribe
    * via another provider (or the same one when it reconnects).
    */
+  private _buildSettingsResponse() {
+    const adapterErrors: Record<string, string> = {}
+    for (const [k, v] of this.localProviderErrors) {
+      adapterErrors[k] = v
+    }
+    return {
+      localBluetoothManaged: this.settings.localBluetoothManaged,
+      localAdapters: this.settings.localAdapters,
+      localMaxGATTSlots: this.settings.localMaxGATTSlots,
+      activeAdapters: Array.from(this.localProviders.keys()),
+      adapterErrors
+    }
+  }
+
   releaseGATTClaimsForProvider(providerId: string) {
     for (const [mac, claim] of this.gattClaims) {
       if (claim.providerId === providerId) {
@@ -411,7 +447,9 @@ export class BLEApi implements IBLEApi {
         this.gattClaims.delete(mac)
         // Close silently — the underlying WS is already dead
         claim.handle.close().catch(() => {})
-        debug(`GATT claim released (gateway offline): ${mac} was ${claim.pluginId} via ${providerId}`)
+        debug(
+          `GATT claim released (gateway offline): ${mac} was ${claim.pluginId} via ${providerId}`
+        )
       }
     }
   }
@@ -546,13 +584,7 @@ export class BLEApi implements IBLEApi {
     this.app.get(
       `${BLE_API_PATH}/settings`,
       async (_req: Request, res: Response) => {
-        res.json({
-          localBluetoothManaged: this.settings.localBluetoothManaged,
-          localBluetoothActive: this.localProvider !== null,
-          localBluetoothError: this.localProviderError,
-          localAdapter: this.settings.localAdapter,
-          localMaxGATTSlots: this.settings.localMaxGATTSlots
-        })
+        res.json(this._buildSettingsResponse())
       }
     )
 
@@ -561,18 +593,22 @@ export class BLEApi implements IBLEApi {
       async (req: Request, res: Response) => {
         const body = req.body
         let changed = false
+        let providerChange = false
 
         if (typeof body.localBluetoothManaged === 'boolean') {
           this.settings.localBluetoothManaged = body.localBluetoothManaged
           changed = true
+          providerChange = true
         }
-        if (typeof body.localAdapter === 'string') {
-          this.settings.localAdapter = body.localAdapter
+        if (Array.isArray(body.localAdapters)) {
+          this.settings.localAdapters = body.localAdapters
           changed = true
+          providerChange = true
         }
         if (typeof body.localMaxGATTSlots === 'number') {
           this.settings.localMaxGATTSlots = body.localMaxGATTSlots
           changed = true
+          providerChange = true
         }
 
         if (changed) {
@@ -589,24 +625,16 @@ export class BLEApi implements IBLEApi {
             }
           )
 
-          // Apply local provider change
-          if (this.settings.localBluetoothManaged && !this.localProvider) {
-            await this.initLocalProvider()
-          } else if (
-            !this.settings.localBluetoothManaged &&
-            this.localProvider
-          ) {
-            await this.shutdownLocalProvider()
+          // Apply provider change
+          if (providerChange) {
+            await this.shutdownLocalProviders()
+            if (this.settings.localBluetoothManaged) {
+              await this.initLocalProviders()
+            }
           }
         }
 
-        res.json({
-          localBluetoothManaged: this.settings.localBluetoothManaged,
-          localBluetoothActive: this.localProvider !== null,
-          localBluetoothError: this.localProviderError,
-          localAdapter: this.settings.localAdapter,
-          localMaxGATTSlots: this.settings.localMaxGATTSlots
-        })
+        res.json(this._buildSettingsResponse())
       }
     )
   }

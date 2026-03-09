@@ -10,6 +10,7 @@ import { faCircle } from '@fortawesome/free-solid-svg-icons/faCircle'
 import { faTowerBroadcast } from '@fortawesome/free-solid-svg-icons/faTowerBroadcast'
 import { faLink } from '@fortawesome/free-solid-svg-icons/faLink'
 import { faPlug } from '@fortawesome/free-solid-svg-icons/faPlug'
+import { faMicrochip } from '@fortawesome/free-solid-svg-icons/faMicrochip'
 
 const BLE_API = '/signalk/v2/api/vessels/self/ble'
 const GATEWAY_API = '/signalk/v2/api/ble'
@@ -34,6 +35,14 @@ interface ConsumerInfo {
   pluginId: string
   advertisementSubscriber: boolean
   gattClaims: string[]
+}
+
+interface BLESettings {
+  localBluetoothManaged: boolean
+  localAdapters: string[]
+  localMaxGATTSlots: number
+  activeAdapters: string[]
+  adapterErrors: Record<string, string>
 }
 
 interface GatewayInfo {
@@ -82,6 +91,7 @@ export default function BLEManager() {
   const [devices, setDevices] = useState<BLEDeviceInfo[]>([])
   const [consumers, setConsumers] = useState<ConsumerInfo[]>([])
   const [gateways, setGateways] = useState<GatewayInfo[]>([])
+  const [bleSettings, setBleSettings] = useState<BLESettings | null>(null)
   const [wsConnected, setWsConnected] = useState(false)
   const [advCount, setAdvCount] = useState(0)
   const wsRef = useRef<WebSocket | null>(null)
@@ -126,17 +136,31 @@ export default function BLEManager() {
     }
   }, [])
 
+  const fetchBleSettings = useCallback(async () => {
+    try {
+      const response = await fetch(`${BLE_API}/settings`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        setBleSettings(await response.json())
+      }
+    } catch (_e) {
+      // ignore
+    }
+  }, [])
+
   // Poll every 5 seconds (initial fetch + interval)
   useEffect(() => {
     const poll = () => {
       fetchDevices()
       fetchConsumers()
       fetchGateways()
+      fetchBleSettings()
     }
     const interval = setInterval(poll, 5000)
     poll()
     return () => clearInterval(interval)
-  }, [fetchDevices, fetchConsumers, fetchGateways])
+  }, [fetchDevices, fetchConsumers, fetchGateways, fetchBleSettings])
 
   // WebSocket for advertisement count
   useEffect(() => {
@@ -166,6 +190,9 @@ export default function BLEManager() {
 
   const hasGateways = gateways.length > 0
   const hasConsumers = consumers.length > 0
+  const localManaged = bleSettings?.localBluetoothManaged ?? false
+  const activeAdapters = bleSettings?.activeAdapters ?? []
+  const adapterErrors = bleSettings?.adapterErrors ?? {}
 
   return (
     <div className="animated fadeIn">
@@ -236,8 +263,8 @@ export default function BLEManager() {
         <Card.Body>
           {!hasGateways ? (
             <p className="text-body-secondary mb-0">
-              No gateways connected. Flash an ESP32 gateway with the BLE
-              gateway firmware and power it on to get started.
+              No gateways connected. Flash an ESP32 gateway with the BLE gateway
+              firmware and power it on to get started.
             </p>
           ) : (
             <Table hover responsive striped size="sm">
@@ -292,11 +319,73 @@ export default function BLEManager() {
         </Card.Body>
       </Card>
 
+      {/* Local Adapters */}
+      <Card className="mb-3">
+        <Card.Header>
+          <FontAwesomeIcon icon={faMicrochip} />{' '}
+          <strong>Local Bluetooth Adapters</strong>
+          {localManaged && activeAdapters.length > 0 && (
+            <Badge bg="success" className="ms-2">
+              {activeAdapters.length} active
+            </Badge>
+          )}
+        </Card.Header>
+        <Card.Body>
+          {!localManaged ? (
+            <p className="text-body-secondary mb-0">
+              Local Bluetooth is disabled. Enable it in{' '}
+              <strong>Server Settings → Bluetooth</strong>.
+            </p>
+          ) : activeAdapters.length === 0 &&
+            Object.keys(adapterErrors).length === 0 ? (
+            <p className="text-body-secondary mb-0">
+              No local adapters running yet…
+            </p>
+          ) : (
+            <Table hover responsive striped size="sm">
+              <thead>
+                <tr>
+                  <th>Adapter</th>
+                  <th>Status</th>
+                  <th>GATT Slots</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeAdapters.map((providerId) => {
+                  const adapterName = providerId.replace('_localBLE:', '')
+                  return (
+                    <tr key={providerId}>
+                      <td>
+                        <code>{adapterName}</code>
+                      </td>
+                      <td>
+                        <Badge bg="success">Active</Badge>
+                      </td>
+                      <td>{bleSettings?.localMaxGATTSlots ?? '-'}</td>
+                    </tr>
+                  )
+                })}
+                {Object.entries(adapterErrors).map(([adapterName, error]) => (
+                  <tr key={adapterName}>
+                    <td>
+                      <code>{adapterName}</code>
+                    </td>
+                    <td>
+                      <Badge bg="danger">Failed</Badge>
+                    </td>
+                    <td className="text-body-secondary">{error}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </Card.Body>
+      </Card>
+
       {/* Consumer Plugins */}
       <Card className="mb-3">
         <Card.Header>
-          <FontAwesomeIcon icon={faPlug} />{' '}
-          <strong>Consumer Plugins</strong>
+          <FontAwesomeIcon icon={faPlug} /> <strong>Consumer Plugins</strong>
           {hasConsumers && (
             <Badge bg="primary" className="ms-2">
               {consumers.length}
@@ -306,8 +395,8 @@ export default function BLEManager() {
         <Card.Body>
           {!hasConsumers ? (
             <p className="text-body-secondary mb-0">
-              No consumer plugins registered. Install a BLE consumer plugin
-              such as bt-sensors-plugin-sk.
+              No consumer plugins registered. Install a BLE consumer plugin such
+              as bt-sensors-plugin-sk.
             </p>
           ) : (
             <Table hover responsive striped size="sm">
