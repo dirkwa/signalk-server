@@ -2,6 +2,7 @@
 import { createDebug } from '../../debug'
 const debug = createDebug('signalk-server:api:ble')
 
+import fs from 'fs'
 import { IRouter, Request, Response } from 'express'
 import { WithSecurityStrategy } from '../../security'
 import { SignalKMessageHub, WithConfig } from '../../app'
@@ -106,7 +107,26 @@ export class BLEApi implements IBLEApi {
     return Promise.resolve()
   }
 
+  // Local Bluetooth adapter support requires Linux + BlueZ. Not available on
+  // macOS or Windows (no DBus/BlueZ). See docs/develop/rest-api/ble_api.md.
+  private isLocalBLESupported(): boolean {
+    return process.platform === 'linux'
+  }
+
   private async getAvailableAdapters(): Promise<string[]> {
+    // /sys/class/bluetooth is populated by the kernel for every BT adapter.
+    // Empty or absent means no hardware — skip to avoid DBus stack traces.
+    try {
+      const entries = fs.readdirSync('/sys/class/bluetooth')
+      if (entries.length === 0) {
+        debug('No Bluetooth hardware detected — skipping local BLE')
+        return []
+      }
+    } catch {
+      debug('No Bluetooth hardware detected — skipping local BLE')
+      return []
+    }
+
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { createBluetooth } = require('@naugehyde/node-ble')
@@ -120,6 +140,11 @@ export class BLEApi implements IBLEApi {
   }
 
   private async initLocalProviders() {
+    if (!this.isLocalBLESupported()) {
+      debug('Local Bluetooth not supported on this platform — skipping')
+      return
+    }
+
     let adapterNames = this.settings.localAdapters
     if (adapterNames.length === 0) {
       adapterNames = await this.getAvailableAdapters()
@@ -147,7 +172,15 @@ export class BLEApi implements IBLEApi {
       } catch (e: any) {
         const msg = `Local BLE adapter ${adapterName} unavailable: ${e.message}`
         debug(msg)
-        console.log(`[BLE API] ${msg}`)
+        // Suppress console.log for expected "no hardware / no BlueZ" errors
+        const isExpected =
+          e.message?.includes('org.freedesktop.DBus.Error.ServiceUnknown') ||
+          e.message?.includes('not provided by any .service files') ||
+          e.message?.includes('ENOENT') ||
+          e.message?.includes('ECONNREFUSED')
+        if (!isExpected) {
+          console.log(`[BLE API] ${msg}`)
+        }
         this.localProviderErrors.set(adapterName, e.message)
       }
     }
@@ -463,6 +496,7 @@ export class BLEApi implements IBLEApi {
       localBluetoothManaged: this.settings.localBluetoothManaged,
       localAdapters: this.settings.localAdapters,
       localMaxGATTSlots: this.settings.localMaxGATTSlots,
+      localBLESupported: this.isLocalBLESupported(),
       activeAdapters: Array.from(this.localProviders.keys()),
       adapterErrors
     }
@@ -624,6 +658,13 @@ export class BLEApi implements IBLEApi {
         let providerChange = false
 
         if (typeof body.localBluetoothManaged === 'boolean') {
+          if (body.localBluetoothManaged && !this.isLocalBLESupported()) {
+            res.status(400).json({
+              message:
+                'Local Bluetooth adapter management is only supported on Linux.'
+            })
+            return
+          }
           this.settings.localBluetoothManaged = body.localBluetoothManaged
           changed = true
           providerChange = true

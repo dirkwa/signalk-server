@@ -27,6 +27,8 @@ BLE hardware access is provided by **provider plugins** (or built-in adapters). 
 
 Enable in **Server Settings → Bluetooth** (`localBluetoothManaged: true`). The server enumerates all available BlueZ adapters and registers each as a separate provider (`_localBLE:hci0`, `_localBLE:hci1`, …). An explicit list can be configured via `localAdapters`.
 
+> **Platform support:** Local Bluetooth adapter management uses BlueZ and is only available on Linux. It is not supported on macOS or Windows. ESP32 gateways and consumer plugins work on all platforms.
+
 ### ESP32 BLE Gateway
 
 A WebSocket-based provider that accepts connections from ESP32 devices running the Signal K BLE gateway firmware. Each gateway is registered as `ble:gateway:<hostname>`. Gateways are visible in the BLE Manager UI and remain listed even when offline.

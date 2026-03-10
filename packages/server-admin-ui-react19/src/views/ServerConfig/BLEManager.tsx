@@ -41,6 +41,7 @@ interface BLESettings {
   localBluetoothManaged: boolean
   localAdapters: string[]
   localMaxGATTSlots: number
+  localBLESupported: boolean
   activeAdapters: string[]
   adapterErrors: Record<string, string>
 }
@@ -191,6 +192,7 @@ export default function BLEManager() {
   const hasGateways = gateways.length > 0
   const hasConsumers = consumers.length > 0
   const localManaged = bleSettings?.localBluetoothManaged ?? false
+  const localBLESupported = bleSettings?.localBLESupported ?? true
   const activeAdapters = bleSettings?.activeAdapters ?? []
   const adapterErrors = bleSettings?.adapterErrors ?? {}
 
@@ -331,7 +333,12 @@ export default function BLEManager() {
           )}
         </Card.Header>
         <Card.Body>
-          {!localManaged ? (
+          {!localBLESupported ? (
+            <p className="text-body-secondary mb-0">
+              Local Bluetooth adapter management is only supported on Linux.
+              ESP32 gateways work on all platforms.
+            </p>
+          ) : !localManaged ? (
             <p className="text-body-secondary mb-0">
               Local Bluetooth is disabled. Enable it in{' '}
               <strong>Server Settings → Bluetooth</strong>.
