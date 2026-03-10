@@ -5,24 +5,24 @@
  */
 const BLE_COMPANY_IDS: Record<number, string> = {
   0x0006: 'Microsoft',
-  0x004C: 'Apple',
+  0x004c: 'Apple',
   0x0059: 'Nordic Semiconductor',
   0x0075: 'Samsung',
-  0x00E0: 'Google',
-  0x01D3: 'Garmin',
-  0x01F5: 'FLIR Systems',
-  0x0499: 'Ruuvi Innovations',  // RuuviTag environmental sensor
-  0x059D: 'Mopeka Products',    // Mopeka tank sensors
-  0x02E1: 'Victron Energy',     // Victron solar, battery, inverter, DCDC
-  0x06D5: 'Shelly',             // Shelly BLE devices
-  0x0BA7: 'Govee',              // Govee sensors
-  0x0DBB: 'Calypso Instruments', // Calypso ultrasonic wind sensor
-  0x0222: 'Sominex',            // Aranet sensors
+  0x00e0: 'Google',
+  0x01d3: 'Garmin',
+  0x01f5: 'FLIR Systems',
+  0x0499: 'Ruuvi Innovations', // RuuviTag environmental sensor
+  0x059d: 'Mopeka Products', // Mopeka tank sensors
+  0x02e1: 'Victron Energy', // Victron solar, battery, inverter, DCDC
+  0x06d5: 'Shelly', // Shelly BLE devices
+  0x0ba7: 'Govee', // Govee sensors
+  0x0dbb: 'Calypso Instruments', // Calypso ultrasonic wind sensor
+  0x0222: 'Sominex', // Aranet sensors
   0x0822: 'Aranet',
-  0x08D3: 'Xiaomi',
-  0x048F: 'Switchbot',
-  0x0969: 'Switchbot',          // SwitchBot T&H (company ID used in advertisements)
-  0x094F: 'Mikrotik',           // MikroTik asset tags
+  0x08d3: 'Xiaomi',
+  0x048f: 'Switchbot',
+  0x0969: 'Switchbot', // SwitchBot T&H (company ID used in advertisements)
+  0x094f: 'Mikrotik' // MikroTik asset tags
 }
 
 /**

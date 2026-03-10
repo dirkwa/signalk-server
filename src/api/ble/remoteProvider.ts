@@ -3,7 +3,6 @@ const debug = createDebug('signalk-server:api:ble:remote')
 
 import { IRouter, Request, Response } from 'express'
 import WebSocket from 'ws'
-import { getSecurityConfig } from '../../security'
 import {
   BLEAdvertisement,
   BLEProvider,
@@ -446,6 +445,33 @@ export class RemoteGatewayProvider {
         debug('Gateway WebSocket connected')
         const gatewayIp: string | null = request.socket?.remoteAddress ?? null
 
+        // Extract token from URL query parameter (?token=<jwt>)
+        // The firmware passes the token obtained via the standard SK HTTP
+        // access-request flow as a URL query parameter, not in the hello body.
+        const reqUrl = new URL(
+          request.url ?? '/',
+          `http://${request.headers.host ?? 'localhost'}`
+        )
+        const urlToken = reqUrl.searchParams.get('token') ?? undefined
+
+        // Validate token at connection time when security is enabled
+        if (this.app.securityStrategy?.canAuthorizeWS()) {
+          let authOk = false
+          if (urlToken) {
+            try {
+              this.app.securityStrategy.authorizeWS({ token: urlToken })
+              authOk = true
+            } catch {
+              debug('Gateway WS: invalid token in URL — closing')
+            }
+          }
+          if (!authOk) {
+            // Close with 4401 so the firmware knows to re-run the auth flow
+            ws.close(4401, 'Unauthorized')
+            return
+          }
+        }
+
         let session: RemoteGATTSession | null = null
         let pongReceived = true
         let pingTimer: ReturnType<typeof setInterval> | null = null
@@ -459,73 +485,11 @@ export class RemoteGatewayProvider {
             return
           }
 
-          // Device access request (before hello — no session yet)
-          if (msg.type === 'access_request' && !session) {
-            if (!this.app.securityStrategy) {
-              ws.send(
-                JSON.stringify({
-                  type: 'auth_response',
-                  state: 'COMPLETED',
-                  statusCode: 404,
-                  message: 'Security not enabled'
-                })
-              )
-              return
-            }
-            const ip = gatewayIp ?? ''
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const config = getSecurityConfig(this.app as any)
-            this.app.securityStrategy
-              .requestAccess(
-                config,
-                { requestId: msg.requestId, accessRequest: msg.accessRequest },
-                ip,
-                (reply: unknown) => {
-                  ws.send(
-                    JSON.stringify({ type: 'auth_response', ...(reply as object) })
-                  )
-                }
-              )
-              .then((reply: unknown) => {
-                ws.send(
-                  JSON.stringify({ type: 'auth_response', ...(reply as object) })
-                )
-              })
-              .catch(() => {})
-            return
-          }
-
           if (msg.type === 'hello' && !session) {
             const gatewayId = msg.gateway_id as string
             if (!gatewayId) {
               debug('Gateway WS: hello missing gateway_id')
               return
-            }
-
-            // Token auth when security is enabled
-            if (this.app.securityStrategy?.canAuthorizeWS()) {
-              const token = msg.token as string | undefined
-              let authOk = false
-              if (token) {
-                try {
-                  this.app.securityStrategy.authorizeWS({ token })
-                  authOk = true
-                } catch {
-                  debug(`Gateway ${gatewayId}: invalid token`)
-                }
-              }
-              if (!authOk) {
-                // clientId: prefer MAC for stable hardware identity, fall back to gateway_id
-                const clientId = (msg.mac as string | undefined) ?? gatewayId
-                ws.send(
-                  JSON.stringify({
-                    type: 'auth_required',
-                    clientId,
-                    description: `BLE Gateway ${gatewayId}`
-                  })
-                )
-                return
-              }
             }
 
             // Close any stale session for same gateway or same IP

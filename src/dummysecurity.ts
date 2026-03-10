@@ -138,7 +138,8 @@ export default function () {
       Promise.resolve({
         state: 'COMPLETED',
         statusCode: 404,
-        message: 'Access requests not available. Server security may not be enabled.'
+        message:
+          'Access requests not available. Server security may not be enabled.'
       })
   }
   //force cast via unknown so that we don't need to

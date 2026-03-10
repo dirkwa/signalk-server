@@ -48,7 +48,11 @@ Returns all BLE devices currently visible across all providers, deduplicated by 
     "lastSeen": 1710000000000,
     "connectable": true,
     "seenBy": [
-      { "providerId": "ble:gateway:esp32-gw1", "rssi": -65, "lastSeen": 1710000000000 }
+      {
+        "providerId": "ble:gateway:esp32-gw1",
+        "rssi": -65,
+        "lastSeen": 1710000000000
+      }
     ],
     "gattClaimedBy": "bt-sensors-plugin-sk"
   }
@@ -109,11 +113,11 @@ Returns BLE configuration and runtime adapter status.
 
 Update BLE settings. Accepted fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `localBluetoothManaged` | boolean | Enable/disable local Bluetooth management |
-| `localAdapters` | string[] | Explicit adapter list; `[]` = auto |
-| `localMaxGATTSlots` | number | Max concurrent GATT connections per local adapter |
+| Field                   | Type     | Description                                       |
+| ----------------------- | -------- | ------------------------------------------------- |
+| `localBluetoothManaged` | boolean  | Enable/disable local Bluetooth management         |
+| `localAdapters`         | string[] | Explicit adapter list; `[]` = auto                |
+| `localMaxGATTSlots`     | number   | Max concurrent GATT connections per local adapter |
 
 Changes take effect immediately — running providers are restarted.
 
@@ -143,16 +147,16 @@ The BLE Manager is available at **Server → BLE Manager** in the admin UI. It s
 
 ### BLEAdvertisement
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `mac` | string | Device MAC address (`AA:BB:CC:DD:EE:FF`) |
-| `name` | string? | Advertised local name |
-| `rssi` | number | Signal strength (dBm) |
-| `manufacturerData` | object? | Company ID (decimal) → hex payload |
-| `serviceData` | object? | Service UUID → hex payload |
-| `serviceUuids` | string[]? | Advertised service UUIDs |
-| `providerId` | string | Provider that received this advertisement |
-| `timestamp` | number | Unix timestamp (ms) |
-| `connectable` | boolean? | Whether the device accepts GATT connections |
-| `txPower` | number? | TX power level (dBm) |
-| `addressType` | string? | `public` or `random` |
+| Field              | Type      | Description                                 |
+| ------------------ | --------- | ------------------------------------------- |
+| `mac`              | string    | Device MAC address (`AA:BB:CC:DD:EE:FF`)    |
+| `name`             | string?   | Advertised local name                       |
+| `rssi`             | number    | Signal strength (dBm)                       |
+| `manufacturerData` | object?   | Company ID (decimal) → hex payload          |
+| `serviceData`      | object?   | Service UUID → hex payload                  |
+| `serviceUuids`     | string[]? | Advertised service UUIDs                    |
+| `providerId`       | string    | Provider that received this advertisement   |
+| `timestamp`        | number    | Unix timestamp (ms)                         |
+| `connectable`      | boolean?  | Whether the device accepts GATT connections |
+| `txPower`          | number?   | TX power level (dBm)                        |
+| `addressType`      | string?   | `public` or `random`                        |
