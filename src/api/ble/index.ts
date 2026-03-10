@@ -333,12 +333,26 @@ export class BLEApi implements IBLEApi {
 
   async getDevices(): Promise<BLEDeviceInfo[]> {
     this.pruneStaleDevices()
-    // Ensure gattClaimedBy is current for all devices (GATT devices may not
-    // receive advertisements while connected, so _handleAdvertisement never
-    // gets to update the field).
+    // Ensure every GATT-claimed device is in the table, even if it stopped
+    // advertising after connection (GATT devices typically do).
+    for (const [mac, claim] of this.gattClaims) {
+      if (!this.deviceTable.has(mac)) {
+        this.deviceTable.set(mac, {
+          mac,
+          rssi: 0,
+          lastSeen: Date.now(),
+          connectable: true,
+          seenBy: [{ providerId: claim.providerId, rssi: 0, lastSeen: Date.now() }]
+        })
+      }
+      const device = this.deviceTable.get(mac)!
+      device.gattClaimedBy = claim.pluginId
+    }
+    // Clear gattClaimedBy for devices no longer claimed
     for (const [mac, device] of this.deviceTable) {
-      const claim = this.gattClaims.get(mac)
-      device.gattClaimedBy = claim?.pluginId ?? undefined
+      if (!this.gattClaims.has(mac)) {
+        device.gattClaimedBy = undefined
+      }
     }
     return Array.from(this.deviceTable.values())
   }
