@@ -3,6 +3,7 @@ const debug = createDebug('signalk-server:api:ble:remote')
 
 import { IRouter, Request, Response } from 'express'
 import WebSocket from 'ws'
+import { getSecurityConfig } from '../../security'
 import {
   BLEAdvertisement,
   BLEProvider,
@@ -278,7 +279,9 @@ type ReleaseGATTClaimsFn = (providerId: string) => void
 
 interface RemoteGatewayApp extends IRouter {
   server?: import('http').Server
-  securityStrategy?: object
+  config?: { settings?: { security?: unknown } }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  securityStrategy?: any
 }
 
 export class RemoteGatewayProvider {
@@ -318,6 +321,20 @@ export class RemoteGatewayProvider {
   }
 
   private _handleAdvertisementPost(req: Request, res: Response) {
+    // Token auth when security is enabled
+    if (this.app.securityStrategy?.canAuthorizeWS()) {
+      const authHeader = req.headers['authorization'] as string | undefined
+      const token = authHeader?.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : undefined
+      try {
+        this.app.securityStrategy.authorizeWS({ token })
+      } catch {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+    }
+
     const body = req.body
     if (!body?.gateway_id || !Array.isArray(body.devices)) {
       res.status(400).json({ error: 'Missing gateway_id or devices array' })
@@ -442,11 +459,73 @@ export class RemoteGatewayProvider {
             return
           }
 
+          // Device access request (before hello — no session yet)
+          if (msg.type === 'access_request' && !session) {
+            if (!this.app.securityStrategy) {
+              ws.send(
+                JSON.stringify({
+                  type: 'auth_response',
+                  state: 'COMPLETED',
+                  statusCode: 404,
+                  message: 'Security not enabled'
+                })
+              )
+              return
+            }
+            const ip = gatewayIp ?? ''
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const config = getSecurityConfig(this.app as any)
+            this.app.securityStrategy
+              .requestAccess(
+                config,
+                { requestId: msg.requestId, accessRequest: msg.accessRequest },
+                ip,
+                (reply: unknown) => {
+                  ws.send(
+                    JSON.stringify({ type: 'auth_response', ...(reply as object) })
+                  )
+                }
+              )
+              .then((reply: unknown) => {
+                ws.send(
+                  JSON.stringify({ type: 'auth_response', ...(reply as object) })
+                )
+              })
+              .catch(() => {})
+            return
+          }
+
           if (msg.type === 'hello' && !session) {
             const gatewayId = msg.gateway_id as string
             if (!gatewayId) {
               debug('Gateway WS: hello missing gateway_id')
               return
+            }
+
+            // Token auth when security is enabled
+            if (this.app.securityStrategy?.canAuthorizeWS()) {
+              const token = msg.token as string | undefined
+              let authOk = false
+              if (token) {
+                try {
+                  this.app.securityStrategy.authorizeWS({ token })
+                  authOk = true
+                } catch {
+                  debug(`Gateway ${gatewayId}: invalid token`)
+                }
+              }
+              if (!authOk) {
+                // clientId: prefer MAC for stable hardware identity, fall back to gateway_id
+                const clientId = (msg.mac as string | undefined) ?? gatewayId
+                ws.send(
+                  JSON.stringify({
+                    type: 'auth_required',
+                    clientId,
+                    description: `BLE Gateway ${gatewayId}`
+                  })
+                )
+                return
+              }
             }
 
             // Close any stale session for same gateway or same IP
