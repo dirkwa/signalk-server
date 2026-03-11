@@ -40,6 +40,19 @@ function handleNmea2000Source(
   Object.assign(existing.n2k, source)
   delete existing.n2k.pgn
   delete existing.n2k.label
+
+  // Accumulate data instances per PGN for conflict detection.
+  // source.instance is set by n2k-signalk mapper for single-mapping PGNs.
+  if (source.instance !== undefined) {
+    const pi = (existing.n2k.pgnInstances ??= {} as Record<string, number[]>)
+    const pgn = String(source.pgn)
+    const arr = (pi[pgn] ??= [])
+    const inst = Number(source.instance)
+    if (!isNaN(inst) && !arr.includes(inst)) {
+      arr.push(inst)
+    }
+  }
+
   delete existing.n2k.instance
   delete existing.n2k.type
 
