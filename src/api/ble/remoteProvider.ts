@@ -272,10 +272,10 @@ interface GatewayInfo {
   mac: string | null
   hostname: string | null
   firmware: string | null
-  connectedAt: number
+  connectedAt: number | null
   disconnectedAt?: number
-  uptime: number
-  freeHeap: number
+  uptime?: number
+  freeHeap?: number
   gattSlots: { total: number; available: number }
   deviceCount: number
 }
@@ -670,6 +670,24 @@ export class RemoteGatewayProvider {
         freeHeap: snap.lastFreeHeap,
         gattSlots: { total: snap.maxSlots, available: 0 },
         deviceCount: 0
+      })
+    }
+
+    // Gateways posting via HTTP but not yet connected via WebSocket
+    // (e.g. reconnected after snapshot TTL expired, WS not yet established)
+    for (const [gatewayId] of this.seenMacs) {
+      if (this.sessions.has(gatewayId) || this.snapshots.has(gatewayId)) continue
+      result.push({
+        gatewayId,
+        providerId: `ble:gateway:${gatewayId}`,
+        online: true,
+        ipAddress: null,
+        mac: null,
+        hostname: gatewayId,
+        firmware: null,
+        connectedAt: null,
+        gattSlots: { total: 0, available: 0 },
+        deviceCount: this.seenMacs.get(gatewayId)?.size ?? 0
       })
     }
 
