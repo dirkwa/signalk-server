@@ -198,7 +198,14 @@ class RemoteGATTSession {
     this.sessions.set(sessionId, session)
     this.activeSlots++
 
-    const handle: GATTSubscriptionHandle = {
+    const fireDisconnect = () => {
+      session.connected = false
+      for (const cb of session.disconnectCallbacks) {
+        try { cb() } catch { /* ignore */ }
+      }
+    }
+
+    const handle: GATTSubscriptionHandle & { _fireDisconnect: () => void } = {
       write: async (charUuid: string, data: Buffer) => {
         this.ws.send(
           JSON.stringify({
@@ -224,7 +231,8 @@ class RemoteGATTSession {
       },
       onConnect: (cb) => {
         session.connectCallbacks.push(cb)
-      }
+      },
+      _fireDisconnect: fireDisconnect
     }
 
     debug(

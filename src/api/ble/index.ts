@@ -519,13 +519,14 @@ export class BLEApi implements IBLEApi {
   releaseGATTClaimsForProvider(providerId: string) {
     for (const [mac, claim] of this.gattClaims) {
       if (claim.providerId === providerId) {
-        // Remove claim first so close() doesn't double-delete
         this.gattClaims.delete(mac)
-        // Close silently — the underlying WS is already dead
-        claim.handle.close().catch(() => {})
         debug(
           `GATT claim released (gateway offline): ${mac} was ${claim.pluginId} via ${providerId}`
         )
+        // Fire disconnect callbacks so the plugin knows to reconnect via
+        // another provider. Don't call handle.close() — the WS is already
+        // dead and close() does not fire disconnectCallbacks.
+        ;(claim.handle as any)._fireDisconnect?.()
       }
     }
   }
