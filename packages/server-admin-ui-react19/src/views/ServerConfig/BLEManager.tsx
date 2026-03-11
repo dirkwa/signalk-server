@@ -51,10 +51,10 @@ interface GatewayInfo {
   ipAddress?: string
   firmware?: string
   online: boolean
-  connectedAt: number
+  connectedAt: number | null
   disconnectedAt?: number
-  uptime: number
-  freeHeap: number
+  uptime?: number
+  freeHeap?: number
   gattSlots: { total: number; available: number }
   deviceCount: number
 }
@@ -298,8 +298,8 @@ export default function BLEManager() {
                       </Badge>
                     </td>
                     <td>{gw.firmware || '-'}</td>
-                    <td>{gw.uptime > 0 ? formatDuration(gw.uptime) : '-'}</td>
-                    <td>{gw.freeHeap > 0 ? formatBytes(gw.freeHeap) : '-'}</td>
+                    <td>{gw.uptime ? formatDuration(gw.uptime) : '-'}</td>
+                    <td>{gw.freeHeap ? formatBytes(gw.freeHeap) : '-'}</td>
                     <td>
                       {gw.gattSlots.total > 0
                         ? `${gw.gattSlots.total - gw.gattSlots.available}/${gw.gattSlots.total}`
@@ -308,7 +308,7 @@ export default function BLEManager() {
                     <td>{gw.deviceCount}</td>
                     <td>
                       {gw.online
-                        ? formatAge(gw.connectedAt)
+                        ? gw.connectedAt ? formatAge(gw.connectedAt) : '-'
                         : gw.disconnectedAt
                           ? formatAge(gw.disconnectedAt)
                           : '-'}

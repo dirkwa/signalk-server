@@ -201,7 +201,11 @@ class RemoteGATTSession {
     const fireDisconnect = () => {
       session.connected = false
       for (const cb of session.disconnectCallbacks) {
-        try { cb() } catch { /* ignore */ }
+        try {
+          cb()
+        } catch {
+          /* ignore */
+        }
       }
     }
 
@@ -676,7 +680,8 @@ export class RemoteGatewayProvider {
     // Gateways posting via HTTP but not yet connected via WebSocket
     // (e.g. reconnected after snapshot TTL expired, WS not yet established)
     for (const [gatewayId] of this.seenMacs) {
-      if (this.sessions.has(gatewayId) || this.snapshots.has(gatewayId)) continue
+      if (this.sessions.has(gatewayId) || this.snapshots.has(gatewayId))
+        continue
       result.push({
         gatewayId,
         providerId: `ble:gateway:${gatewayId}`,
