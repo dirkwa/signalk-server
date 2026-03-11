@@ -303,6 +303,8 @@ export class RemoteGatewayProvider {
   private advCallbacks = new Map<string, Set<(adv: BLEAdvertisement) => void>>()
   // Per-gateway: Set<mac> of seen devices
   private seenMacs = new Map<string, Set<string>>()
+  // Per-gateway: timestamp of last HTTP POST (ms)
+  private lastPostTime = new Map<string, number>()
 
   constructor(
     private readonly app: RemoteGatewayApp,
@@ -347,6 +349,7 @@ export class RemoteGatewayProvider {
     }
 
     const body = req.body
+    console.log('[BLE-DEBUG] POST from', body?.gateway_id, 'devices:', JSON.stringify(body?.devices?.map((d: {mac:string,name?:string}) => ({mac: d.mac, name: d.name}))))
     if (!body?.gateway_id || !Array.isArray(body.devices)) {
       res.status(400).json({ error: 'Missing gateway_id or devices array' })
       return
@@ -394,6 +397,7 @@ export class RemoteGatewayProvider {
     }
 
     this.seenMacs.set(gatewayId, macs)
+    this.lastPostTime.set(gatewayId, Date.now())
     res.json({ ok: true })
   }
 
@@ -678,10 +682,13 @@ export class RemoteGatewayProvider {
     }
 
     // Gateways posting via HTTP but not yet connected via WebSocket
-    // (e.g. reconnected after snapshot TTL expired, WS not yet established)
+    // (e.g. reconnected after snapshot TTL expired, WS not yet established).
+    // Only shown if a POST arrived within the snapshot TTL window.
     for (const [gatewayId] of this.seenMacs) {
       if (this.sessions.has(gatewayId) || this.snapshots.has(gatewayId))
         continue
+      const lastPost = this.lastPostTime.get(gatewayId) ?? 0
+      if (Date.now() - lastPost > OFFLINE_SNAPSHOT_MS) continue
       result.push({
         gatewayId,
         providerId: `ble:gateway:${gatewayId}`,
