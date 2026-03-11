@@ -213,7 +213,6 @@ function asyncApiViewerHtml(specsJson: string): string {
       if (depth > 4) return '<div class="schema-block">...</div>';
 
       var html = '';
-      // For objects with properties
       if (schema.type === 'object' && schema.properties) {
         var req = schema.required || [];
         html += '<table class="prop-table"><tr><th>Property</th><th>Type</th><th>Description</th></tr>';
@@ -234,7 +233,6 @@ function asyncApiViewerHtml(specsJson: string): string {
         });
         html += '</div>';
       } else {
-        // Simple type
         html += '<div style="margin:4px 0"><span class="badge badge-type">' + esc(typeLabel(schema)) + '</span>';
         if (schema.description) html += ' <span class="summary">' + esc(schema.description) + '</span>';
         if (schema.enum) html += '<br><span style="color:#858585;font-size:12px">enum: </span><span style="font-family:monospace;font-size:12px;color:#ce9178">' + schema.enum.map(function(e) { return JSON.stringify(e); }).join(', ') + '</span>';
@@ -245,14 +243,12 @@ function asyncApiViewerHtml(specsJson: string): string {
 
     function renderDoc(doc) {
       var html = '';
-      // Header
       html += '<h1>' + esc(doc.info.title) + '</h1>';
       html += '<div class="version">v' + esc(doc.info.version) + ' &mdash; AsyncAPI ' + esc(doc.asyncapi) + '</div>';
       if (doc.info.description) {
         html += '<div class="description">' + md(doc.info.description) + '</div>';
       }
 
-      // Servers
       if (doc.servers) {
         html += '<h2>Servers</h2>';
         Object.keys(doc.servers).forEach(function(sname) {
@@ -266,7 +262,6 @@ function asyncApiViewerHtml(specsJson: string): string {
         });
       }
 
-      // Channels
       if (doc.channels) {
         html += '<h2>Channels</h2>';
         Object.keys(doc.channels).forEach(function(cname) {
@@ -301,7 +296,6 @@ function asyncApiViewerHtml(specsJson: string): string {
         });
       }
 
-      // Operations
       if (doc.operations) {
         html += '<h2>Operations</h2>';
         Object.keys(doc.operations).forEach(function(oname) {
@@ -314,7 +308,6 @@ function asyncApiViewerHtml(specsJson: string): string {
         });
       }
 
-      // Schemas
       if (doc.components && doc.components.schemas) {
         html += '<h2>Schemas</h2>';
         Object.keys(doc.components.schemas).forEach(function(sname) {
