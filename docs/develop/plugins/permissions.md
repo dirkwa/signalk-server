@@ -26,7 +26,6 @@ All HTTP endpoints registered via `registerWithRouter()` are mounted under `/plu
 
 ```javascript
 plugin.registerWithRouter = (router) => {
-  // This endpoint requires admin permission
   router.put('/my-setting', (req, res) => {
     // ...
     res.json({ status: 'ok' })
@@ -60,7 +59,6 @@ plugin.start = (options) => {
       switchController
         .setState(value)
         .then(() => {
-          // Report success — server will emit a delta with the new value
           callback({ state: 'COMPLETED', statusCode: 200 })
         })
         .catch((err) => {
@@ -71,7 +69,6 @@ plugin.start = (options) => {
           })
         })
 
-      // Return PENDING to indicate async processing
       return { state: 'PENDING' }
     }
   )
