@@ -97,6 +97,7 @@ export default class MdnsWs extends Transform {
         notifications: false,
         autoConnect: false,
         deltaStreamBehaviour,
+        sendMeta: 'all',
         rejectUnauthorized: !(options.selfsignedcert === true),
         wsKeepaliveInterval: 10
       })

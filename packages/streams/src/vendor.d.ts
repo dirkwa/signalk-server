@@ -59,6 +59,7 @@ declare module '@signalk/client' {
     notifications?: boolean
     autoConnect?: boolean
     deltaStreamBehaviour?: string
+    sendMeta?: string
     rejectUnauthorized?: boolean
     wsKeepaliveInterval?: number
   }
