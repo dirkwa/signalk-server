@@ -358,6 +358,30 @@ module.exports = function (app) {
         const registryMeta = await npmMetadata.get(pkg.name, pkg.version)
         if (registryMeta && registryMeta.signalk) {
           pkgForEnrichment = { ...pkg, signalk: registryMeta.signalk }
+          // Actively probe declared asset paths on the CDN so plugins that
+          // publish paths relative to their webapp root (e.g.
+          // @signalk/charts-plugin's "./logo.svg" that lives at /public/logo.svg
+          // in the tarball) get a working URL in the enriched payload. Cached
+          // results are consumed by enrichEntry via iconUrlLookup.
+          const signalk = registryMeta.signalk
+          const toProbe = []
+          if (typeof signalk.appIcon === 'string' && signalk.appIcon.trim()) {
+            toProbe.push(signalk.appIcon.trim())
+          }
+          if (Array.isArray(signalk.screenshots)) {
+            for (const s of signalk.screenshots) {
+              if (typeof s === 'string' && s.trim()) toProbe.push(s.trim())
+            }
+          }
+          if (toProbe.length > 0) {
+            await Promise.all(
+              toProbe.map((p) =>
+                probeIconUrl(pkg.name, pkg.version, p, iconProbe).catch((err) =>
+                  debug('probe %s failed on detail for %s: %O', p, name, err)
+                )
+              )
+            )
+          }
         }
       } catch (err) {
         debug('npm metadata fetch for %s failed: %O', name, err)
