@@ -83,7 +83,8 @@ const PluginCard: React.FC<PluginCardProps> = ({
             {typeof score === 'number' && <ScoreRing score={score} size={34} />}
             {typeof stars === 'number' && (
               <div className="plugin-card__metric" title="GitHub stars">
-                ★{stars}
+                <span className="plugin-card__star">★</span>
+                {stars}
               </div>
             )}
             {typeof downloads === 'number' && (
