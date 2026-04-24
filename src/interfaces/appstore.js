@@ -30,6 +30,15 @@ const {
 } = require('../modules')
 const { SERVERROUTESPREFIX } = require('../constants')
 const { getCategories, getAvailableCategories } = require('../categories')
+const {
+  createCache,
+  createRegistryClient,
+  enrichEntry,
+  buildOfflineResponse,
+  buildPluginDetail,
+  readDetailFromCache,
+  badgesToIndicators
+} = require('../appstore')
 
 const bundledAdminUIs = ['@signalk/server-admin-ui']
 
@@ -44,6 +53,10 @@ module.exports = function (app) {
   let moduleInstalling
   const modulesInstalledSinceStartup = {}
   const moduleInstallQueue = []
+  const cache = createCache(app.config.configPath)
+  const registry = createRegistryClient({
+    cacheDir: `${app.config.configPath}/appstore-cache`
+  })
 
   return {
     start: function () {
@@ -167,20 +180,225 @@ module.exports = function (app) {
         Promise.all([
           findPluginsAndWebapps(),
           getLatestServerVersion(app.config.version).catch(() => '0.0.0'),
-          fetchDistTagsForPackages(installedNames).catch(() => ({}))
+          fetchDistTagsForPackages(installedNames).catch(() => ({})),
+          registry.getIndex().catch(() => undefined)
         ])
-          .then(([[plugins, webapps], serverVersion, distTagsMap]) =>
-            getAllModuleInfo(plugins, webapps, serverVersion, distTagsMap)
+          .then(([[plugins, webapps], serverVersion, distTagsMap, regIndex]) =>
+            getAllModuleInfo(
+              plugins,
+              webapps,
+              serverVersion,
+              distTagsMap,
+              regIndex
+            )
           )
-          .then((result) => res.json(result))
+          .then((result) => {
+            try {
+              cache.writeList(result)
+            } catch (err) {
+              debug('writeList failed: %O', err)
+            }
+            scheduleInstalledDetailRefresh(result)
+            res.json(result)
+          })
           .catch((error) => {
             console.log(error.message)
             debug(error.stack)
-            res.json(emptyAppStoreInfo(false))
+            res.json(buildOfflineResponse(app, cache))
           })
       })
+
+      app.get(
+        [
+          `${SERVERROUTESPREFIX}/appstore/plugin/:name`,
+          `${SERVERROUTESPREFIX}/appstore/plugin/:org/:name`
+        ],
+        async (req, res) => {
+          let name = req.params.name
+          if (req.params.org) {
+            name = req.params.org + '/' + name
+          }
+
+          try {
+            const detail = await loadPluginDetail(name)
+            if (!detail) {
+              res.status(404).json({
+                error: 'Plugin not found',
+                name,
+                storeAvailable: false
+              })
+              return
+            }
+            res.json(detail)
+          } catch (err) {
+            console.log(err.message)
+            debug(err.stack)
+            const cached = readDetailFromCache(cache, name)
+            if (cached) {
+              res.json({ ...cached, storeAvailable: false, fromCache: true })
+              return
+            }
+            res.status(503).json({
+              error:
+                'Plugin details not available. Reconnect and refresh to view.',
+              name,
+              storeAvailable: false
+            })
+          }
+        }
+      )
+
+      app.post(`${SERVERROUTESPREFIX}/appstore/refresh`, (req, res) => {
+        cache.invalidateList()
+        registry.invalidate()
+        res.json({ ok: true })
+      })
+
+      app.post(
+        `${SERVERROUTESPREFIX}/appstore/install-with-deps`,
+        async (req, res) => {
+          const { name, version } = req.body || {}
+          if (!name || typeof name !== 'string') {
+            res.status(400).json({ error: 'name is required' })
+            return
+          }
+          try {
+            const [plugins, webapps] = await findPluginsAndWebapps()
+            const match =
+              plugins.find((p) => p.package.name === name) ||
+              webapps.find((w) => w.package.name === name)
+            if (!match) {
+              res.status(404).json({ error: `No such plugin: ${name}` })
+              return
+            }
+            const ext = enrichEntry(match.package)
+            const required = ext.requires || []
+            const toInstall = []
+            for (const dep of required) {
+              if (!getPlugin(dep) && !getWebApp(dep)) {
+                toInstall.push(dep)
+              }
+            }
+            toInstall.push(name)
+            for (const pkgName of toInstall) {
+              const pkgVersion =
+                pkgName === name
+                  ? version
+                  : resolveLatestVersion(pkgName, plugins, webapps)
+              if (moduleInstalling) {
+                moduleInstallQueue.push({
+                  name: pkgName,
+                  version: pkgVersion
+                })
+              } else {
+                installSKModule(pkgName, pkgVersion)
+              }
+            }
+            sendAppStoreChangedEvent()
+            res.json({ queued: toInstall })
+          } catch (err) {
+            console.log(err.message)
+            debug(err.stack)
+            res.status(500).json({ error: err.message })
+          }
+        }
+      )
     },
     stop: () => undefined
+  }
+
+  async function loadPluginDetail(name) {
+    const [plugins, webapps] = await findPluginsAndWebapps()
+    const match =
+      plugins.find((p) => p.package.name === name) ||
+      webapps.find((w) => w.package.name === name)
+    if (!match) {
+      const cached = readDetailFromCache(cache, name)
+      return cached || null
+    }
+    const pkg = match.package
+    const ext = enrichEntry(pkg, { includeIndicators: true })
+    const resolver = buildDependencyResolver(plugins, webapps)
+    const [detail, regIndexEntry] = await Promise.all([
+      buildPluginDetail(
+        {
+          name: pkg.name,
+          version: pkg.version,
+          displayName: ext.displayName,
+          appIcon: ext.appIcon,
+          screenshots: ext.screenshots || [],
+          official: ext.official,
+          deprecated: ext.deprecated,
+          description: pkg.description,
+          keywords: pkg.keywords || [],
+          npmReadme: pkg.readme,
+          githubUrl: ext.githubUrl,
+          lastReleaseDate: pkg.date,
+          requires: ext.requires,
+          recommends: ext.recommends
+        },
+        resolver
+      ),
+      registry.getIndexEntry(name).catch(() => undefined)
+    ])
+
+    if (regIndexEntry) {
+      const { score, checks } = badgesToIndicators(
+        regIndexEntry.badges_stable,
+        regIndexEntry.composite_stable
+      )
+      detail.indicators = {
+        score,
+        checks,
+        reportedPlatforms: [],
+        rawMetrics: {
+          lastReleaseDate: regIndexEntry.last_tested
+        }
+      }
+    }
+
+    const installed = !!getPlugin(name) || !!getWebApp(name)
+    cache.writePluginDetail(detail, installed)
+    return detail
+  }
+
+  function resolveLatestVersion(name, plugins, webapps) {
+    const match =
+      plugins.find((p) => p.package.name === name) ||
+      webapps.find((w) => w.package.name === name)
+    return match ? match.package.version : undefined
+  }
+
+  function buildDependencyResolver(plugins, webapps) {
+    const byName = new Map()
+    for (const p of plugins) byName.set(p.package.name, p.package)
+    for (const w of webapps) byName.set(w.package.name, w.package)
+    return (name) => {
+      const pkg = byName.get(name)
+      const installed = !!getPlugin(name) || !!getWebApp(name)
+      if (!pkg) {
+        return { installed }
+      }
+      const ext = enrichEntry(pkg)
+      return {
+        displayName: ext.displayName,
+        appIcon: ext.appIcon,
+        installed
+      }
+    }
+  }
+
+  function scheduleInstalledDetailRefresh(result) {
+    const installedNames = getInstalledPackageNames()
+    if (installedNames.length === 0) return
+    setImmediate(() => {
+      installedNames.forEach((name) => {
+        loadPluginDetail(name).catch((err) =>
+          debug('background detail refresh for %s failed: %O', name, err)
+        )
+      })
+      void result
+    })
   }
 
   function findPluginsAndWebapps() {
@@ -240,8 +458,20 @@ module.exports = function (app) {
     }
   }
 
-  function getAllModuleInfo(plugins, webapps, serverVersion, distTagsMap = {}) {
+  function getAllModuleInfo(
+    plugins,
+    webapps,
+    serverVersion,
+    distTagsMap = {},
+    regIndex
+  ) {
     const all = emptyAppStoreInfo()
+    const regLookup = new Map()
+    if (regIndex?.plugins) {
+      for (const entry of regIndex.plugins) {
+        regLookup.set(entry.name, entry)
+      }
+    }
 
     if (
       process.argv.length > 1 &&
@@ -279,8 +509,8 @@ module.exports = function (app) {
       all.canUpdateServer = false
     }
 
-    getModulesInfo(plugins, getPlugin, all, distTagsMap)
-    getModulesInfo(webapps, getWebApp, all, distTagsMap)
+    getModulesInfo(plugins, getPlugin, all, distTagsMap, regLookup)
+    getModulesInfo(webapps, getWebApp, all, distTagsMap, regLookup)
 
     if (process.env.PLUGINS_WITH_UPDATE_DISABLED) {
       const disabled = process.env.PLUGINS_WITH_UPDATE_DISABLED.split(',')
@@ -294,7 +524,7 @@ module.exports = function (app) {
     return all
   }
 
-  function getModulesInfo(modules, existing, result, distTagsMap) {
+  function getModulesInfo(modules, existing, result, distTagsMap, regLookup) {
     modules.forEach((plugin) => {
       const name = plugin.package.name
       const version = plugin.package.version
@@ -307,6 +537,7 @@ module.exports = function (app) {
         return
       }
 
+      const ext = enrichEntry(plugin.package)
       const pluginInfo = {
         name: name,
         version: version,
@@ -322,7 +553,34 @@ module.exports = function (app) {
         isWebapp: plugin.package.keywords.some((v) => v === 'signalk-webapp'),
         isEmbeddableWebapp: plugin.package.keywords.some(
           (v) => v === 'signalk-embeddable-webapp'
+        ),
+        displayName: ext.displayName,
+        appIcon: ext.appIcon,
+        screenshots: ext.screenshots,
+        official: ext.official,
+        deprecated: ext.deprecated,
+        githubUrl: ext.githubUrl,
+        issuesUrl: ext.issuesUrl,
+        requires: ext.requires,
+        recommends: ext.recommends
+      }
+
+      const regEntry = regLookup && regLookup.get(name)
+      if (regEntry) {
+        const { score, checks } = badgesToIndicators(
+          regEntry.badges_stable,
+          regEntry.composite_stable
         )
+        pluginInfo.indicators = {
+          score,
+          checks,
+          reportedPlatforms: [],
+          rawMetrics: {
+            lastReleaseDate: regEntry.last_tested
+          }
+        }
+        pluginInfo.registryBadges = regEntry.badges_stable || []
+        pluginInfo.registryTestStatus = regEntry.test_status
       }
 
       const tags = distTagsMap[name]
