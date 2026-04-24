@@ -25,6 +25,17 @@ export interface AppInfo {
   version?: string
   description?: string
   author?: string
+  displayName?: string
+  appIcon?: string
+  screenshots?: string[]
+  official?: boolean
+  deprecated?: boolean
+  githubUrl?: string
+  issuesUrl?: string
+  requires?: string[]
+  recommends?: string[]
+  categories?: string[]
+  installedVersion?: string
   [key: string]: unknown
 }
 
