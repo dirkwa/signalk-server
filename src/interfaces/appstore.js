@@ -33,6 +33,7 @@ const { getCategories, getAvailableCategories } = require('../categories')
 const {
   createCache,
   createIconProbeCache,
+  createNpmMetadataClient,
   createRegistryClient,
   enrichEntry,
   buildOfflineResponse,
@@ -60,6 +61,9 @@ module.exports = function (app) {
     cacheDir: `${app.config.configPath}/appstore-cache`
   })
   const iconProbe = createIconProbeCache(
+    `${app.config.configPath}/appstore-cache`
+  )
+  const npmMetadata = createNpmMetadataClient(
     `${app.config.configPath}/appstore-cache`
   )
   const iconUrlLookup = (pkg, version, declaredPath) =>
@@ -270,6 +274,7 @@ module.exports = function (app) {
         cache.invalidateList()
         registry.invalidate()
         iconProbe.invalidate()
+        npmMetadata.invalidate()
         installedMetadataCache.clear()
         res.json({ ok: true })
       })
@@ -343,6 +348,19 @@ module.exports = function (app) {
       const installedMeta = getInstalledPackageMetadata(name)
       if (installedMeta && installedMeta.signalk) {
         pkgForEnrichment = { ...pkg, signalk: installedMeta.signalk }
+      }
+    } else {
+      // npm search strips the signalk.* key, so a non-installed plugin's
+      // detail page would miss icon/screenshots/requires/recommends. The
+      // per-version registry endpoint returns the full package.json; it's
+      // only one extra request on the detail path (unlike the list path).
+      try {
+        const registryMeta = await npmMetadata.get(pkg.name, pkg.version)
+        if (registryMeta && registryMeta.signalk) {
+          pkgForEnrichment = { ...pkg, signalk: registryMeta.signalk }
+        }
+      } catch (err) {
+        debug('npm metadata fetch for %s failed: %O', name, err)
       }
     }
     const ext = enrichEntry(pkgForEnrichment, {
