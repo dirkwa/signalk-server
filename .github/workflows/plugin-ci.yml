@@ -211,6 +211,39 @@ jobs:
             }
           }
 
+          // Changelog: either a CHANGELOG.md-style file at repo root, or a
+          // .github/release.yml configuring GitHub's auto-generated release
+          // notes (see signalk-server PR #2615 for the release-notes
+          // convention the App Store surfaces). Non-blocking — plugins
+          // without either also lose 5 points in the plugin registry score.
+          const CHANGELOG_FILES = ['CHANGELOG.md', 'CHANGELOG', 'CHANGES.md', 'CHANGES', 'HISTORY.md', 'HISTORY'];
+          const rootEntriesUpper = new Set(fs.readdirSync('.').map(n => n.toUpperCase()));
+          const hasChangelogFile = CHANGELOG_FILES.some(n => rootEntriesUpper.has(n.toUpperCase()));
+          const hasReleaseYml = fs.existsSync('.github/release.yml') || fs.existsSync('.github/release.yaml');
+          if (!hasChangelogFile && !hasReleaseYml) {
+            warnings.push(
+              'No CHANGELOG.md or .github/release.yml found. ' +
+              'Plugins should publish per-version release notes so users know what changed — ' +
+              'either maintain a CHANGELOG.md or configure GitHub auto-generated release notes. ' +
+              'See https://github.com/SignalK/signalk-server/pull/2615 for the recommended release-notes convention.'
+            );
+          }
+
+          // Screenshots: signalk.screenshots array with at least one entry in
+          // package.json. The App Store shows the first screenshot as the
+          // hero image on the plugin detail page; without any, the page
+          // degrades to a text-only layout. Non-blocking.
+          const screenshots = pkg.signalk && pkg.signalk.screenshots;
+          const hasScreenshot = Array.isArray(screenshots) && screenshots.some(s => typeof s === 'string' && s.trim().length > 0);
+          if (!hasScreenshot) {
+            warnings.push(
+              'No signalk.screenshots declared in package.json. ' +
+              'Add at least one package-relative image path under "signalk": { "screenshots": [...] } ' +
+              'so the App Store can show users what your plugin looks like. ' +
+              'See https://demo.signalk.org/documentation/develop/plugins/publishing.html for the full schema.'
+            );
+          }
+
           warnings.forEach(w => console.log('::warning::' + w));
           if (errors.length > 0) {
             errors.forEach(e => console.log('::error::' + e));
