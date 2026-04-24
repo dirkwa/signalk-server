@@ -64,6 +64,13 @@ module.exports = function (app) {
   )
   const iconUrlLookup = (pkg, version, declaredPath) =>
     iconProbe.get(pkg, version, declaredPath)
+  // npm's search API does not surface the signalk.* key from package.json,
+  // so plugins discovered via findModulesWithKeyword never have appIcon /
+  // screenshots / displayName on the ModuleInfo object. For INSTALLED
+  // plugins the real package.json is available locally — overlay it when
+  // enriching so installed plugins get their declared signalk.* data even
+  // though npm search omits it.
+  const installedMetadataCache = new Map()
 
   return {
     start: function () {
@@ -263,6 +270,7 @@ module.exports = function (app) {
         cache.invalidateList()
         registry.invalidate()
         iconProbe.invalidate()
+        installedMetadataCache.clear()
         res.json({ ok: true })
       })
 
@@ -329,7 +337,18 @@ module.exports = function (app) {
       return cached || null
     }
     const pkg = match.package
-    const ext = enrichEntry(pkg, { includeIndicators: true, iconUrlLookup })
+    const isInstalled = !!getPlugin(name) || !!getWebApp(name)
+    let pkgForEnrichment = pkg
+    if (isInstalled) {
+      const installedMeta = getInstalledPackageMetadata(name)
+      if (installedMeta && installedMeta.signalk) {
+        pkgForEnrichment = { ...pkg, signalk: installedMeta.signalk }
+      }
+    }
+    const ext = enrichEntry(pkgForEnrichment, {
+      includeIndicators: true,
+      iconUrlLookup
+    })
     const resolver = buildDependencyResolver(plugins, webapps)
     const [detail, regIndexEntry] = await Promise.all([
       buildPluginDetail(
@@ -369,16 +388,45 @@ module.exports = function (app) {
       }
     }
 
-    const installed = !!getPlugin(name) || !!getWebApp(name)
-    if (installed) {
-      const localIcons = buildLocalAssetUrls(pkg.name, pkg)
+    if (isInstalled) {
+      const localIcons = buildLocalAssetUrls(pkg.name, pkgForEnrichment)
       if (localIcons?.appIcon) detail.installedIconUrl = localIcons.appIcon
       if (localIcons?.screenshots && localIcons.screenshots.length > 0) {
         detail.installedScreenshotUrls = localIcons.screenshots
       }
     }
-    cache.writePluginDetail(detail, installed)
+    cache.writePluginDetail(detail, isInstalled)
     return detail
+  }
+
+  function getInstalledPackageMetadata(name) {
+    if (installedMetadataCache.has(name)) {
+      return installedMetadataCache.get(name)
+    }
+    const webapp = getWebApp(name)
+    // app.webapps[i] is already the full package.json metadata
+    if (webapp && typeof webapp === 'object' && webapp.signalk) {
+      installedMetadataCache.set(name, webapp)
+      return webapp
+    }
+    const plugin = getPlugin(name)
+    if (plugin && plugin.packageLocation) {
+      try {
+        // packageLocation is the parent directory; append /package.json
+        const pkgPath = `${plugin.packageLocation}/${name}/package.json`
+        const metadata = require(pkgPath)
+        installedMetadataCache.set(name, metadata)
+        return metadata
+      } catch (err) {
+        debug('failed to read installed package.json for %s: %O', name, err)
+      }
+    }
+    if (webapp && typeof webapp === 'object') {
+      installedMetadataCache.set(name, webapp)
+      return webapp
+    }
+    installedMetadataCache.set(name, undefined)
+    return undefined
   }
 
   // Webapps and plugins that ship static assets are mounted by the server at
@@ -648,12 +696,26 @@ module.exports = function (app) {
         return
       }
 
-      const ext = enrichEntry(plugin.package, { iconUrlLookup })
       const installedLocally =
         !!getPlugin(name) || !!getWebApp(name) || !!existing(name)
-      const localIcons = installedLocally
-        ? buildLocalAssetUrls(name, plugin.package)
-        : undefined
+      // For installed plugins, the real package.json (including signalk.*)
+      // is available on disk. npm search strips the signalk key, so merge
+      // the on-disk metadata over the npm search result before enrichment.
+      let packageForEnrichment = plugin.package
+      let localIcons
+      if (installedLocally) {
+        const installedMeta = getInstalledPackageMetadata(name)
+        if (installedMeta && installedMeta.signalk) {
+          packageForEnrichment = {
+            ...plugin.package,
+            signalk: installedMeta.signalk
+          }
+          localIcons = buildLocalAssetUrls(name, installedMeta)
+        } else {
+          localIcons = buildLocalAssetUrls(name, plugin.package)
+        }
+      }
+      const ext = enrichEntry(packageForEnrichment, { iconUrlLookup })
       const pluginInfo = {
         name: name,
         version: version,
