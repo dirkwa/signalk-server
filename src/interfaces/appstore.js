@@ -262,6 +262,7 @@ module.exports = function (app) {
       app.post(`${SERVERROUTESPREFIX}/appstore/refresh`, (req, res) => {
         cache.invalidateList()
         registry.invalidate()
+        iconProbe.invalidate()
         res.json({ ok: true })
       })
 

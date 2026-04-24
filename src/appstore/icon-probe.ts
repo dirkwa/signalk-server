@@ -22,7 +22,9 @@ const debug = createDebug('signalk-server:appstore:icon-probe')
 const ALT_DIRS = ['public', 'assets', 'img', 'docs', 'dist', 'src']
 
 const HEAD_TIMEOUT_MS = 8_000
-const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 1 week per package@version@path
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 1 week for successful resolutions
+const CACHE_NEG_TTL_MS = 24 * 60 * 60 * 1000 // 1 day for negative (null) results,
+// so plugins that publish a fix don't wait a week to be re-probed
 
 interface ProbedEntry {
   resolved: string | null
@@ -41,6 +43,7 @@ export interface IconProbeCache {
     declaredPath: string,
     resolved: string | null
   ): void
+  invalidate(): void
 }
 
 export function createIconProbeCache(cacheDir: string): IconProbeCache {
@@ -82,7 +85,8 @@ export function createIconProbeCache(cacheDir: string): IconProbeCache {
       load()
       const entry = memo[key(pkg, version, declaredPath)]
       if (!entry) return undefined
-      if (Date.now() - entry.probedAt > CACHE_TTL_MS) return undefined
+      const ttl = entry.resolved === null ? CACHE_NEG_TTL_MS : CACHE_TTL_MS
+      if (Date.now() - entry.probedAt > ttl) return undefined
       return entry.resolved
     },
     set(pkg, version, declaredPath, resolved) {
@@ -92,6 +96,15 @@ export function createIconProbeCache(cacheDir: string): IconProbeCache {
         probedAt: Date.now()
       }
       persist()
+    },
+    invalidate() {
+      memo = {}
+      loaded = true
+      try {
+        if (fs.existsSync(file)) fs.unlinkSync(file)
+      } catch (err) {
+        debug('iconUrls cache invalidate failed: %O', err)
+      }
     }
   }
 }
@@ -114,15 +127,23 @@ function altCandidatesFor(
   version: string,
   declaredPath: string
 ): string[] {
-  const base = declaredPath
-    .replace(/\\/g, '/')
-    .replace(/^\.?\/+/, '')
-    .split('/')
-    .pop()
-  if (!base) return []
-  return ALT_DIRS.map((dir) =>
-    resolveScreenshotUrl(pkg, version, `./${dir}/${base}`)
-  )
+  const clean = declaredPath.replace(/\\/g, '/').replace(/^\.?\/+/, '')
+  if (!clean) return []
+  const base = clean.split('/').pop() || clean
+  const seen = new Set<string>()
+  const out: string[] = []
+  // Prefer prefix-preserving candidates (./public/assets/icons/x.png) before
+  // basename-only candidates (./public/x.png). freeboard-sk needs the former,
+  // app-dock the latter.
+  for (const dir of ALT_DIRS) {
+    for (const tail of [clean, base]) {
+      const url = resolveScreenshotUrl(pkg, version, `./${dir}/${tail}`)
+      if (seen.has(url)) continue
+      seen.add(url)
+      out.push(url)
+    }
+  }
+  return out
 }
 
 /**
