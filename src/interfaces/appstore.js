@@ -479,30 +479,50 @@ module.exports = function (app) {
         checks,
         reportedPlatforms: [],
         rawMetrics: {
-          lastReleaseDate: regIndexEntry.last_tested
+          lastReleaseDate: regIndexEntry.last_tested,
+          // Registry publishes these as of plugin-registry 0.3.0 so we
+          // don't each hit api.github.com/60h from every boat.
+          ...(typeof regIndexEntry.stars === 'number'
+            ? { stars: regIndexEntry.stars }
+            : {}),
+          ...(typeof regIndexEntry.open_issues === 'number'
+            ? { openIssues: regIndexEntry.open_issues }
+            : {}),
+          ...(typeof regIndexEntry.contributors === 'number'
+            ? { contributors: regIndexEntry.contributors }
+            : {}),
+          ...(typeof regIndexEntry.downloads_per_week === 'number'
+            ? { downloadsPerWeek: regIndexEntry.downloads_per_week }
+            : {})
         }
       }
     }
 
-    // Merge GitHub/npm-derived raw metrics into whatever indicators we
-    // already built (from the registry or the heuristic fallback). Overwrites
-    // only the fields we actually fetched — lastReleaseDate from the registry
-    // stays if present.
+    // Direct-API fetch only fills gaps the registry didn't fill. Plugins
+    // brand-new between nightly registry runs, or any field the registry
+    // failed to fetch for some reason, still get a best-effort refresh.
     if (metricsSample && detail.indicators) {
-      detail.indicators.rawMetrics = {
-        ...detail.indicators.rawMetrics,
-        ...(metricsSample.stars !== undefined
-          ? { stars: metricsSample.stars }
-          : {}),
-        ...(metricsSample.downloadsPerWeek !== undefined
-          ? { downloadsPerWeek: metricsSample.downloadsPerWeek }
-          : {}),
-        ...(metricsSample.openIssues !== undefined
-          ? { openIssues: metricsSample.openIssues }
-          : {}),
-        ...(metricsSample.contributors !== undefined
-          ? { contributors: metricsSample.contributors }
-          : {})
+      const rm = detail.indicators.rawMetrics
+      if (rm.stars === undefined && metricsSample.stars !== undefined) {
+        rm.stars = metricsSample.stars
+      }
+      if (
+        rm.openIssues === undefined &&
+        metricsSample.openIssues !== undefined
+      ) {
+        rm.openIssues = metricsSample.openIssues
+      }
+      if (
+        rm.contributors === undefined &&
+        metricsSample.contributors !== undefined
+      ) {
+        rm.contributors = metricsSample.contributors
+      }
+      if (
+        rm.downloadsPerWeek === undefined &&
+        metricsSample.downloadsPerWeek !== undefined
+      ) {
+        rm.downloadsPerWeek = metricsSample.downloadsPerWeek
       }
     }
 

@@ -47,7 +47,16 @@ export const RegistryIndexEntrySchema = Type.Object({
   installs: Type.Optional(Type.Boolean()),
   loads: Type.Optional(Type.Boolean()),
   activates: Type.Optional(Type.Boolean()),
-  providers: Type.Optional(Type.Array(Type.String()))
+  providers: Type.Optional(Type.Array(Type.String())),
+  // Upstream metrics published by signalk-plugin-registry >= 0.3.0.
+  // Fetched nightly with an authenticated GITHUB_TOKEN so individual
+  // signalk-server installs don't each hit api.github.com's 60/hr
+  // unauthenticated limit. Any subset may be absent.
+  stars: Type.Optional(Type.Number()),
+  open_issues: Type.Optional(Type.Number()),
+  contributors: Type.Optional(Type.Number()),
+  downloads_per_week: Type.Optional(Type.Number()),
+  github_url: Type.Optional(Type.String())
 })
 export type RegistryIndexEntry = Static<typeof RegistryIndexEntrySchema>
 
