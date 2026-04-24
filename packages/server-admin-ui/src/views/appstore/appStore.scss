@@ -228,10 +228,66 @@
 .plugin-row {
   background: #fff;
   transition: background 0.1s;
+  padding: 8px 12px;
+
+  // Narrow layout (< md): two visual lines.
+  // Line 1: icon + title/badges/desc on the left, action button on the right
+  // Line 2: author / category / version indented under the title
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'title   action'
+    'meta    meta';
+  column-gap: 12px;
+  row-gap: 4px;
+  align-items: center;
 }
 
 .plugin-row:hover {
   background: #f8f9fa;
+}
+
+.plugin-row__title-line {
+  grid-area: title;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.plugin-row__title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.plugin-row__meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  // Line up under the title text: 28px icon + 12px column gap = 40px.
+  margin-left: 40px;
+}
+
+.plugin-row__action-slot {
+  grid-area: action;
+  min-width: 160px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+// md+ (>= 768px): collapse to a single dense row for classic desktop
+// density. Same grid, just one template row with three columns.
+@media (min-width: 768px) {
+  .plugin-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'title meta action';
+    padding: 6px 12px;
+    row-gap: 0;
+  }
+  .plugin-row__meta {
+    margin-left: 0;
+  }
 }
 
 .plugin-row__badge {
@@ -241,10 +297,6 @@
 
 .plugin-row__desc {
   max-width: 40ch;
-}
-
-.plugin-row__action {
-  min-width: 160px;
 }
 
 .plugin-list {

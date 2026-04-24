@@ -18,49 +18,53 @@ const PluginRow: React.FC<PluginRowProps> = ({
   const showDeprecated = app.deprecated && isInstalled
 
   return (
-    <div className="plugin-row d-flex align-items-center gap-3 px-3 py-2 border-bottom">
-      <div className="flex-shrink-0">
-        <NavLink to={`${detailLinkBase}/${encodeURIComponent(app.name)}`}>
-          <PluginIcon
-            name={app.name}
-            displayName={app.displayName}
-            appIcon={app.appIcon}
-            installedIconUrl={app.installedIconUrl}
-            size={28}
-          />
-        </NavLink>
-      </div>
-      <div className="flex-grow-1 min-w-0">
-        <div className="d-flex align-items-center gap-2">
-          <NavLink
-            to={`${detailLinkBase}/${encodeURIComponent(app.name)}`}
-            className="text-dark text-decoration-none fw-semibold text-truncate"
-          >
-            {app.displayName || app.name}
+    <div className="plugin-row border-bottom">
+      <div className="plugin-row__title-line">
+        <div className="plugin-row__icon flex-shrink-0">
+          <NavLink to={`${detailLinkBase}/${encodeURIComponent(app.name)}`}>
+            <PluginIcon
+              name={app.name}
+              displayName={app.displayName}
+              appIcon={app.appIcon}
+              installedIconUrl={app.installedIconUrl}
+              size={28}
+            />
           </NavLink>
-          {app.official && (
-            <Badge bg="primary" className="plugin-row__badge">
-              OFFICIAL
-            </Badge>
-          )}
-          {showDeprecated && (
-            <Badge bg="danger" className="plugin-row__badge">
-              DEPRECATED
-            </Badge>
-          )}
-          <span className="text-muted small text-truncate plugin-row__desc">
-            {app.description}
-          </span>
+        </div>
+        <div className="plugin-row__title-block">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <NavLink
+              to={`${detailLinkBase}/${encodeURIComponent(app.name)}`}
+              className="text-dark text-decoration-none fw-semibold text-truncate"
+            >
+              {app.displayName || app.name}
+            </NavLink>
+            {app.official && (
+              <Badge bg="primary" className="plugin-row__badge">
+                OFFICIAL
+              </Badge>
+            )}
+            {showDeprecated && (
+              <Badge bg="danger" className="plugin-row__badge">
+                DEPRECATED
+              </Badge>
+            )}
+            <span className="text-muted small text-truncate plugin-row__desc">
+              {app.description}
+            </span>
+          </div>
         </div>
       </div>
-      <div className="text-muted small text-nowrap">{app.author}</div>
-      <div className="text-muted small text-nowrap d-none d-md-block">
-        {(app.categories || [])[0]}
+      <div className="plugin-row__meta">
+        <div className="text-muted small text-nowrap">{app.author}</div>
+        <div className="text-muted small text-nowrap d-none d-md-block">
+          {(app.categories || [])[0]}
+        </div>
+        <div className="text-muted small font-monospace text-nowrap">
+          v{app.installedVersion || app.version}
+        </div>
       </div>
-      <div className="text-muted small font-monospace text-nowrap">
-        v{app.installedVersion || app.version}
-      </div>
-      <div className="plugin-row__action">
+      <div className="plugin-row__action-slot">
         <ActionCellRenderer data={app} />
       </div>
     </div>
