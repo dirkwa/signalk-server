@@ -35,6 +35,7 @@ const {
   createIconBytesCache,
   createIconProbeCache,
   createNpmMetadataClient,
+  createRawMetricsClient,
   createRegistryClient,
   enrichEntry,
   buildOfflineResponse,
@@ -68,6 +69,9 @@ module.exports = function (app) {
     `${app.config.configPath}/appstore-cache`
   )
   const iconBytes = createIconBytesCache(
+    `${app.config.configPath}/appstore-cache`
+  )
+  const rawMetrics = createRawMetricsClient(
     `${app.config.configPath}/appstore-cache`
   )
   const iconUrlLookup = (pkg, version, declaredPath) =>
@@ -302,6 +306,7 @@ module.exports = function (app) {
         iconProbe.invalidate()
         iconBytes.invalidate()
         npmMetadata.invalidate()
+        rawMetrics.invalidate()
         installedMetadataCache.clear()
         res.json({ ok: true })
       })
@@ -440,7 +445,7 @@ module.exports = function (app) {
       iconUrlLookup
     })
     const resolver = buildDependencyResolver(plugins, webapps)
-    const [detail, regIndexEntry] = await Promise.all([
+    const [detail, regIndexEntry, metricsSample] = await Promise.all([
       buildPluginDetail(
         {
           name: pkg.name,
@@ -460,7 +465,8 @@ module.exports = function (app) {
         },
         resolver
       ),
-      registry.getIndexEntry(name).catch(() => undefined)
+      registry.getIndexEntry(name).catch(() => undefined),
+      rawMetrics.get(pkg.name, ext.githubUrl).catch(() => undefined)
     ])
 
     if (regIndexEntry) {
@@ -475,6 +481,28 @@ module.exports = function (app) {
         rawMetrics: {
           lastReleaseDate: regIndexEntry.last_tested
         }
+      }
+    }
+
+    // Merge GitHub/npm-derived raw metrics into whatever indicators we
+    // already built (from the registry or the heuristic fallback). Overwrites
+    // only the fields we actually fetched — lastReleaseDate from the registry
+    // stays if present.
+    if (metricsSample && detail.indicators) {
+      detail.indicators.rawMetrics = {
+        ...detail.indicators.rawMetrics,
+        ...(metricsSample.stars !== undefined
+          ? { stars: metricsSample.stars }
+          : {}),
+        ...(metricsSample.downloadsPerWeek !== undefined
+          ? { downloadsPerWeek: metricsSample.downloadsPerWeek }
+          : {}),
+        ...(metricsSample.openIssues !== undefined
+          ? { openIssues: metricsSample.openIssues }
+          : {}),
+        ...(metricsSample.contributors !== undefined
+          ? { contributors: metricsSample.contributors }
+          : {})
       }
     }
 
