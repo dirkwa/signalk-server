@@ -591,8 +591,57 @@ module.exports = function (app) {
     await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()))
   }
 
+  // For non-installed plugins whose npm-search entry lacks signalk.* (because
+  // the /-/v1/search endpoint strips it), hydrate the registry metadata in
+  // the background so subsequent list responses have appIcon/displayName/
+  // requires/recommends cached and ready. Hydrated metadata feeds the icon
+  // probe below so the Grid view shows real icons without waiting for the
+  // user to open the detail page.
+  async function hydrateNonInstalledMetadata(plugins, webapps) {
+    const CONCURRENCY = 8
+    const queue = []
+    for (const list of [plugins, webapps]) {
+      for (const mod of list) {
+        const pkg = mod.package
+        if (pkg.signalk && typeof pkg.signalk === 'object') continue
+        if (!pkg.name || !pkg.version) continue
+        queue.push(mod)
+      }
+    }
+    if (queue.length === 0) return
+    debug('hydrating %d non-installed npm metadata records', queue.length)
+    let i = 0
+    async function worker() {
+      while (true) {
+        const idx = i++
+        if (idx >= queue.length) return
+        const mod = queue[idx]
+        const pkg = mod.package
+        try {
+          const meta = await npmMetadata.get(pkg.name, pkg.version)
+          if (
+            meta &&
+            meta.signalk &&
+            typeof meta.signalk === 'object' &&
+            !pkg.signalk
+          ) {
+            pkg.signalk = meta.signalk
+          }
+        } catch (err) {
+          debug('hydrate %s failed: %O', pkg.name, err)
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()))
+  }
+
   function scheduleIconProbe(plugins, webapps) {
-    setImmediate(() => {
+    setImmediate(async () => {
+      try {
+        await hydrateNonInstalledMetadata(plugins, webapps)
+      } catch (err) {
+        debug('metadata hydration run failed: %O', err)
+      }
       const tasks = collectIconProbeTasks(plugins, webapps)
       if (tasks.length === 0) return
       debug('scheduling %d icon probes', tasks.length)
