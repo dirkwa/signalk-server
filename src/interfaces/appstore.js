@@ -376,20 +376,34 @@ module.exports = function (app) {
     const pkg = match.package
     const isInstalled = !!getPlugin(name) || !!getWebApp(name)
     let pkgForEnrichment = pkg
-    if (isInstalled) {
+    // Always try the npm registry first — it has the signalk.* key for
+    // the LATEST available version, which is what the detail page
+    // represents (header version, Update button target, changelog entries).
+    // For installed plugins, the on-disk signalk.* is often an older
+    // version that may lack screenshots/requires/recommends added in a
+    // later release. Fall back to on-disk only when the registry fetch
+    // fails or a plugin isn't on npm at all.
+    let registryMeta
+    try {
+      registryMeta = await npmMetadata.get(pkg.name, pkg.version)
+    } catch (err) {
+      debug('npm metadata fetch for %s failed: %O', name, err)
+    }
+    if (registryMeta && registryMeta.signalk) {
+      pkgForEnrichment = { ...pkg, signalk: registryMeta.signalk }
+    } else if (isInstalled) {
       const installedMeta = getInstalledPackageMetadata(name)
       if (installedMeta && installedMeta.signalk) {
         pkgForEnrichment = { ...pkg, signalk: installedMeta.signalk }
       }
-    } else {
-      // npm search strips the signalk.* key, so a non-installed plugin's
-      // detail page would miss icon/screenshots/requires/recommends. The
-      // per-version registry endpoint returns the full package.json; it's
-      // only one extra request on the detail path (unlike the list path).
+    }
+
+    // Always run the active icon/screenshot probe when we have declared
+    // signalk.* paths — the probe cache is how enrichEntry resolves to
+    // real CDN URLs instead of the naive package-relative ones.
+    if (pkgForEnrichment.signalk) {
       try {
-        const registryMeta = await npmMetadata.get(pkg.name, pkg.version)
         if (registryMeta && registryMeta.signalk) {
-          pkgForEnrichment = { ...pkg, signalk: registryMeta.signalk }
           // Actively probe declared asset paths on the CDN so plugins that
           // publish paths relative to their webapp root (e.g.
           // @signalk/charts-plugin's "./logo.svg" that lives at /public/logo.svg
@@ -923,22 +937,27 @@ module.exports = function (app) {
 
       const installedLocally =
         !!getPlugin(name) || !!getWebApp(name) || !!existing(name)
-      // For installed plugins, the real package.json (including signalk.*)
-      // is available on disk. npm search strips the signalk key, so merge
-      // the on-disk metadata over the npm search result before enrichment.
+      // Prefer the latest-version signalk.* (populated on plugin.package by
+      // the background npm-metadata hydrator). For installed plugins, fall
+      // back to on-disk metadata when hydration hasn't run yet — this keeps
+      // the card populated on the first /appstore/available after a cold
+      // cache, before the hydrator finishes. Local icon URLs (served from
+      // the installed plugin's own /<name>/<path> mount) continue to use
+      // on-disk paths so they always work offline even when the declared
+      // path changed between versions.
       let packageForEnrichment = plugin.package
       let localIcons
       if (installedLocally) {
         const installedMeta = getInstalledPackageMetadata(name)
-        if (installedMeta && installedMeta.signalk) {
+        if (!plugin.package.signalk && installedMeta && installedMeta.signalk) {
           packageForEnrichment = {
             ...plugin.package,
             signalk: installedMeta.signalk
           }
-          localIcons = buildLocalAssetUrls(name, installedMeta)
-        } else {
-          localIcons = buildLocalAssetUrls(name, plugin.package)
         }
+        localIcons =
+          buildLocalAssetUrls(name, installedMeta) ||
+          buildLocalAssetUrls(name, plugin.package)
       }
       const ext = enrichEntry(packageForEnrichment, { iconUrlLookup })
       const pluginInfo = {
