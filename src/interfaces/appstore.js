@@ -541,9 +541,28 @@ module.exports = function (app) {
     }
 
     if (isInstalled) {
-      const localIcons = buildLocalAssetUrls(pkg.name, pkgForEnrichment)
+      // The local webapp mount at /<pkg-name>/ serves files from the
+      // INSTALLED version's tarball on disk. If the installed version is
+      // older than the available version we're rendering, declaring paths
+      // that the newer version added (e.g. new screenshots) will 404 from
+      // that mount. Build local URLs from the on-disk signalk.* (installed
+      // version) to keep them in sync with what's actually servable, and
+      // only advertise them when the installed version matches the
+      // displayed version. For icons specifically we can be more
+      // permissive — the appIcon path rarely changes between versions
+      // and the installed copy on disk is what the server serves today.
+      const installedMeta = getInstalledPackageMetadata(name)
+      const localIcons =
+        buildLocalAssetUrls(pkg.name, installedMeta) ||
+        buildLocalAssetUrls(pkg.name, pkgForEnrichment)
       if (localIcons?.appIcon) detail.installedIconUrl = localIcons.appIcon
-      if (localIcons?.screenshots && localIcons.screenshots.length > 0) {
+      const installedVersion =
+        getPlugin(name)?.version || getWebApp(name)?.version
+      if (
+        installedVersion === pkg.version &&
+        localIcons?.screenshots &&
+        localIcons.screenshots.length > 0
+      ) {
         detail.installedScreenshotUrls = localIcons.screenshots
       }
     }
@@ -980,7 +999,14 @@ module.exports = function (app) {
         appIcon: appIconUrlFor(name, ext.appIcon),
         installedIconUrl: localIcons?.appIcon,
         screenshots: ext.screenshots,
-        installedScreenshotUrls: localIcons?.screenshots,
+        // Only advertise installedScreenshotUrls when the installed version
+        // matches the displayed version — otherwise the local webapp mount
+        // 404s on screenshots that only exist in the newer tarball.
+        installedScreenshotUrls:
+          installedLocally &&
+          (getPlugin(name)?.version || getWebApp(name)?.version) === version
+            ? localIcons?.screenshots
+            : undefined,
         official: ext.official,
         deprecated: ext.deprecated,
         githubUrl: ext.githubUrl,
