@@ -1,5 +1,11 @@
 import React, { useEffect, Component, ReactNode, ComponentType } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import {
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useParams
+} from 'react-router-dom'
 import Container from 'react-bootstrap/Container'
 import { useLoginStatus, type LoginStatus } from '../../store'
 
@@ -16,6 +22,7 @@ import Webapps from '../../views/Webapps/Webapps'
 import DataBrowser from '../../views/DataBrowser/DataBrowser'
 import Playground from '../../views/Playground'
 import Apps from '../../views/appstore/Apps/Apps'
+import DetailView from '../../views/appstore/Detail/DetailView'
 import Configuration from '../../views/Configuration/Configuration'
 import Login from '../../views/security/Login'
 import SecuritySettings from '../../views/security/Settings'
@@ -110,6 +117,26 @@ function ProtectedRoute({
   )
 }
 
+function LegacyAppstorePluginRedirect() {
+  const { name } = useParams<{ name: string }>()
+  return (
+    <Navigate
+      to={`/apps/store/plugin/${encodeURIComponent(name || '')}`}
+      replace
+    />
+  )
+}
+
+function LegacyPluginConfigRedirect() {
+  const { pluginid } = useParams<{ pluginid: string }>()
+  return (
+    <Navigate
+      to={`/apps/configuration/${encodeURIComponent(pluginid || '-')}`}
+      replace
+    />
+  )
+}
+
 export default function Full() {
   const location = useLocation()
 
@@ -162,12 +189,32 @@ export default function Full() {
                 }
               />
               <Route
-                path="/appstore/*"
+                path="/apps/store/plugin/:name"
+                element={<ProtectedRoute component={DetailView} />}
+              />
+              <Route
+                path="/apps/store/*"
                 element={<ProtectedRoute component={Apps} />}
               />
               <Route
-                path="/serverConfiguration/plugins/:pluginid"
+                path="/apps/configuration/:pluginid"
                 element={<ProtectedRoute component={Configuration} />}
+              />
+              <Route
+                path="/appstore"
+                element={<Navigate to="/apps/store" replace />}
+              />
+              <Route
+                path="/appstore/plugin/:name"
+                element={<LegacyAppstorePluginRedirect />}
+              />
+              <Route
+                path="/appstore/*"
+                element={<Navigate to="/apps/store" replace />}
+              />
+              <Route
+                path="/serverConfiguration/plugins/:pluginid"
+                element={<LegacyPluginConfigRedirect />}
               />
               <Route
                 path="/serverConfiguration/settings"
