@@ -1,5 +1,5 @@
 import React from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 interface ChangelogTabProps {
@@ -8,21 +8,44 @@ interface ChangelogTabProps {
   version: string
 }
 
-function decorateChangelog(src: string): string {
-  return src
-    .split(/\r?\n/)
-    .map((line) => {
-      const m = line.match(/^([-*]\s+)(feat|fix|BREAKING|!)([:(].*)?/)
-      if (!m) return line
-      const tone =
-        m[2].toLowerCase() === 'feat'
-          ? 'plugin-detail__changelog-feat'
-          : m[2].toLowerCase() === 'fix'
-            ? 'plugin-detail__changelog-fix'
-            : 'plugin-detail__changelog-breaking'
-      return `${m[1]}<span class="${tone}">${m[2]}</span>${m[3] || ''}`
-    })
-    .join('\n')
+// Matches conventional-commit prefixes that GitHub release bodies and
+// CHANGELOG.md entries routinely start a list item with.
+// Captures: [1] prefix label, [2] optional (scope), [3] separator + rest.
+const PREFIX_RE = /^(feat|fix|BREAKING|!)(\([^)]*\))?(\s*[:!] .*)$/i
+
+function toneClass(label: string): string {
+  const lower = label.toLowerCase()
+  if (lower === 'feat') return 'plugin-detail__changelog-feat'
+  if (lower === 'fix') return 'plugin-detail__changelog-fix'
+  return 'plugin-detail__changelog-breaking'
+}
+
+const markdownComponents: Components = {
+  // Highlights conventional-commit-style prefixes on list items so that
+  // lines starting with "feat:", "fix:", or "BREAKING:" get coloured
+  // inline. Runs through React rendering so we never need to inject raw
+  // HTML into the markdown pipeline.
+  li({ children, ...rest }) {
+    const arr = React.Children.toArray(children)
+    const first = arr[0]
+    if (typeof first === 'string') {
+      const m = PREFIX_RE.exec(first)
+      if (m) {
+        const [, label, scope, tail] = m
+        const className = toneClass(label)
+        const rest = arr.slice(1)
+        return (
+          <li {...{}}>
+            <span className={className}>{label}</span>
+            {scope}
+            {tail}
+            {rest}
+          </li>
+        )
+      }
+    }
+    return <li {...rest}>{children}</li>
+  }
 }
 
 const ChangelogTab: React.FC<ChangelogTabProps> = ({
@@ -53,10 +76,14 @@ const ChangelogTab: React.FC<ChangelogTabProps> = ({
     )
   }
 
-  const decorated = decorateChangelog(changelog)
   return (
     <div className="plugin-detail__markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{decorated}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={markdownComponents}
+      >
+        {changelog}
+      </ReactMarkdown>
     </div>
   )
 }
