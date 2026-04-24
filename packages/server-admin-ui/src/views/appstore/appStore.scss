@@ -398,4 +398,130 @@
     font-weight: 700;
     text-transform: uppercase;
   }
+
+  // Button reset: screenshots are <button> now instead of <a target="_blank">
+  // so clicks open the lightbox. The button should look like a plain image.
+  &__screenshot-button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: zoom-in;
+    display: block;
+    width: 100%;
+
+    img {
+      transition: transform 0.12s ease;
+      width: 100%;
+    }
+
+    &:hover img {
+      transform: scale(1.01);
+    }
+
+    &:focus-visible {
+      outline: 2px solid #20a8d8;
+      outline-offset: 2px;
+    }
+  }
+
+  &__lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    z-index: 1080; // above bootstrap modals (1050) and toasts (1055)
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 60px;
+    cursor: zoom-out;
+  }
+
+  &__lightbox-body {
+    position: relative;
+    max-width: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    cursor: default;
+  }
+
+  &__lightbox-img {
+    max-width: 100%;
+    max-height: calc(100vh - 120px);
+    object-fit: contain;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  &__lightbox-counter {
+    color: #fff;
+    font-size: 0.9rem;
+    opacity: 0.75;
+  }
+
+  &__lightbox-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 0;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    &:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+  }
+
+  &__lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 0;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 42px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 6px; // visual centring for the chevron glyph
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    &:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+
+    &--prev {
+      left: 16px;
+    }
+
+    &--next {
+      right: 16px;
+    }
+  }
 }

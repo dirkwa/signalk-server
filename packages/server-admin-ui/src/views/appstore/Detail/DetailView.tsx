@@ -13,6 +13,7 @@ import ReadmeTab from './ReadmeTab'
 import ChangelogTab from './ChangelogTab'
 import IndicatorsTab, { IndicatorResult } from './IndicatorsTab'
 import DependenciesSection, { DependencyReference } from './DependenciesSection'
+import ScreenshotLightbox from './ScreenshotLightbox'
 import '../appStore.scss'
 
 interface DetailPayload {
@@ -47,6 +48,7 @@ const DetailView: React.FC = () => {
   const decodedName = name ? decodeURIComponent(name) : ''
   const appStore = useAppStore() as AppStoreState
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const listEntry = useMemo((): AppInfo | undefined => {
     if (!decodedName) return undefined
@@ -308,7 +310,12 @@ const DetailView: React.FC = () => {
                 className="plugin-detail__hero-shot"
                 style={{ flexBasis: '320px', flexShrink: 0 }}
               >
-                <a href={heroScreenshot} target="_blank" rel="noreferrer">
+                <button
+                  type="button"
+                  className="plugin-detail__screenshot-button"
+                  onClick={() => setLightboxIndex(0)}
+                  aria-label="Open screenshot viewer"
+                >
                   <img
                     src={heroScreenshot}
                     alt=""
@@ -316,7 +323,7 @@ const DetailView: React.FC = () => {
                     className="img-fluid rounded border"
                     style={{ aspectRatio: '16/10', objectFit: 'cover' }}
                   />
-                </a>
+                </button>
                 {effectiveScreenshots.length > 1 && (
                   <small className="text-muted d-block mt-2 text-end">
                     +{effectiveScreenshots.length - 1} more in README tab
@@ -367,6 +374,7 @@ const DetailView: React.FC = () => {
                     screenshots={effectiveScreenshots}
                     packageName={detail.name}
                     version={detail.version}
+                    onScreenshotClick={(i) => setLightboxIndex(i)}
                   />
                 </Tab.Pane>
                 <Tab.Pane eventKey="changelog">
@@ -384,6 +392,12 @@ const DetailView: React.FC = () => {
           </div>
         </Card.Body>
       </Card>
+      <ScreenshotLightbox
+        screenshots={effectiveScreenshots}
+        index={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+        onIndexChange={setLightboxIndex}
+      />
     </div>
   )
 }

@@ -7,6 +7,7 @@ interface ReadmeTabProps {
   screenshots: string[]
   packageName: string
   version: string
+  onScreenshotClick?: (index: number) => void
 }
 
 function rewriteRelativeImages(
@@ -28,7 +29,8 @@ const ReadmeTab: React.FC<ReadmeTabProps> = ({
   readme,
   screenshots,
   packageName,
-  version
+  version,
+  onScreenshotClick
 }) => {
   const hasReadme = readme && readme.trim().length > 0
   const rewritten = hasReadme
@@ -57,16 +59,21 @@ const ReadmeTab: React.FC<ReadmeTabProps> = ({
           style={{ flexBasis: '40%', flexShrink: 0 }}
         >
           <div className="row g-2">
-            {screenshots.slice(0, 6).map((src) => (
+            {screenshots.slice(0, 6).map((src, idx) => (
               <div className="col-6" key={src}>
-                <a href={src} target="_blank" rel="noreferrer">
+                <button
+                  type="button"
+                  className="plugin-detail__screenshot-button"
+                  onClick={() => onScreenshotClick?.(idx)}
+                  aria-label={`Open screenshot ${idx + 1}`}
+                >
                   <img
                     src={src}
                     alt=""
                     loading="lazy"
                     className="plugin-detail__screenshot img-fluid rounded"
                   />
-                </a>
+                </button>
               </div>
             ))}
           </div>
