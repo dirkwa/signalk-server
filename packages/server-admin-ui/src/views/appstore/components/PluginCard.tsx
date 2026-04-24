@@ -40,6 +40,7 @@ const PluginCard: React.FC<PluginCardProps> = ({
                 name={app.name}
                 displayName={app.displayName}
                 appIcon={app.appIcon}
+                installedIconUrl={app.installedIconUrl}
                 size={48}
               />
             </NavLink>

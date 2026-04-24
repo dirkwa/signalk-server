@@ -20,7 +20,9 @@ interface DetailPayload {
   version: string
   displayName?: string
   appIcon?: string
+  installedIconUrl?: string
   screenshots: string[]
+  installedScreenshotUrls?: string[]
   official: boolean
   deprecated: boolean
   readme: string
@@ -142,7 +144,14 @@ const DetailView: React.FC = () => {
 
   const detail = state.detail
   const missingRequired = detail.requires.filter((d) => !d.installed)
-  const heroScreenshot = detail.screenshots[0]
+  // Prefer installedScreenshotUrls (served by the local server mount, always
+  // works for installed plugins) over the unpkg-CDN screenshots (which may
+  // 404 when signalk.screenshots paths aren't tarball-relative).
+  const effectiveScreenshots =
+    detail.installedScreenshotUrls && detail.installedScreenshotUrls.length > 0
+      ? detail.installedScreenshotUrls
+      : detail.screenshots
+  const heroScreenshot = effectiveScreenshots[0]
   const displayTitle = detail.displayName || detail.name
 
   const handleInstall = () => {
@@ -183,6 +192,7 @@ const DetailView: React.FC = () => {
                   name={detail.name}
                   displayName={detail.displayName}
                   appIcon={detail.appIcon}
+                  installedIconUrl={detail.installedIconUrl}
                   size={80}
                 />
                 <div className="flex-grow-1 min-w-0">
@@ -307,9 +317,9 @@ const DetailView: React.FC = () => {
                     style={{ aspectRatio: '16/10', objectFit: 'cover' }}
                   />
                 </a>
-                {detail.screenshots.length > 1 && (
+                {effectiveScreenshots.length > 1 && (
                   <small className="text-muted d-block mt-2 text-end">
-                    +{detail.screenshots.length - 1} more in README tab
+                    +{effectiveScreenshots.length - 1} more in README tab
                   </small>
                 )}
               </div>
@@ -354,7 +364,7 @@ const DetailView: React.FC = () => {
                 <Tab.Pane eventKey="readme">
                   <ReadmeTab
                     readme={detail.readme}
-                    screenshots={detail.screenshots}
+                    screenshots={effectiveScreenshots}
                     packageName={detail.name}
                     version={detail.version}
                   />

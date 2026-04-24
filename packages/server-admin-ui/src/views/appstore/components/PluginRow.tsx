@@ -25,6 +25,7 @@ const PluginRow: React.FC<PluginRowProps> = ({
             name={app.name}
             displayName={app.displayName}
             appIcon={app.appIcon}
+            installedIconUrl={app.installedIconUrl}
             size={28}
           />
         </NavLink>

@@ -370,8 +370,48 @@ module.exports = function (app) {
     }
 
     const installed = !!getPlugin(name) || !!getWebApp(name)
+    if (installed) {
+      const localIcons = buildLocalAssetUrls(pkg.name, pkg)
+      if (localIcons?.appIcon) detail.installedIconUrl = localIcons.appIcon
+      if (localIcons?.screenshots && localIcons.screenshots.length > 0) {
+        detail.installedScreenshotUrls = localIcons.screenshots
+      }
+    }
     cache.writePluginDetail(detail, installed)
     return detail
+  }
+
+  // Webapps and plugins that ship static assets are mounted by the server at
+  // /<package-name>/, so declared paths that look wrong against unpkg's raw
+  // tarball layout (e.g. freeboard-sk's "./assets/icons/icon-72x72.png" which
+  // is actually at "/public/assets/icons/icon-72x72.png" inside the tarball)
+  // resolve correctly against the mounted serving root. Reuse that URL
+  // scheme for installed plugins so the App Store card matches what Webapps
+  // shows elsewhere in the admin UI.
+  function buildLocalAssetUrl(pkgName, declaredPath) {
+    if (!declaredPath || typeof declaredPath !== 'string') return undefined
+    if (/^(https?:)?\/\//i.test(declaredPath)) return declaredPath
+    if (declaredPath.startsWith('data:')) return declaredPath
+    const cleaned = declaredPath.replace(/^\.\//, '')
+    return `/${pkgName}/${cleaned}`
+  }
+
+  function buildLocalAssetUrls(pkgName, pkg) {
+    const signalk = pkg && pkg.signalk
+    if (!signalk || typeof signalk !== 'object') return undefined
+    const appIcon =
+      typeof signalk.appIcon === 'string' && signalk.appIcon.trim()
+        ? buildLocalAssetUrl(pkgName, signalk.appIcon.trim())
+        : undefined
+    let screenshots
+    if (Array.isArray(signalk.screenshots)) {
+      screenshots = signalk.screenshots
+        .filter((s) => typeof s === 'string' && s.trim())
+        .map((s) => buildLocalAssetUrl(pkgName, s.trim()))
+        .filter(Boolean)
+    }
+    if (!appIcon && (!screenshots || screenshots.length === 0)) return undefined
+    return { appIcon, screenshots }
   }
 
   function resolveLatestVersion(name, plugins, webapps) {
@@ -609,6 +649,11 @@ module.exports = function (app) {
       }
 
       const ext = enrichEntry(plugin.package, { iconUrlLookup })
+      const installedLocally =
+        !!getPlugin(name) || !!getWebApp(name) || !!existing(name)
+      const localIcons = installedLocally
+        ? buildLocalAssetUrls(name, plugin.package)
+        : undefined
       const pluginInfo = {
         name: name,
         version: version,
@@ -627,7 +672,9 @@ module.exports = function (app) {
         ),
         displayName: ext.displayName,
         appIcon: ext.appIcon,
+        installedIconUrl: localIcons?.appIcon,
         screenshots: ext.screenshots,
+        installedScreenshotUrls: localIcons?.screenshots,
         official: ext.official,
         deprecated: ext.deprecated,
         githubUrl: ext.githubUrl,

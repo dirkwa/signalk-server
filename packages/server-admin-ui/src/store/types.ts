@@ -27,7 +27,9 @@ export interface AppInfo {
   author?: string
   displayName?: string
   appIcon?: string
+  installedIconUrl?: string
   screenshots?: string[]
+  installedScreenshotUrls?: string[]
   official?: boolean
   deprecated?: boolean
   githubUrl?: string

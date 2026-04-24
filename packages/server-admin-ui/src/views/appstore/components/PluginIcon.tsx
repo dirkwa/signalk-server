@@ -4,6 +4,7 @@ interface PluginIconProps {
   name: string
   displayName?: string
   appIcon?: string
+  installedIconUrl?: string
   size?: number
 }
 
@@ -28,13 +29,25 @@ const PluginIcon: React.FC<PluginIconProps> = ({
   name,
   displayName,
   appIcon,
+  installedIconUrl,
   size = 48
 }) => {
-  const [failed, setFailed] = useState(false)
-  if (appIcon && !failed) {
+  // Prefer the server's own mount (e.g. /@signalk/freeboard-sk/assets/icons/icon-72x72.png)
+  // because it's what the Webapps view uses and it always works for installed plugins.
+  // Fall back to the CDN-probed URL (appIcon) when the plugin is not installed or the
+  // local image failed to load.
+  const candidates: string[] = []
+  if (installedIconUrl) candidates.push(installedIconUrl)
+  if (appIcon && appIcon !== installedIconUrl) candidates.push(appIcon)
+
+  const [failedIndex, setFailedIndex] = useState(-1)
+  const activeSrc = candidates[failedIndex + 1]
+
+  if (activeSrc) {
     return (
       <img
-        src={appIcon}
+        key={activeSrc}
+        src={activeSrc}
         alt=""
         width={size}
         height={size}
@@ -45,10 +58,11 @@ const PluginIcon: React.FC<PluginIconProps> = ({
           borderRadius: 8,
           background: '#f0f3f5'
         }}
-        onError={() => setFailed(true)}
+        onError={() => setFailedIndex(failedIndex + 1)}
       />
     )
   }
+
   const monogram = monogramFor(name, displayName)
   return (
     <div
