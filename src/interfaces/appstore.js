@@ -32,12 +32,14 @@ const { SERVERROUTESPREFIX } = require('../constants')
 const { getCategories, getAvailableCategories } = require('../categories')
 const {
   createCache,
+  createIconProbeCache,
   createRegistryClient,
   enrichEntry,
   buildOfflineResponse,
   buildPluginDetail,
   readDetailFromCache,
-  badgesToIndicators
+  badgesToIndicators,
+  probeIconUrl
 } = require('../appstore')
 
 const bundledAdminUIs = ['@signalk/server-admin-ui']
@@ -57,6 +59,11 @@ module.exports = function (app) {
   const registry = createRegistryClient({
     cacheDir: `${app.config.configPath}/appstore-cache`
   })
+  const iconProbe = createIconProbeCache(
+    `${app.config.configPath}/appstore-cache`
+  )
+  const iconUrlLookup = (pkg, version, declaredPath) =>
+    iconProbe.get(pkg, version, declaredPath)
 
   return {
     start: function () {
@@ -183,22 +190,26 @@ module.exports = function (app) {
           fetchDistTagsForPackages(installedNames).catch(() => ({})),
           registry.getIndex().catch(() => undefined)
         ])
-          .then(([[plugins, webapps], serverVersion, distTagsMap, regIndex]) =>
-            getAllModuleInfo(
-              plugins,
-              webapps,
-              serverVersion,
-              distTagsMap,
-              regIndex
-            )
+          .then(
+            ([[plugins, webapps], serverVersion, distTagsMap, regIndex]) => {
+              const result = getAllModuleInfo(
+                plugins,
+                webapps,
+                serverVersion,
+                distTagsMap,
+                regIndex
+              )
+              return { result, plugins, webapps }
+            }
           )
-          .then((result) => {
+          .then(({ result, plugins, webapps }) => {
             try {
               cache.writeList(result)
             } catch (err) {
               debug('writeList failed: %O', err)
             }
             scheduleInstalledDetailRefresh(result)
+            scheduleIconProbe(plugins, webapps)
             res.json(result)
           })
           .catch((error) => {
@@ -271,7 +282,7 @@ module.exports = function (app) {
               res.status(404).json({ error: `No such plugin: ${name}` })
               return
             }
-            const ext = enrichEntry(match.package)
+            const ext = enrichEntry(match.package, { iconUrlLookup })
             const required = ext.requires || []
             const toInstall = []
             for (const dep of required) {
@@ -317,7 +328,7 @@ module.exports = function (app) {
       return cached || null
     }
     const pkg = match.package
-    const ext = enrichEntry(pkg, { includeIndicators: true })
+    const ext = enrichEntry(pkg, { includeIndicators: true, iconUrlLookup })
     const resolver = buildDependencyResolver(plugins, webapps)
     const [detail, regIndexEntry] = await Promise.all([
       buildPluginDetail(
@@ -379,7 +390,7 @@ module.exports = function (app) {
       if (!pkg) {
         return { installed }
       }
-      const ext = enrichEntry(pkg)
+      const ext = enrichEntry(pkg, { iconUrlLookup })
       return {
         displayName: ext.displayName,
         appIcon: ext.appIcon,
@@ -398,6 +409,65 @@ module.exports = function (app) {
         )
       })
       void result
+    })
+  }
+
+  function collectIconProbeTasks(plugins, webapps) {
+    const tasks = []
+    const queuedKey = new Set()
+    for (const list of [plugins, webapps]) {
+      for (const mod of list) {
+        const pkg = mod.package
+        const signalk = pkg.signalk
+        if (!signalk || typeof signalk !== 'object') continue
+        const paths = []
+        if (typeof signalk.appIcon === 'string' && signalk.appIcon.trim()) {
+          paths.push(signalk.appIcon.trim())
+        }
+        if (Array.isArray(signalk.screenshots)) {
+          for (const s of signalk.screenshots) {
+            if (typeof s === 'string' && s.trim()) paths.push(s.trim())
+          }
+        }
+        for (const declaredPath of paths) {
+          const key = `${pkg.name}@${pkg.version}@${declaredPath}`
+          if (queuedKey.has(key)) continue
+          if (iconProbe.get(pkg.name, pkg.version, declaredPath) !== undefined)
+            continue
+          queuedKey.add(key)
+          tasks.push({ name: pkg.name, version: pkg.version, declaredPath })
+        }
+      }
+    }
+    return tasks
+  }
+
+  async function runIconProbeTasks(tasks) {
+    const CONCURRENCY = 6
+    let i = 0
+    async function worker() {
+      while (true) {
+        const idx = i++
+        if (idx >= tasks.length) return
+        const t = tasks[idx]
+        try {
+          await probeIconUrl(t.name, t.version, t.declaredPath, iconProbe)
+        } catch (err) {
+          debug('icon probe %s failed: %O', t.name, err)
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()))
+  }
+
+  function scheduleIconProbe(plugins, webapps) {
+    setImmediate(() => {
+      const tasks = collectIconProbeTasks(plugins, webapps)
+      if (tasks.length === 0) return
+      debug('scheduling %d icon probes', tasks.length)
+      runIconProbeTasks(tasks).catch((err) =>
+        debug('icon probe run failed: %O', err)
+      )
     })
   }
 
@@ -537,7 +607,7 @@ module.exports = function (app) {
         return
       }
 
-      const ext = enrichEntry(plugin.package)
+      const ext = enrichEntry(plugin.package, { iconUrlLookup })
       const pluginInfo = {
         name: name,
         version: version,

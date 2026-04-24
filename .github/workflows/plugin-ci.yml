@@ -244,6 +244,36 @@ jobs:
             );
           }
 
+          // Verify signalk.appIcon and signalk.screenshots paths actually
+          // exist in the working tree. Common failure mode: author lists
+          // "./app-icon.svg" in signalk.appIcon but the file is at
+          // ./public/app-icon.svg — the App Store CDN then 404s and shows
+          // the monogram fallback instead of the real icon.
+          function normaliseRelPath(p) {
+            return p.replace(/^\.?\//, '');
+          }
+          function checkDeclaredPath(field, declared) {
+            const rel = normaliseRelPath(declared);
+            if (!fs.existsSync(rel)) {
+              warnings.push(
+                field + ' "' + declared + '" does not exist in the repo. ' +
+                'The App Store fetches assets from unpkg.com/{pkg}@{version}/{path} — ' +
+                'if the file is not at the declared path in the published tarball, it will 404. ' +
+                'Move the file or update the path to match where it actually lives (e.g. ./public/... or ./assets/...).'
+              );
+            }
+          }
+          if (pkg.signalk && typeof pkg.signalk.appIcon === 'string' && pkg.signalk.appIcon.trim()) {
+            checkDeclaredPath('signalk.appIcon', pkg.signalk.appIcon.trim());
+          }
+          if (Array.isArray(pkg.signalk && pkg.signalk.screenshots)) {
+            pkg.signalk.screenshots.forEach((s, i) => {
+              if (typeof s === 'string' && s.trim()) {
+                checkDeclaredPath('signalk.screenshots[' + i + ']', s.trim());
+              }
+            });
+          }
+
           warnings.forEach(w => console.log('::warning::' + w));
           if (errors.length > 0) {
             errors.forEach(e => console.log('::error::' + e));
@@ -1093,6 +1123,38 @@ jobs:
             if (!files.some(f => f.startsWith(dir + '/'))) {
               errors.push('"main" references ' + dir + '/ directory but no files from it are in the package. Did you forget to build, or need to add "' + dir + '" to the "files" array in package.json?');
             }
+          }
+
+          // Check that signalk.appIcon and signalk.screenshots[] paths are
+          // included in the npm tarball. Paths missing from the pack will
+          // 404 on the App Store CDN and degrade to the monogram fallback.
+          function normaliseDeclared(p) {
+            return p.replace(/^\.?\//, '');
+          }
+          function assetIncluded(declared) {
+            const clean = normaliseDeclared(declared);
+            return files.includes(clean) || files.includes(declared);
+          }
+          if (pkg.signalk && typeof pkg.signalk.appIcon === 'string' && pkg.signalk.appIcon.trim()) {
+            const declared = pkg.signalk.appIcon.trim();
+            if (!assetIncluded(declared)) {
+              warnings.push(
+                'signalk.appIcon "' + declared + '" is NOT included in the npm tarball. ' +
+                'The App Store will 404 and show the monogram fallback. ' +
+                'Ensure the file is covered by the "files" field or not excluded by .npmignore.'
+              );
+            }
+          }
+          if (Array.isArray(pkg.signalk && pkg.signalk.screenshots)) {
+            pkg.signalk.screenshots.forEach((s, i) => {
+              if (typeof s === 'string' && s.trim() && !assetIncluded(s.trim())) {
+                warnings.push(
+                  'signalk.screenshots[' + i + '] "' + s.trim() + '" is NOT included in the npm tarball. ' +
+                  'The App Store detail page will not show this screenshot. ' +
+                  'Ensure the file is covered by the "files" field or not excluded by .npmignore.'
+                );
+              }
+            });
           }
 
           warnings.forEach(w => console.log('::warning::' + w));

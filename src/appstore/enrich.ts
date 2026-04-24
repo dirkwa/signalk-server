@@ -105,9 +105,35 @@ function parseSignalKMetadata(
   }
 }
 
+/**
+ * A cache of pre-probed CDN URLs. When the author's declared signalk.appIcon
+ * or signalk.screenshots[] path 404s on unpkg (common when source assets live
+ * in ./public/, ./assets/, etc. but the declared path is relative to the
+ * repo root), a background probe discovers the real URL and stores it here.
+ * enrichEntry consults the cache and, if a resolution is known, uses it
+ * instead of the naive package-relative URL.
+ */
+export type ProbedUrlLookup = (
+  pkg: string,
+  version: string,
+  declaredPath: string
+) => string | null | undefined
+
+function defaultResolve(
+  pkg: string,
+  version: string,
+  declaredPath: string,
+  lookup?: ProbedUrlLookup
+): string {
+  const cached = lookup?.(pkg, version, declaredPath)
+  if (cached) return cached
+  return resolveScreenshotUrl(pkg, version, declaredPath)
+}
+
 function resolveScreenshotList(
   pkg: NpmPackageLike,
-  meta: SignalKPackageMetadata | undefined
+  meta: SignalKPackageMetadata | undefined,
+  lookup?: ProbedUrlLookup
 ): string[] {
   const raw = meta?.screenshots
   if (!Array.isArray(raw)) return []
@@ -116,7 +142,7 @@ function resolveScreenshotList(
     if (typeof entry !== 'string' || entry.trim() === '') continue
     const resolved = isAbsoluteUrl(entry)
       ? entry
-      : resolveScreenshotUrl(pkg.name, pkg.version, entry)
+      : defaultResolve(pkg.name, pkg.version, entry, lookup)
     out.push(resolved)
     if (out.length >= MAX_SCREENSHOTS) break
   }
@@ -125,13 +151,14 @@ function resolveScreenshotList(
 
 function resolveAppIcon(
   pkg: NpmPackageLike,
-  meta: SignalKPackageMetadata | undefined
+  meta: SignalKPackageMetadata | undefined,
+  lookup?: ProbedUrlLookup
 ): string | undefined {
   const icon = meta?.appIcon
   if (!icon || typeof icon !== 'string' || icon.trim() === '') return undefined
   return isAbsoluteUrl(icon)
     ? icon
-    : resolveScreenshotUrl(pkg.name, pkg.version, icon)
+    : defaultResolve(pkg.name, pkg.version, icon, lookup)
 }
 
 function isDeprecated(
@@ -163,6 +190,7 @@ function normalizeNameList(value: string[] | undefined): string[] | undefined {
 export interface EnrichmentOptions {
   indicatorInputs?: Partial<IndicatorInputs>
   includeIndicators?: boolean
+  iconUrlLookup?: ProbedUrlLookup
 }
 
 export function enrichEntry(
@@ -170,8 +198,8 @@ export function enrichEntry(
   options: EnrichmentOptions = {}
 ): AppStoreEntryExtension {
   const meta = parseSignalKMetadata(pkg)
-  const screenshots = resolveScreenshotList(pkg, meta)
-  const appIcon = resolveAppIcon(pkg, meta)
+  const screenshots = resolveScreenshotList(pkg, meta, options.iconUrlLookup)
+  const appIcon = resolveAppIcon(pkg, meta, options.iconUrlLookup)
   const githubUrl = extractGithubUrl(pkg)
   const issuesUrl = extractIssuesUrl(pkg)
   const deprecated = isDeprecated(pkg, meta)
