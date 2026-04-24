@@ -1,0 +1,381 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import { NavLink, useParams } from 'react-router-dom'
+import Alert from 'react-bootstrap/Alert'
+import Badge from 'react-bootstrap/Badge'
+import Button from 'react-bootstrap/Button'
+import Card from 'react-bootstrap/Card'
+import Nav from 'react-bootstrap/Nav'
+import Tab from 'react-bootstrap/Tab'
+import { useAppStore } from '../../../store'
+import type { AppStoreState, AppInfo } from '../../../store/types'
+import PluginIcon from '../components/PluginIcon'
+import ReadmeTab from './ReadmeTab'
+import ChangelogTab from './ChangelogTab'
+import IndicatorsTab, { IndicatorResult } from './IndicatorsTab'
+import DependenciesSection, { DependencyReference } from './DependenciesSection'
+import '../appStore.scss'
+
+interface DetailPayload {
+  name: string
+  version: string
+  displayName?: string
+  appIcon?: string
+  screenshots: string[]
+  official: boolean
+  deprecated: boolean
+  readme: string
+  changelog: string
+  indicators?: IndicatorResult
+  requires: DependencyReference[]
+  recommends: DependencyReference[]
+  readmeFormat: 'markdown'
+  changelogFormat: 'markdown' | 'synthesized'
+  fetchedAt: number
+  fromCache?: boolean
+  storeAvailable?: boolean
+}
+
+type LoadState =
+  | { status: 'loading' }
+  | { status: 'loaded'; detail: DetailPayload }
+  | { status: 'error'; message: string; offline?: boolean }
+
+const DetailView: React.FC = () => {
+  const { name } = useParams<{ name: string }>()
+  const decodedName = name ? decodeURIComponent(name) : ''
+  const appStore = useAppStore() as AppStoreState
+  const [state, setState] = useState<LoadState>({ status: 'loading' })
+
+  const listEntry = useMemo((): AppInfo | undefined => {
+    if (!decodedName) return undefined
+    return (
+      appStore.installed.find((a) => a.name === decodedName) ||
+      appStore.available.find((a) => a.name === decodedName) ||
+      appStore.updates.find((a) => a.name === decodedName)
+    )
+  }, [appStore, decodedName])
+
+  const isInstalled = !!listEntry?.installedVersion
+  const updateAvailable = !!appStore.updates.find((u) => u.name === decodedName)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!decodedName) return
+    setState({ status: 'loading' })
+    fetch(
+      `${window.serverRoutesPrefix}/appstore/plugin/${encodeURIComponent(decodedName)}`,
+      { credentials: 'include' }
+    )
+      .then(async (res) => {
+        if (cancelled) return
+        if (res.ok) {
+          const detail = (await res.json()) as DetailPayload
+          setState({ status: 'loaded', detail })
+        } else if (res.status === 503) {
+          const body = await res.json().catch(() => ({}))
+          setState({
+            status: 'error',
+            message: body.error || 'Plugin details not available offline.',
+            offline: true
+          })
+        } else {
+          setState({
+            status: 'error',
+            message: `Failed to load plugin details (${res.status}).`
+          })
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setState({
+          status: 'error',
+          message: err?.message || 'Network error loading plugin details.',
+          offline: true
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [decodedName])
+
+  if (!decodedName) {
+    return (
+      <Alert variant="warning">
+        No plugin specified. Return to the{' '}
+        <NavLink to="/apps/store">Store</NavLink>.
+      </Alert>
+    )
+  }
+
+  if (state.status === 'loading') {
+    return (
+      <div className="plugin-detail">
+        <div className="mb-2">
+          <NavLink to="/apps/store" className="btn btn-light btn-sm">
+            ← Back to Store
+          </NavLink>
+        </div>
+        <Card>
+          <Card.Body>Loading {decodedName}…</Card.Body>
+        </Card>
+      </div>
+    )
+  }
+
+  if (state.status === 'error') {
+    return (
+      <Card className="plugin-detail">
+        <Card.Body>
+          <Alert
+            variant={state.offline ? 'warning' : 'danger'}
+            className="mb-3"
+          >
+            {state.message}
+          </Alert>
+          <NavLink to="/apps/store" className="btn btn-light">
+            Back to Store
+          </NavLink>
+        </Card.Body>
+      </Card>
+    )
+  }
+
+  const detail = state.detail
+  const missingRequired = detail.requires.filter((d) => !d.installed)
+  const heroScreenshot = detail.screenshots[0]
+  const displayTitle = detail.displayName || detail.name
+
+  const handleInstall = () => {
+    fetch(
+      `${window.serverRoutesPrefix}/appstore/install/${encodeURIComponent(
+        detail.name
+      )}/${encodeURIComponent(detail.version)}`,
+      { method: 'POST', credentials: 'include' }
+    )
+  }
+
+  const handleInstallWithDeps = () => {
+    fetch(`${window.serverRoutesPrefix}/appstore/install-with-deps`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: detail.name, version: detail.version })
+    })
+  }
+
+  return (
+    <div className="plugin-detail animated fadeIn">
+      <div className="mb-2">
+        <NavLink
+          to="/apps/store"
+          className="btn btn-light btn-sm"
+          aria-label="Back to Store"
+        >
+          ← Back to Store
+        </NavLink>
+      </div>
+      <Card>
+        <Card.Body>
+          <div className="d-flex gap-4 flex-column flex-lg-row">
+            <div className="flex-grow-1">
+              <div className="d-flex gap-3 align-items-start">
+                <PluginIcon
+                  name={detail.name}
+                  displayName={detail.displayName}
+                  appIcon={detail.appIcon}
+                  size={80}
+                />
+                <div className="flex-grow-1 min-w-0">
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
+                    <span
+                      className={`plugin-detail__typedot ${
+                        listEntry?.isPlugin ? 'is-plugin' : 'is-webapp'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <code className="text-muted">{detail.name}</code>
+                    {detail.official && <Badge bg="primary">OFFICIAL</Badge>}
+                    {detail.deprecated && <Badge bg="danger">DEPRECATED</Badge>}
+                  </div>
+                  <h2 className="mb-1 mt-2">{displayTitle}</h2>
+                  <p className="text-muted mb-2">
+                    {(listEntry?.description as string) || ''}
+                  </p>
+                  <div className="text-muted small d-flex gap-3 flex-wrap">
+                    {listEntry?.author && (
+                      <span>
+                        by <strong>{listEntry.author}</strong>
+                      </span>
+                    )}
+                    <span className="font-monospace">v{detail.version}</span>
+                    {(listEntry?.githubUrl as string | undefined) && (
+                      <a
+                        href={listEntry.githubUrl as string}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        GitHub
+                      </a>
+                    )}
+                    {(listEntry?.npmUrl as string | undefined) && (
+                      <a
+                        href={listEntry.npmUrl as string}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        npm
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <DependenciesSection
+                title="Requires"
+                tone="required"
+                deps={detail.requires}
+              />
+              <DependenciesSection
+                title="Works well with"
+                tone="recommended"
+                deps={detail.recommends}
+              />
+
+              <div className="plugin-detail__actions mt-4 d-flex justify-content-end gap-2 flex-wrap">
+                {isInstalled && listEntry?.id ? (
+                  <>
+                    <NavLink
+                      to={`/apps/configuration/${encodeURIComponent(
+                        (listEntry.id as string) || detail.name
+                      )}`}
+                      className="btn btn-primary"
+                    >
+                      Configure
+                    </NavLink>
+                    {updateAvailable && (
+                      <Button variant="warning" onClick={handleInstall}>
+                        Update to v{detail.version}
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline-danger"
+                      onClick={() => {
+                        fetch(
+                          `${window.serverRoutesPrefix}/appstore/remove/${encodeURIComponent(detail.name)}`,
+                          {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ deleteData: false })
+                          }
+                        )
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {missingRequired.length > 0 && (
+                      <Button
+                        variant="warning"
+                        onClick={handleInstallWithDeps}
+                        title={`Installs this plugin plus ${missingRequired.length} required dependencies`}
+                      >
+                        Install required plugins ({missingRequired.length + 1})
+                      </Button>
+                    )}
+                    <Button variant="primary" onClick={handleInstall}>
+                      Install
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {heroScreenshot && (
+              <div
+                className="plugin-detail__hero-shot"
+                style={{ flexBasis: '320px', flexShrink: 0 }}
+              >
+                <a href={heroScreenshot} target="_blank" rel="noreferrer">
+                  <img
+                    src={heroScreenshot}
+                    alt=""
+                    loading="lazy"
+                    className="img-fluid rounded border"
+                    style={{ aspectRatio: '16/10', objectFit: 'cover' }}
+                  />
+                </a>
+                {detail.screenshots.length > 1 && (
+                  <small className="text-muted d-block mt-2 text-end">
+                    +{detail.screenshots.length - 1} more in README tab
+                  </small>
+                )}
+              </div>
+            )}
+          </div>
+
+          {detail.deprecated && (
+            <Alert variant="danger" className="mt-4">
+              <strong>This plugin is deprecated.</strong> The author no longer
+              recommends it for new installations.
+              {isInstalled && (
+                <>
+                  {' '}
+                  Since it&apos;s installed, you can still configure or remove
+                  it here.
+                </>
+              )}
+            </Alert>
+          )}
+
+          {detail.fromCache && detail.storeAvailable === false && (
+            <Alert variant="warning" className="mt-4 mb-0">
+              Showing cached details from{' '}
+              {new Date(detail.fetchedAt).toLocaleString()}.
+            </Alert>
+          )}
+
+          <div className="mt-4">
+            <Tab.Container defaultActiveKey="readme">
+              <Nav variant="tabs">
+                <Nav.Item>
+                  <Nav.Link eventKey="readme">README</Nav.Link>
+                </Nav.Item>
+                <Nav.Item>
+                  <Nav.Link eventKey="changelog">Changelog</Nav.Link>
+                </Nav.Item>
+                <Nav.Item>
+                  <Nav.Link eventKey="indicators">Indicators</Nav.Link>
+                </Nav.Item>
+              </Nav>
+              <Tab.Content className="p-3">
+                <Tab.Pane eventKey="readme">
+                  <ReadmeTab
+                    readme={detail.readme}
+                    screenshots={detail.screenshots}
+                    packageName={detail.name}
+                    version={detail.version}
+                  />
+                </Tab.Pane>
+                <Tab.Pane eventKey="changelog">
+                  <ChangelogTab
+                    changelog={detail.changelog}
+                    changelogFormat={detail.changelogFormat}
+                    version={detail.version}
+                  />
+                </Tab.Pane>
+                <Tab.Pane eventKey="indicators">
+                  <IndicatorsTab indicators={detail.indicators} />
+                </Tab.Pane>
+              </Tab.Content>
+            </Tab.Container>
+          </div>
+        </Card.Body>
+      </Card>
+    </div>
+  )
+}
+
+export default DetailView
