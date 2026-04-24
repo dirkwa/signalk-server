@@ -11,6 +11,7 @@
 import { createDebug } from '../debug'
 import { AppStoreCache } from './cache'
 import { changelogUrlFor, readmeUrlFor } from './cdn'
+import { fetchReleasesMarkdown, parseGithubSlug } from './github-releases'
 import { computeIndicators } from './indicators'
 import { DependencyReference, PluginDetailPayload } from './schemas'
 
@@ -92,13 +93,29 @@ export async function buildPluginDetail(
       ? summary.npmReadme
       : (await fetchText(readmeUrlFor(summary.name, summary.version))) || ''
 
+  // Prefer a CHANGELOG.md in the published tarball. If absent, fall back
+  // to the repo's public GitHub Releases atom feed (no token required;
+  // the convention recommended in signalk-server PR #2615). Rendered to
+  // Markdown via unified/rehype-remark so the existing Changelog tab
+  // renders release notes directly.
   const changelogRaw = await fetchText(
     changelogUrlFor(summary.name, summary.version)
   )
-  const changelog = changelogRaw ?? ''
-  const changelogFormat: PluginDetailPayload['changelogFormat'] = changelogRaw
+  let changelog = changelogRaw ?? ''
+  let changelogFormat: PluginDetailPayload['changelogFormat'] = changelogRaw
     ? 'markdown'
     : 'synthesized'
+
+  if (!changelogRaw) {
+    const slug = parseGithubSlug(summary.githubUrl)
+    if (slug) {
+      const releases = await fetchReleasesMarkdown(slug.owner, slug.repo)
+      if (releases && releases.trim()) {
+        changelog = releases
+        changelogFormat = 'markdown'
+      }
+    }
+  }
 
   const indicators = computeIndicators({
     hasRepository: !!summary.githubUrl,
