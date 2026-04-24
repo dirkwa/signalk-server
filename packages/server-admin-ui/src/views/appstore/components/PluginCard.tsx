@@ -16,14 +16,16 @@ const PluginCard: React.FC<PluginCardProps> = ({
   app,
   detailLinkBase = '/apps/store/plugin'
 }) => {
-  const score =
+  const indicators =
     typeof app.indicators === 'object' && app.indicators !== null
-      ? (app.indicators as { score?: number }).score
+      ? (app.indicators as {
+          score?: number
+          rawMetrics?: { stars?: number; downloadsPerWeek?: number }
+        })
       : undefined
-  const stars = (app.rawMetrics as { stars?: number } | undefined)?.stars
-  const downloads = (
-    app.rawMetrics as { downloadsPerWeek?: number } | undefined
-  )?.downloadsPerWeek
+  const score = indicators?.score
+  const stars = indicators?.rawMetrics?.stars
+  const downloads = indicators?.rawMetrics?.downloadsPerWeek
   const isInstalled = !!app.installedVersion
   const showDeprecated = app.deprecated && isInstalled
 

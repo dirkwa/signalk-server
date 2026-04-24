@@ -981,7 +981,22 @@ module.exports = function (app) {
           checks,
           reportedPlatforms: [],
           rawMetrics: {
-            lastReleaseDate: regEntry.last_tested
+            lastReleaseDate: regEntry.last_tested,
+            // Upstream metrics published by signalk-plugin-registry >= 0.3.0.
+            // Surfaced on the card so e.g. "★5" renders next to the score
+            // without each boat hitting api.github.com.
+            ...(typeof regEntry.stars === 'number'
+              ? { stars: regEntry.stars }
+              : {}),
+            ...(typeof regEntry.open_issues === 'number'
+              ? { openIssues: regEntry.open_issues }
+              : {}),
+            ...(typeof regEntry.contributors === 'number'
+              ? { contributors: regEntry.contributors }
+              : {}),
+            ...(typeof regEntry.downloads_per_week === 'number'
+              ? { downloadsPerWeek: regEntry.downloads_per_week }
+              : {})
           }
         }
         pluginInfo.registryBadges = regEntry.badges_stable || []
