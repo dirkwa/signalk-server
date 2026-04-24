@@ -32,6 +32,7 @@ const { SERVERROUTESPREFIX } = require('../constants')
 const { getCategories, getAvailableCategories } = require('../categories')
 const {
   createCache,
+  createIconBytesCache,
   createIconProbeCache,
   createNpmMetadataClient,
   createRegistryClient,
@@ -64,6 +65,9 @@ module.exports = function (app) {
     `${app.config.configPath}/appstore-cache`
   )
   const npmMetadata = createNpmMetadataClient(
+    `${app.config.configPath}/appstore-cache`
+  )
+  const iconBytes = createIconBytesCache(
     `${app.config.configPath}/appstore-cache`
   )
   const iconUrlLookup = (pkg, version, declaredPath) =>
@@ -270,10 +274,33 @@ module.exports = function (app) {
         }
       )
 
+      app.get(
+        [
+          `${SERVERROUTESPREFIX}/appstore/icon/:name`,
+          `${SERVERROUTESPREFIX}/appstore/icon/:org/:name`
+        ],
+        (req, res) => {
+          let name = req.params.name
+          if (req.params.org) {
+            name = req.params.org + '/' + name
+          }
+          const stored = iconBytes.read(name)
+          if (!stored) {
+            res.status(404).json({ error: 'Icon not cached', name })
+            return
+          }
+          res.setHeader('Content-Type', stored.contentType)
+          res.setHeader('Cache-Control', 'public, max-age=3600')
+          res.setHeader('X-Content-Type-Options', 'nosniff')
+          res.sendFile(stored.path)
+        }
+      )
+
       app.post(`${SERVERROUTESPREFIX}/appstore/refresh`, (req, res) => {
         cache.invalidateList()
         registry.invalidate()
         iconProbe.invalidate()
+        iconBytes.invalidate()
         npmMetadata.invalidate()
         installedMetadataCache.clear()
         res.json({ ok: true })
@@ -366,20 +393,41 @@ module.exports = function (app) {
           const signalk = registryMeta.signalk
           const toProbe = []
           if (typeof signalk.appIcon === 'string' && signalk.appIcon.trim()) {
-            toProbe.push(signalk.appIcon.trim())
+            toProbe.push({ declaredPath: signalk.appIcon.trim(), kind: 'icon' })
           }
           if (Array.isArray(signalk.screenshots)) {
             for (const s of signalk.screenshots) {
-              if (typeof s === 'string' && s.trim()) toProbe.push(s.trim())
+              if (typeof s === 'string' && s.trim()) {
+                toProbe.push({ declaredPath: s.trim(), kind: 'screenshot' })
+              }
             }
           }
           if (toProbe.length > 0) {
             await Promise.all(
-              toProbe.map((p) =>
-                probeIconUrl(pkg.name, pkg.version, p, iconProbe).catch((err) =>
-                  debug('probe %s failed on detail for %s: %O', p, name, err)
-                )
-              )
+              toProbe.map(async (t) => {
+                try {
+                  const resolved = await probeIconUrl(
+                    pkg.name,
+                    pkg.version,
+                    t.declaredPath,
+                    iconProbe
+                  )
+                  if (
+                    resolved &&
+                    t.kind === 'icon' &&
+                    !iconBytes.read(pkg.name)
+                  ) {
+                    await iconBytes.download(pkg.name, pkg.version, resolved)
+                  }
+                } catch (err) {
+                  debug(
+                    'probe %s failed on detail for %s: %O',
+                    t.declaredPath,
+                    name,
+                    err
+                  )
+                }
+              })
             )
           }
         }
@@ -398,7 +446,7 @@ module.exports = function (app) {
           name: pkg.name,
           version: pkg.version,
           displayName: ext.displayName,
-          appIcon: ext.appIcon,
+          appIcon: appIconUrlFor(pkg.name, ext.appIcon),
           screenshots: ext.screenshots || [],
           official: ext.official,
           deprecated: ext.deprecated,
@@ -486,6 +534,19 @@ module.exports = function (app) {
     return `/${pkgName}/${cleaned}`
   }
 
+  // When the background probe + downloader has cached a plugin's icon
+  // locally, route the card/detail <img> through the server's own icon
+  // route so the browser never has to reach unpkg. This makes the grid
+  // render instantly on a boat with no internet after a one-time warmup.
+  // When bytes aren't cached yet, pass the CDN URL through unchanged.
+  function appIconUrlFor(pkgName, cdnUrl) {
+    if (!pkgName) return cdnUrl
+    if (iconBytes.read(pkgName)) {
+      return `${SERVERROUTESPREFIX}/appstore/icon/${pkgName}`
+    }
+    return cdnUrl
+  }
+
   function buildLocalAssetUrls(pkgName, pkg) {
     const signalk = pkg && pkg.signalk
     if (!signalk || typeof signalk !== 'object') return undefined
@@ -524,7 +585,7 @@ module.exports = function (app) {
       const ext = enrichEntry(pkg, { iconUrlLookup })
       return {
         displayName: ext.displayName,
-        appIcon: ext.appIcon,
+        appIcon: appIconUrlFor(name, ext.appIcon),
         installed
       }
     }
@@ -551,22 +612,32 @@ module.exports = function (app) {
         const pkg = mod.package
         const signalk = pkg.signalk
         if (!signalk || typeof signalk !== 'object') continue
-        const paths = []
+        const entries = []
         if (typeof signalk.appIcon === 'string' && signalk.appIcon.trim()) {
-          paths.push(signalk.appIcon.trim())
+          entries.push({ declaredPath: signalk.appIcon.trim(), kind: 'icon' })
         }
         if (Array.isArray(signalk.screenshots)) {
           for (const s of signalk.screenshots) {
-            if (typeof s === 'string' && s.trim()) paths.push(s.trim())
+            if (typeof s === 'string' && s.trim()) {
+              entries.push({ declaredPath: s.trim(), kind: 'screenshot' })
+            }
           }
         }
-        for (const declaredPath of paths) {
-          const key = `${pkg.name}@${pkg.version}@${declaredPath}`
+        for (const entry of entries) {
+          const key = `${pkg.name}@${pkg.version}@${entry.declaredPath}`
           if (queuedKey.has(key)) continue
-          if (iconProbe.get(pkg.name, pkg.version, declaredPath) !== undefined)
+          if (
+            iconProbe.get(pkg.name, pkg.version, entry.declaredPath) !==
+            undefined
+          )
             continue
           queuedKey.add(key)
-          tasks.push({ name: pkg.name, version: pkg.version, declaredPath })
+          tasks.push({
+            name: pkg.name,
+            version: pkg.version,
+            declaredPath: entry.declaredPath,
+            kind: entry.kind
+          })
         }
       }
     }
@@ -582,7 +653,22 @@ module.exports = function (app) {
         if (idx >= tasks.length) return
         const t = tasks[idx]
         try {
-          await probeIconUrl(t.name, t.version, t.declaredPath, iconProbe)
+          const resolved = await probeIconUrl(
+            t.name,
+            t.version,
+            t.declaredPath,
+            iconProbe
+          )
+          // Persist the icon bytes locally so the grid renders from the
+          // server's own origin — fast, offline-friendly, and the
+          // plugin-author CDN URL never goes to the user's browser.
+          // Screenshots stay remote (larger + only viewed on detail).
+          if (resolved && t.kind === 'icon') {
+            const existing = iconBytes.read(t.name)
+            if (!existing) {
+              await iconBytes.download(t.name, t.version, resolved)
+            }
+          }
         } catch (err) {
           debug('icon probe %s failed: %O', t.name, err)
         }
@@ -824,7 +910,7 @@ module.exports = function (app) {
           (v) => v === 'signalk-embeddable-webapp'
         ),
         displayName: ext.displayName,
-        appIcon: ext.appIcon,
+        appIcon: appIconUrlFor(name, ext.appIcon),
         installedIconUrl: localIcons?.appIcon,
         screenshots: ext.screenshots,
         installedScreenshotUrls: localIcons?.screenshots,
