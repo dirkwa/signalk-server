@@ -279,7 +279,11 @@ const Apps: React.FC = () => {
 
           <div className="action__container">
             {view === 'Updates' && appStore.updates.length > 0 ? (
-              <Button variant="success" onClick={handleUpdateAll}>
+              <Button
+                variant="success"
+                onClick={handleUpdateAll}
+                className="text-nowrap"
+              >
                 Update all
               </Button>
             ) : undefined}
