@@ -175,6 +175,13 @@
 .plugin-card__title {
   font-size: 1rem;
   font-weight: 600;
+  // Long unbreakable npm package names (e.g. @marineyachtradar/signalk-plugin)
+  // would otherwise force the title block wider than its container, squeezing
+  // the score-ring stats column. overflow-wrap: anywhere lets the browser
+  // break inside the token at any glyph when needed.
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .plugin-card__author {
