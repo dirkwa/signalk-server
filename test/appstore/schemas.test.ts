@@ -4,6 +4,7 @@ import {
   AppStoreEntryExtensionSchema,
   IndicatorCheckSchema,
   IndicatorResultSchema,
+  PluginCiSchema,
   PluginDetailPayloadSchema,
   SignalKPackageMetadataSchema
 } from '../../dist/appstore/schemas.js'
@@ -107,5 +108,116 @@ describe('appstore/schemas', () => {
       fromCache: false
     }
     expect(Value.Check(PluginDetailPayloadSchema, bad)).to.equal(false)
+  })
+
+  describe('PluginCiSchema', () => {
+    it('accepts no-githead', () => {
+      expect(Value.Check(PluginCiSchema, { status: 'no-githead' })).to.equal(
+        true
+      )
+    })
+
+    it('accepts no-run with required fields', () => {
+      expect(
+        Value.Check(PluginCiSchema, {
+          status: 'no-run',
+          head_sha: 'abc',
+          commit_url: 'https://github.com/o/r/commit/abc'
+        })
+      ).to.equal(true)
+    })
+
+    it('rejects no-run missing commit_url', () => {
+      expect(
+        Value.Check(PluginCiSchema, { status: 'no-run', head_sha: 'abc' })
+      ).to.equal(false)
+    })
+
+    it('accepts in-progress with optional tested_at', () => {
+      expect(
+        Value.Check(PluginCiSchema, {
+          status: 'in-progress',
+          head_sha: 'abc',
+          workflow_run_url: 'https://github.com/o/r/actions/runs/1'
+        })
+      ).to.equal(true)
+    })
+
+    it('accepts ok with empty jobs', () => {
+      expect(
+        Value.Check(PluginCiSchema, {
+          status: 'ok',
+          head_sha: 'abc',
+          commit_url: 'https://x',
+          workflow_run_url: 'https://y',
+          tested_at: '2026-04-25T00:00:00Z',
+          workflow_ref: 'refs/heads/master',
+          jobs: []
+        })
+      ).to.equal(true)
+    })
+
+    it('accepts ok with a populated job array', () => {
+      expect(
+        Value.Check(PluginCiSchema, {
+          status: 'ok',
+          head_sha: 'abc',
+          commit_url: 'https://x',
+          workflow_run_url: 'https://y',
+          tested_at: '2026-04-25T00:00:00Z',
+          workflow_ref: 'refs/heads/master',
+          jobs: [
+            { platform: 'linux-x64', node: 22, conclusion: 'success' },
+            { platform: 'armv7-cerbo', node: 20, conclusion: 'success' },
+            {
+              platform: 'integration',
+              node: 22,
+              conclusion: 'skipped',
+              server_version: 'latest'
+            },
+            // Future-proof: unknown platform string is accepted via Type.String fallback
+            { platform: 'experimental', node: 24, conclusion: null }
+          ]
+        })
+      ).to.equal(true)
+    })
+
+    it('rejects ok with an unknown conclusion', () => {
+      expect(
+        Value.Check(PluginCiSchema, {
+          status: 'ok',
+          head_sha: 'abc',
+          commit_url: 'https://x',
+          workflow_run_url: 'https://y',
+          tested_at: '2026-04-25T00:00:00Z',
+          workflow_ref: 'refs/heads/master',
+          jobs: [{ platform: 'linux-x64', node: 22, conclusion: 'pending' }]
+        })
+      ).to.equal(false)
+    })
+
+    it('rejects an unknown status', () => {
+      expect(Value.Check(PluginCiSchema, { status: 'banana' })).to.equal(false)
+    })
+  })
+
+  it('plugin detail payload accepts the new optional pluginCi field', () => {
+    const payload = {
+      name: 'p',
+      version: '1.0.0',
+      screenshots: [],
+      official: false,
+      deprecated: false,
+      readme: '',
+      changelog: '',
+      requires: [],
+      recommends: [],
+      readmeFormat: 'markdown',
+      changelogFormat: 'synthesized',
+      fetchedAt: 0,
+      fromCache: false,
+      pluginCi: { status: 'no-githead' }
+    }
+    expect(Value.Check(PluginDetailPayloadSchema, payload)).to.equal(true)
   })
 })

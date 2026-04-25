@@ -50,6 +50,13 @@ export const IndicatorResultSchema = Type.Object(
   {
     score: Type.Number({ minimum: 0, maximum: 100 }),
     checks: Type.Array(IndicatorCheckSchema),
+    /**
+     * @deprecated Always emitted as []. The Indicators tab now uses the
+     * structured plugin-ci matrix on PluginDetailPayload.pluginCi instead
+     * of community-submitted platform reports. Kept here so older admin
+     * UIs that read this field don't crash. Remove in a future
+     * coordinated bump.
+     */
     reportedPlatforms: Type.Array(Type.String()),
     rawMetrics: IndicatorRawMetricsSchema
   },
@@ -60,6 +67,77 @@ export const IndicatorResultSchema = Type.Object(
   }
 )
 export type IndicatorResult = Static<typeof IndicatorResultSchema>
+
+// plugin-ci matrix: per-platform pass/fail of the upstream
+// SignalK/signalk-server/.github/workflows/plugin-ci.yml against the
+// commit (npm gitHead) the published version was built from. Fetched
+// once per nightly by the signalk-plugin-registry CI under the
+// authenticated GITHUB_TOKEN; surfaced on the App Store Indicators tab.
+// Discriminated union by `status` so the UI never has to disambiguate
+// "not yet fetched" from "fetched, nothing found".
+export const PluginCiPlatformSchema = Type.Union([
+  Type.Literal('linux-x64'),
+  Type.Literal('linux-arm64'),
+  Type.Literal('macos'),
+  Type.Literal('windows'),
+  Type.Literal('armv7-cerbo'),
+  Type.Literal('integration'),
+  // Future-proof: registry may emit new platforms before the admin UI
+  // ships a label for them.
+  Type.String()
+])
+export type PluginCiPlatform = Static<typeof PluginCiPlatformSchema>
+
+export const PluginCiConclusionSchema = Type.Union([
+  Type.Literal('success'),
+  Type.Literal('failure'),
+  Type.Literal('skipped'),
+  Type.Literal('cancelled'),
+  Type.Literal('in_progress'),
+  Type.Null()
+])
+export type PluginCiConclusion = Static<typeof PluginCiConclusionSchema>
+
+export const PluginCiJobSchema = Type.Object({
+  platform: PluginCiPlatformSchema,
+  node: Type.Number(),
+  conclusion: PluginCiConclusionSchema,
+  server_version: Type.Optional(Type.String()),
+  job_url: Type.Optional(Type.String())
+})
+export type PluginCiJob = Static<typeof PluginCiJobSchema>
+
+export const PluginCiSchema = Type.Union([
+  Type.Object({
+    status: Type.Literal('no-githead')
+  }),
+  Type.Object({
+    status: Type.Literal('no-run'),
+    head_sha: Type.String(),
+    commit_url: Type.String()
+  }),
+  Type.Object({
+    status: Type.Literal('no-plugin-ci'),
+    head_sha: Type.String(),
+    workflow_run_url: Type.String()
+  }),
+  Type.Object({
+    status: Type.Literal('in-progress'),
+    head_sha: Type.String(),
+    workflow_run_url: Type.String(),
+    tested_at: Type.Optional(Type.String())
+  }),
+  Type.Object({
+    status: Type.Literal('ok'),
+    head_sha: Type.String(),
+    commit_url: Type.String(),
+    workflow_run_url: Type.String(),
+    tested_at: Type.String(),
+    workflow_ref: Type.String(),
+    jobs: Type.Array(PluginCiJobSchema)
+  })
+])
+export type PluginCi = Static<typeof PluginCiSchema>
 
 export const SignalKPackageMetadataSchema = Type.Object(
   {
@@ -110,7 +188,8 @@ export const AppStoreEntryExtensionSchema = Type.Object(
     issuesUrl: Type.Optional(Type.String()),
     requires: Type.Optional(Type.Array(Type.String())),
     recommends: Type.Optional(Type.Array(Type.String())),
-    indicators: Type.Optional(IndicatorResultSchema)
+    indicators: Type.Optional(IndicatorResultSchema),
+    pluginCi: Type.Optional(PluginCiSchema)
   },
   {
     $id: 'AppStoreEntryExtension',
@@ -133,6 +212,7 @@ export const PluginDetailPayloadSchema = Type.Object(
     readme: Type.String(),
     changelog: Type.String(),
     indicators: Type.Optional(IndicatorResultSchema),
+    pluginCi: Type.Optional(PluginCiSchema),
     requires: Type.Array(DependencyReferenceSchema),
     recommends: Type.Array(DependencyReferenceSchema),
     readmeFormat: Type.Literal('markdown'),

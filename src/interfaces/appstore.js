@@ -510,6 +510,11 @@ module.exports = function (app) {
             : {})
         }
       }
+      // plugin-ci matrix from registry >= 0.4.0. Wire-rename from
+      // snake_case (registry side) to camelCase (server payload).
+      if (regIndexEntry.plugin_ci) {
+        detail.pluginCi = regIndexEntry.plugin_ci
+      }
     }
 
     // Direct-API fetch only fills gaps the registry didn't fill. Plugins
@@ -1046,6 +1051,12 @@ module.exports = function (app) {
         }
         pluginInfo.registryBadges = regEntry.badges_stable || []
         pluginInfo.registryTestStatus = regEntry.test_status
+        // plugin-ci matrix from registry >= 0.4.0. List entries get it
+        // too so the card can show a small "5/5 green" indicator
+        // without an extra detail-page round-trip.
+        if (regEntry.plugin_ci) {
+          pluginInfo.pluginCi = regEntry.plugin_ci
+        }
       }
 
       const tags = distTagsMap[name]

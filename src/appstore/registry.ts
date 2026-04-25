@@ -13,6 +13,7 @@ import { Value } from '@sinclair/typebox/value'
 import fs from 'fs'
 import path from 'path'
 import { createDebug } from '../debug'
+import { PluginCiSchema } from './schemas'
 
 const debug = createDebug('signalk-server:appstore:registry')
 
@@ -56,7 +57,10 @@ export const RegistryIndexEntrySchema = Type.Object({
   open_issues: Type.Optional(Type.Number()),
   contributors: Type.Optional(Type.Number()),
   downloads_per_week: Type.Optional(Type.Number()),
-  github_url: Type.Optional(Type.String())
+  github_url: Type.Optional(Type.String()),
+  // plugin-ci matrix published by signalk-plugin-registry >= 0.4.0.
+  // Same wire shape as PluginCiSchema in src/appstore/schemas.ts.
+  plugin_ci: Type.Optional(PluginCiSchema)
 })
 export type RegistryIndexEntry = Static<typeof RegistryIndexEntrySchema>
 

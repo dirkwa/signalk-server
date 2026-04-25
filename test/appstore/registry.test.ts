@@ -118,3 +118,82 @@ describe('appstore/registry badgesToIndicators', () => {
     expect(r.checks).to.have.length.greaterThan(0)
   })
 })
+
+describe('appstore/registry plugin_ci passthrough', () => {
+  it('accepts an index entry with plugin_ci status=ok', () => {
+    const entry = {
+      name: '@signalk/app-dock',
+      version: '0.3.2',
+      composite_stable: 100,
+      plugin_ci: {
+        status: 'ok',
+        head_sha: '9d951dd54c4bb4d9299ca8c3f4504db7e942f814',
+        commit_url:
+          'https://github.com/SignalK/app-dock/commit/9d951dd54c4bb4d9299ca8c3f4504db7e942f814',
+        workflow_run_url:
+          'https://github.com/SignalK/app-dock/actions/runs/24909301821',
+        tested_at: '2026-04-24T20:03:53Z',
+        workflow_ref: 'refs/heads/master',
+        jobs: [
+          { platform: 'linux-x64', node: 22, conclusion: 'success' },
+          { platform: 'armv7-cerbo', node: 20, conclusion: 'success' }
+        ]
+      }
+    }
+    expect(Value.Check(RegistryIndexSchema, { plugins: [entry] })).to.equal(
+      true
+    )
+  })
+
+  it('accepts an index entry with plugin_ci status=no-githead', () => {
+    const entry = {
+      name: 'p',
+      composite_stable: 50,
+      plugin_ci: { status: 'no-githead' }
+    }
+    expect(Value.Check(RegistryIndexSchema, { plugins: [entry] })).to.equal(
+      true
+    )
+  })
+
+  it('accepts plugin_ci status=in-progress with optional tested_at', () => {
+    const entry = {
+      name: 'p',
+      composite_stable: 0,
+      plugin_ci: {
+        status: 'in-progress',
+        head_sha: 'abc',
+        workflow_run_url: 'https://github.com/o/r/actions/runs/1'
+      }
+    }
+    expect(Value.Check(RegistryIndexSchema, { plugins: [entry] })).to.equal(
+      true
+    )
+  })
+
+  it('rejects an index entry with an unknown plugin_ci status', () => {
+    const entry = {
+      name: 'p',
+      composite_stable: 50,
+      plugin_ci: { status: 'banana' }
+    }
+    expect(Value.Check(RegistryIndexSchema, { plugins: [entry] })).to.equal(
+      false
+    )
+  })
+
+  it('rejects plugin_ci ok when required fields are missing', () => {
+    const entry = {
+      name: 'p',
+      composite_stable: 50,
+      plugin_ci: {
+        status: 'ok',
+        head_sha: 'x'
+        // missing commit_url, workflow_run_url, tested_at, workflow_ref, jobs
+      }
+    }
+    expect(Value.Check(RegistryIndexSchema, { plugins: [entry] })).to.equal(
+      false
+    )
+  })
+})
