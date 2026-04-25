@@ -92,6 +92,25 @@ Every plugin gets a per-plugin detail page (`/admin/#/apps/store/plugin/<name>`)
 
 Keep your README scannable — most users will read it before installing — and maintain a `CHANGELOG.md` with version headers (`## 1.2.0`) for a clean changelog view.
 
+#### How your plugin appears tested in the App Store
+
+The Indicators tab shows a per-platform pass/fail matrix from your plugin's own GitHub Actions runs. When you publish a new version, the App Store reads each version's `gitHead` from npm, finds the matching commit on GitHub, and looks for a workflow run that calls SignalK's reusable [`plugin-ci.yml`](https://github.com/SignalK/signalk-server/blob/master/.github/workflows/plugin-ci.yml). If found, the matrix of platforms and Node versions is shown on your plugin's Indicators tab — green for success, red for failure, grey for skipped jobs.
+
+To opt in, add a workflow that calls the reusable plugin-ci on your repo's pushes and tags:
+
+```yaml
+# .github/workflows/ci.yml in your plugin's repo
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    uses: SignalK/signalk-server/.github/workflows/plugin-ci.yml@master
+```
+
+The reusable workflow handles the matrix of platforms and Node versions — see [plugin-ci.yml](https://github.com/SignalK/signalk-server/blob/master/.github/workflows/plugin-ci.yml) for the authoritative list. You can disable platforms you don't support via workflow inputs; cells you don't enable are simply omitted from the App Store grid (not shown as red). The fetch is centralised in the SignalK plugin registry's nightly scan, so individual users' boats never hit GitHub's API directly.
+
+If your plugin doesn't use the workflow, the Indicators tab simply notes that the workflow isn't configured. There is no penalty.
+
 _Example: package.json_
 
 ```JSON
