@@ -265,7 +265,7 @@ const DetailView: React.FC = () => {
                       Configure
                     </NavLink>
                     {updateAvailable && (
-                      <Button variant="warning" onClick={handleInstall}>
+                      <Button variant="success" onClick={handleInstall}>
                         Update to v{detail.version}
                       </Button>
                     )}
