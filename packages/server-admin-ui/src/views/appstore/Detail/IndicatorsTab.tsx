@@ -2,6 +2,7 @@ import React from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import ScoreRing from '../components/ScoreRing'
+import PluginCiMatrix, { type PluginCi } from './PluginCiMatrix'
 
 interface Check {
   id: string
@@ -27,6 +28,7 @@ export interface IndicatorResult {
 
 interface IndicatorsTabProps {
   indicators?: IndicatorResult
+  pluginCi?: PluginCi
 }
 
 const statusToVariant: Record<Check['status'], string> = {
@@ -35,7 +37,10 @@ const statusToVariant: Record<Check['status'], string> = {
   fail: 'danger'
 }
 
-const IndicatorsTab: React.FC<IndicatorsTabProps> = ({ indicators }) => {
+const IndicatorsTab: React.FC<IndicatorsTabProps> = ({
+  indicators,
+  pluginCi
+}) => {
   if (!indicators) {
     return (
       <Alert variant="warning" className="mb-0">
@@ -43,7 +48,7 @@ const IndicatorsTab: React.FC<IndicatorsTabProps> = ({ indicators }) => {
       </Alert>
     )
   }
-  const { score, checks, reportedPlatforms, rawMetrics } = indicators
+  const { score, checks, rawMetrics } = indicators
 
   return (
     <div className="plugin-detail__indicators">
@@ -87,26 +92,7 @@ const IndicatorsTab: React.FC<IndicatorsTabProps> = ({ indicators }) => {
         ))}
       </ul>
 
-      <h5 className="mt-4">Reported working on</h5>
-      <p className="text-muted small">
-        Community-submitted reports.{' '}
-        <strong>
-          Absence of a platform does not mean it&apos;s incompatible
-        </strong>{' '}
-        — Signal K runs on many more platforms than can be tested or listed.
-        This is just &quot;who&apos;s reported it works&quot;.
-      </p>
-      {reportedPlatforms.length === 0 ? (
-        <div className="text-muted">No platform reports submitted yet.</div>
-      ) : (
-        <div className="d-flex flex-wrap gap-2">
-          {reportedPlatforms.map((p) => (
-            <Badge key={p} bg="light" text="dark" className="fw-normal">
-              {p}
-            </Badge>
-          ))}
-        </div>
-      )}
+      <PluginCiMatrix data={pluginCi} />
 
       <h5 className="mt-4">Raw metrics</h5>
       <dl className="row">

@@ -12,6 +12,7 @@ import PluginIcon from '../components/PluginIcon'
 import ReadmeTab from './ReadmeTab'
 import ChangelogTab from './ChangelogTab'
 import IndicatorsTab, { IndicatorResult } from './IndicatorsTab'
+import { type PluginCi } from './PluginCiMatrix'
 import DependenciesSection, { DependencyReference } from './DependenciesSection'
 import ScreenshotLightbox from './ScreenshotLightbox'
 import '../appStore.scss'
@@ -29,6 +30,7 @@ interface DetailPayload {
   readme: string
   changelog: string
   indicators?: IndicatorResult
+  pluginCi?: PluginCi
   requires: DependencyReference[]
   recommends: DependencyReference[]
   readmeFormat: 'markdown'
@@ -385,7 +387,10 @@ const DetailView: React.FC = () => {
                   />
                 </Tab.Pane>
                 <Tab.Pane eventKey="indicators">
-                  <IndicatorsTab indicators={detail.indicators} />
+                  <IndicatorsTab
+                    indicators={detail.indicators}
+                    pluginCi={detail.pluginCi}
+                  />
                 </Tab.Pane>
               </Tab.Content>
             </Tab.Container>
