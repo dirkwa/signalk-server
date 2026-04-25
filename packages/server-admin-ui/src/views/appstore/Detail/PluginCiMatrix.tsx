@@ -1,8 +1,13 @@
 import React from 'react'
 import Badge from 'react-bootstrap/Badge'
 
-// Shape mirrors PluginCiSchema in src/appstore/schemas.ts. Keep this in
-// sync if the schema gains new platforms or status variants.
+// These types intentionally duplicate the TypeBox-inferred PluginCi /
+// PluginCiJob from src/appstore/schemas.ts. The admin UI is published
+// as its own npm package (@signalk/server-admin-ui) and can't import
+// from outside its workspace without breaking that publication
+// boundary. The wire shape is small and changes rarely, so this
+// duplication is the lesser evil. Keep in sync if the schema gains
+// new statuses or fields.
 export interface PluginCiJob {
   platform: string
   node: number
