@@ -502,11 +502,6 @@ const SourcePriorities: React.FC = () => {
     [sourcePriorities]
   )
 
-  const isDirty =
-    saveState.dirty ||
-    groupsSaveState.dirty ||
-    defaultsSaveState.dirty ||
-    overridesSaveState.dirty
   const isSaving = !!(
     saveState.isSaving ||
     groupsSaveState.isSaving ||
@@ -529,6 +524,23 @@ const SourcePriorities: React.FC = () => {
     }
     return map
   }, [displayed, savedGroups])
+
+  // Include groups whose displayed ranking differs from what is saved.
+  // Without this, the auto-derived groups that appear after a reset (or
+  // on first visit before anything has ever been saved) leave the
+  // footer Save button greyed out — users had to make a fake edit to
+  // un-grey it before they could persist the default ordering.
+  const hasUnsavedGroupRanking = useMemo(() => {
+    for (const dirty of dirtyByGroupId.values()) if (dirty) return true
+    return false
+  }, [dirtyByGroupId])
+
+  const isDirty =
+    saveState.dirty ||
+    groupsSaveState.dirty ||
+    defaultsSaveState.dirty ||
+    overridesSaveState.dirty ||
+    hasUnsavedGroupRanking
 
   const buildSavePayload = useCallback(() => {
     // If the user clicks "Save changes" with the Fallback input still
