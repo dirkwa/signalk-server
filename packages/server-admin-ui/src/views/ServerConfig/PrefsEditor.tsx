@@ -1,0 +1,233 @@
+import React, { useMemo } from 'react'
+import Badge from 'react-bootstrap/Badge'
+import Form from 'react-bootstrap/Form'
+import Table from 'react-bootstrap/Table'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faArrowUp } from '@fortawesome/free-solid-svg-icons/faArrowUp'
+import { faArrowDown } from '@fortawesome/free-solid-svg-icons/faArrowDown'
+import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash'
+import Creatable from 'react-select/creatable'
+import { useStore, useSourceStatus, useSourceStatusLoaded } from '../../store'
+import { type SourcesData } from '../../utils/sourceLabels'
+import { useSourceAliases } from '../../hooks/useSourceAliases'
+
+interface Priority {
+  sourceRef: string
+  timeout: string | number
+}
+
+interface SelectOption {
+  label: string
+  value: string
+}
+
+interface PrefsEditorProps {
+  path: string
+  priorities: Priority[]
+  pathIndex: number
+  isSaving: boolean
+  sourcesData: SourcesData | null
+  multiSourcePaths: Record<string, string[]>
+}
+
+export const PrefsEditor: React.FC<PrefsEditorProps> = ({
+  path,
+  priorities,
+  pathIndex,
+  isSaving,
+  sourcesData,
+  multiSourcePaths
+}) => {
+  const changePriority = useStore((s) => s.changePriority)
+  const deletePriority = useStore((s) => s.deletePriority)
+  const movePriority = useStore((s) => s.movePriority)
+  const sourceStatus = useSourceStatus()
+  const sourceStatusLoaded = useSourceStatusLoaded()
+  const { getDisplayName } = useSourceAliases()
+
+  const sourceRefs = useMemo(
+    () => (path && multiSourcePaths[path]) || [],
+    [path, multiSourcePaths]
+  )
+
+  const allOptions: SelectOption[] = useMemo(
+    () =>
+      sourceRefs.map((ref) => ({
+        label: getDisplayName(ref, sourcesData),
+        value: ref
+      })),
+    [sourceRefs, getDisplayName, sourcesData]
+  )
+
+  const rows = useMemo(() => {
+    const assigned = new Set(priorities.map((p) => p.sourceRef).filter(Boolean))
+    if (priorities.length >= sourceRefs.length) return priorities
+    const hasUnassigned = sourceRefs.some((ref) => !assigned.has(ref))
+    if (hasUnassigned) return [...priorities, { sourceRef: '', timeout: 5000 }]
+    return priorities
+  }, [priorities, sourceRefs])
+
+  const selectedRefs = useMemo(
+    () => new Set(rows.map((r) => r.sourceRef).filter(Boolean)),
+    [rows]
+  )
+
+  return (
+    <Table size="sm" className="mb-0">
+      <thead>
+        <tr>
+          <th scope="col" style={{ width: '30px' }}>
+            #
+          </th>
+          <th scope="col">Source</th>
+          <th scope="col" style={{ width: '140px' }}>
+            Fallback after (ms)
+          </th>
+          <th scope="col" style={{ width: '70px' }}>
+            Enabled
+          </th>
+          <th scope="col" style={{ width: '80px' }}>
+            Order
+          </th>
+          <th scope="col" aria-label="Actions" />
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(({ sourceRef, timeout }, index) => {
+          const availableOptions = allOptions.filter(
+            (o) => o.value === sourceRef || !selectedRefs.has(o.value)
+          )
+          const isDisabled = Number(timeout) === -1
+          // sourceRef is stable across renders even when rows reorder; the
+          // index suffix lets multiple unassigned rows coexist.
+          const rowKey = sourceRef || `unassigned-${index}`
+          return (
+            <tr key={rowKey}>
+              <td>{index + 1}.</td>
+              <td>
+                <div className="d-flex align-items-center gap-2">
+                  <div style={{ flex: 1 }}>
+                    <Creatable
+                      menuPortalTarget={document.body}
+                      options={availableOptions}
+                      value={{
+                        value: sourceRef,
+                        label: getDisplayName(sourceRef, sourcesData)
+                      }}
+                      onChange={(e) => {
+                        changePriority(
+                          pathIndex,
+                          index,
+                          e?.value || '',
+                          timeout
+                        )
+                      }}
+                    />
+                  </div>
+                  {(() => {
+                    if (!sourceRef || !sourceStatusLoaded) return null
+                    const entry = sourceStatus[sourceRef]
+                    // Offline = server reported it as offline OR the server
+                    // has no record of it at all (e.g. plugin was disabled
+                    // before any delta could be stamped). The user keeps
+                    // the row in their priorities; the badge tells them
+                    // why no data is flowing.
+                    const isOffline = entry ? !entry.online : true
+                    if (!isOffline) return null
+                    return (
+                      <Badge
+                        bg="secondary"
+                        style={{ fontSize: '0.7em', flexShrink: 0 }}
+                        title="No frames seen from this source — its rank is preserved so it auto-recovers when it returns."
+                      >
+                        Offline
+                      </Badge>
+                    )
+                  })()}
+                </div>
+              </td>
+              <td>
+                {index === 0 && !isDisabled ? (
+                  <span className="text-muted small">preferred</span>
+                ) : (
+                  <Form.Control
+                    type="number"
+                    name="timeout"
+                    disabled={isDisabled}
+                    onChange={(e) =>
+                      changePriority(
+                        pathIndex,
+                        index,
+                        sourceRef,
+                        e.target.value
+                      )
+                    }
+                    value={isDisabled ? '' : timeout}
+                  />
+                )}
+              </td>
+              <td className="text-center">
+                <Form.Check
+                  type="checkbox"
+                  checked={!isDisabled}
+                  aria-label={`Enable source ${sourceRef || 'row ' + (index + 1)}`}
+                  onChange={(e) =>
+                    changePriority(
+                      pathIndex,
+                      index,
+                      sourceRef,
+                      e.target.checked ? (index === 0 ? 0 : 5000) : -1
+                    )
+                  }
+                />
+              </td>
+              <td>
+                {index > 0 && index < priorities.length && (
+                  <button
+                    type="button"
+                    aria-label={`Move row ${index + 1} up`}
+                    disabled={isSaving}
+                    onClick={() => movePriority(pathIndex, index, -1)}
+                  >
+                    <FontAwesomeIcon icon={faArrowUp} />
+                  </button>
+                )}
+                {index < priorities.length - 1 && (
+                  <button
+                    type="button"
+                    aria-label={`Move row ${index + 1} down`}
+                    disabled={isSaving}
+                    onClick={() => movePriority(pathIndex, index, 1)}
+                  >
+                    <FontAwesomeIcon icon={faArrowDown} />
+                  </button>
+                )}
+              </td>
+              <td>
+                {index < priorities.length && (
+                  <button
+                    type="button"
+                    aria-label={`Delete row ${index + 1}`}
+                    disabled={isSaving}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: isSaving ? 'not-allowed' : 'pointer',
+                      color: 'inherit'
+                    }}
+                    onClick={() => deletePriority(pathIndex, index)}
+                  >
+                    <FontAwesomeIcon icon={faTrash} />
+                  </button>
+                )}
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </Table>
+  )
+}
+
+export default PrefsEditor
