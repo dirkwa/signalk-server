@@ -576,15 +576,18 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                               : undefined
                             const deviceLabel =
                               identity?.modelId ?? identity?.manufacturerCode
-                            // Offline = server reported it offline OR the
-                            // server has no record at all (plugin was
-                            // disabled before any delta could be stamped).
+                            // Offline = server positively reports it offline.
+                            // Absence of an entry is "unknown" (e.g. plugin
+                            // was disabled before any delta could be stamped,
+                            // or transient sourceMeta drift across an
+                            // upstream reconnect) — don't badge those as
+                            // Offline so a recovered-but-not-yet-republished
+                            // source isn't stuck looking down.
                             const statusEntry = sourceStatus[src]
-                            const isOffline = sourceStatusLoaded
-                              ? statusEntry
+                            const isOffline =
+                              sourceStatusLoaded && statusEntry
                                 ? !statusEntry.online
-                                : true
-                              : false
+                                : false
                             return (
                               <SortableSourceRow
                                 key={src}

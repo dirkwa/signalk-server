@@ -127,13 +127,12 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
                   {(() => {
                     if (!sourceRef || !sourceStatusLoaded) return null
                     const entry = sourceStatus[sourceRef]
-                    // Offline = server reported it as offline OR the server
-                    // has no record of it at all (e.g. plugin was disabled
-                    // before any delta could be stamped). The user keeps
-                    // the row in their priorities; the badge tells them
-                    // why no data is flowing.
-                    const isOffline = entry ? !entry.online : true
-                    if (!isOffline) return null
+                    // Only badge as Offline when the server positively
+                    // reports it offline. A missing entry is "unknown"
+                    // (plugin disabled, or transient sourceMeta drift
+                    // across an upstream reconnect) — silence is better
+                    // than a stale Offline that won't clear.
+                    if (!entry || entry.online) return null
                     return (
                       <Badge
                         bg="secondary"

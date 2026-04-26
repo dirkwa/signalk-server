@@ -270,18 +270,26 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
   },
 
   setSourceStatus: (statuses) => {
-    const sourceStatus: Record<string, { online: boolean; lastSeen?: number }> =
-      {}
-    for (const s of statuses) {
-      // Prefer the canonical sourceRef field; fall back to providerId+src
-      // for older server payloads that didn't include it.
-      const key = s.sourceRef ?? `${s.providerId}.${s.src}`
-      sourceStatus[key] = {
-        online: s.online,
-        lastSeen: s.lastSeen
+    set((state) => {
+      // Merge rather than replace. The server emits a full snapshot on
+      // every transition, but its sourceMeta map can transiently lose a
+      // sourceRef across an upstream reconnect — the snapshot would
+      // then omit that source entirely, and a replace-based slice
+      // would silently drop the entry. The PriorityGroupCard treats
+      // a missing entry as Offline, leaving the source stuck Offline
+      // until the next transition that happens to mention it.
+      const sourceStatus = { ...state.sourceStatus }
+      for (const s of statuses) {
+        // Prefer the canonical sourceRef field; fall back to providerId+src
+        // for older server payloads that didn't include it.
+        const key = s.sourceRef ?? `${s.providerId}.${s.src}`
+        sourceStatus[key] = {
+          online: s.online,
+          lastSeen: s.lastSeen
+        }
       }
-    }
-    set({ sourceStatus, sourceStatusLoaded: true })
+      return { sourceStatus, sourceStatusLoaded: true }
+    })
   },
 
   setDebugSettings: (settings) => {
