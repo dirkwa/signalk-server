@@ -17,11 +17,15 @@
 
 import { createDebug } from './debug'
 const debug = createDebug('signalk-server:deltacache')
-import { FullSignalK, getSourceId } from '@signalk/signalk-schema'
+import { FullSignalK, getSourceId } from '@signalk/server-api'
 import _, { isUndefined } from 'lodash'
+import { readFileSync, writeFile } from 'fs'
+import { join } from 'path'
 import { toDelta, StreamBundle } from './streambundle'
 import { ContextMatcher, SignalKServer } from './types'
 import { Context, NormalizedDelta, SourceRef } from '@signalk/server-api'
+
+const SOURCES_CACHE_FILE = 'sources-cache.json'
 
 interface StringKeyed {
   [key: string]: any
@@ -38,12 +42,23 @@ export default class DeltaCache {
       [path: string]: string[]
     }
   } = {}
+  private sourcesCachePath: string | null = null
+  private saveTimer: ReturnType<typeof setTimeout> | null = null
+  private preferredSources: Map<string, SourceRef> = new Map()
+  private multiSourceTimer: ReturnType<typeof setTimeout> | null = null
+  private lastEmittedMultiSourceCount = 0
+
+  private subscribedPaths = new Set<string>()
 
   constructor(app: SignalKServer, streambundle: StreamBundle) {
     this.app = app
     streambundle.keys.onValue((key) => {
+      if (this.subscribedPaths.has(key)) return
+      this.subscribedPaths.add(key)
       streambundle.getBus(key).onValue(this.onValue.bind(this))
     })
+
+    this.loadSourcesCache()
 
     // String.split() is heavy enough and called frequently enough
     // to warrant caching the result. Has a noticeable effect
@@ -96,6 +111,7 @@ export default class DeltaCache {
 
     if (msg.path.length !== 0) {
       leaf[sourceRef] = msg
+      this.preferredSources.set(msg.context + '\0' + msg.path, sourceRef)
     } else if (msg.value) {
       _.keys(msg.value).forEach((key) => {
         if (!leaf[key]) {
@@ -107,9 +123,302 @@ export default class DeltaCache {
     this.lastModifieds[msg.context] = Date.now()
   }
 
+  private scheduleMultiSourceEmit() {
+    if (this.multiSourceTimer) return
+    this.multiSourceTimer = setTimeout(() => {
+      this.multiSourceTimer = null
+      this.emitMultiSourcePaths()
+    }, 2000)
+  }
+
+  private emitMultiSourcePaths() {
+    const paths = this.getMultiSourcePaths()
+    const count = Object.keys(paths).length
+    const countChanged = count !== this.lastEmittedMultiSourceCount
+    this.lastEmittedMultiSourceCount = count
+    ;(this.app as any).emit('serverevent', {
+      type: 'MULTISOURCEPATHS',
+      data: paths
+    })
+    if (countChanged) {
+      this.scheduleMultiSourceEmit()
+    }
+  }
+
+  /**
+   * Remove all cached deltas for a given sourceRef and re-emit
+   * MULTISOURCEPATHS so the UI reflects the change. For every path whose
+   * preferred source pointed at the removed ref, pick a deterministic
+   * replacement from the remaining leaf entries so filterDeltasToPreferred
+   * doesn't fall back to whatever Object.keys iterates first.
+   */
+  removeSource(sourceRef: SourceRef) {
+    const removeFromNode = (node: any): void => {
+      for (const key of Object.keys(node)) {
+        if (key === 'meta') continue
+        const child = node[key]
+        if (!child || typeof child !== 'object') continue
+        if (child.path !== undefined && child.value !== undefined) {
+          if (key === sourceRef) delete node[key]
+        } else {
+          removeFromNode(child)
+        }
+      }
+    }
+    removeFromNode(this.cache)
+    for (const [key, ref] of this.preferredSources) {
+      if (ref !== sourceRef) continue
+      const nullIdx = key.indexOf('\0')
+      const context = nullIdx === -1 ? key : key.slice(0, nullIdx)
+      const path = nullIdx === -1 ? '' : key.slice(nullIdx + 1)
+      const replacement = this.pickReplacementSource(context, path)
+      if (replacement) {
+        this.preferredSources.set(key, replacement)
+      } else {
+        this.preferredSources.delete(key)
+      }
+    }
+    this.emitMultiSourcePaths()
+  }
+
+  private pickReplacementSource(
+    context: string,
+    path: string
+  ): SourceRef | undefined {
+    const parts = context.split('.')
+    if (path.length !== 0) parts.push(...path.split('.'))
+    let node: any = this.cache
+    for (const p of parts) {
+      if (!node || typeof node !== 'object') return undefined
+      node = node[p]
+    }
+    if (!node || typeof node !== 'object') return undefined
+    for (const ref of Object.keys(node)) {
+      if (ref === 'meta') continue
+      const leaf = node[ref]
+      if (leaf && typeof leaf === 'object' && leaf.value !== undefined) {
+        return ref as SourceRef
+      }
+    }
+    return undefined
+  }
+
+  /**
+   * Remove a source delta entry by key, purge all cached data for the
+   * corresponding sourceRefs (numeric address and CAN Name forms), and
+   * persist the updated sources cache to disk.
+   */
+  removeSourceDelta(key: string) {
+    const delta = this.sourceDeltas[key] as any
+    const refsToRemove: string[] = [key]
+    const dotIdx = key.indexOf('.')
+    const conn = dotIdx !== -1 ? key.slice(0, dotIdx) : ''
+    const addr = dotIdx !== -1 ? key.slice(dotIdx + 1) : ''
+    if (delta?.updates?.[0]?.source) {
+      const src = delta.updates[0].source
+      if (src.canName) refsToRemove.push(`${conn}.${src.canName}`)
+      if (src.src !== undefined) refsToRemove.push(`${conn}.${src.src}`)
+    }
+    delete this.sourceDeltas[key]
+    for (const ref of new Set(refsToRemove)) {
+      this.removeSource(ref as SourceRef)
+    }
+
+    // Also remove from the FullSignalK sources tree so the REST API
+    // (which may serve app.signalk.retrieve() directly) reflects the change
+    const sources = this.app.signalk.retrieve().sources
+    if (sources && conn && sources[conn]) {
+      delete sources[conn][addr]
+      const remaining = Object.keys(sources[conn]).filter(
+        (k) => k !== 'type' && k !== 'label'
+      )
+      if (remaining.length === 0) {
+        delete sources[conn]
+      }
+    }
+
+    this.scheduleSaveSourcesCache()
+  }
+
+  ingestDelta(delta: any) {
+    if (!delta.updates) return
+    for (const update of delta.updates) {
+      if (!('values' in update) || !update.values) continue
+      const sourceRef: SourceRef = update.$source
+      for (const pathValue of update.values) {
+        if (pathValue.path.length === 0) continue
+        const msg = {
+          context: delta.context,
+          source: update.source,
+          $source: sourceRef,
+          timestamp: update.timestamp,
+          path: pathValue.path,
+          value: pathValue.value,
+          isMeta: false
+        } as NormalizedDelta
+        const leaf = getLeafObject(
+          this.cache,
+          this.getContextAndPathParts(msg),
+          true
+        )
+        const isNewSource = !leaf[sourceRef]
+        leaf[sourceRef] = msg
+        // Populate preferredSources so getCachedDeltas('preferred')
+        // works correctly after restart/replay
+        const prefKey = delta.context + '\0' + pathValue.path
+        if (!this.preferredSources.has(prefKey)) {
+          this.preferredSources.set(prefKey, sourceRef)
+        }
+
+        if (isNewSource) {
+          const sourceCount = Object.keys(leaf).filter((k) => {
+            const v = leaf[k]
+            return (
+              v &&
+              typeof v === 'object' &&
+              v.path !== undefined &&
+              v.value !== undefined
+            )
+          }).length
+          if (sourceCount >= 2) {
+            this.scheduleMultiSourceEmit()
+          }
+        }
+      }
+    }
+    if (delta.context) {
+      this.lastModifieds[delta.context] = Date.now()
+    }
+  }
+
   setSourceDelta(key: string, delta: any) {
+    // Deduplicate by canName: if a different key already exists for the
+    // same canName (e.g. a device moved from address 254 to its final
+    // address), remove the old entry to prevent duplicates.
+    const canName = delta?.updates?.[0]?.source?.canName
+    if (canName) {
+      const dotIdx = key.indexOf('.')
+      const conn = dotIdx !== -1 ? key.slice(0, dotIdx) : ''
+      // Collect first, mutate after — removeSourceDelta deletes from
+      // this.sourceDeltas, which would invalidate the entries iterator.
+      const keysToRemove: string[] = []
+      for (const [existingKey, existingDelta] of Object.entries(
+        this.sourceDeltas
+      )) {
+        if (existingKey === key) continue
+        if (!existingKey.startsWith(conn + '.')) continue
+        const existingCanName = (existingDelta as any)?.updates?.[0]?.source
+          ?.canName
+        if (existingCanName === canName) {
+          keysToRemove.push(existingKey)
+        }
+      }
+      for (const existingKey of keysToRemove) {
+        this.removeSourceDelta(existingKey)
+      }
+    }
     this.sourceDeltas[key] = delta
     this.app.signalk.addDelta(delta)
+    this.scheduleSaveSourcesCache()
+  }
+
+  private getSourcesCachePath(): string | null {
+    if (this.sourcesCachePath === null) {
+      const configPath = (this.app.config as any).configPath as
+        | string
+        | undefined
+      if (configPath) {
+        this.sourcesCachePath = join(configPath, SOURCES_CACHE_FILE)
+      }
+    }
+    return this.sourcesCachePath
+  }
+
+  private loadSourcesCache() {
+    const cachePath = this.getSourcesCachePath()
+    if (!cachePath) {
+      return
+    }
+    try {
+      const data = readFileSync(cachePath, 'utf-8')
+      const cached = JSON.parse(data)
+      if (cached && typeof cached === 'object') {
+        // Deduplicate by canName: when the same device appears under
+        // multiple addresses (e.g. from address 254 claim cycling),
+        // keep only the entry with the lower non-254 address.
+        const byCanName = new Map<string, string>()
+        for (const [key, delta] of Object.entries(cached)) {
+          const cn = (delta as any)?.updates?.[0]?.source?.canName
+          if (!cn) continue
+          const dotIdx = key.indexOf('.')
+          const conn = dotIdx !== -1 ? key.slice(0, dotIdx) : ''
+          const fullCn = conn + '.' + cn
+          const existing = byCanName.get(fullCn)
+          if (existing) {
+            const existingAddr = Number(
+              existing.slice(existing.indexOf('.') + 1)
+            )
+            const thisAddr = Number(key.slice(dotIdx + 1))
+            // If addresses are not numeric (e.g. canName-based key), keep
+            // the existing entry to avoid NaN-driven nondeterministic choice
+            if (Number.isNaN(existingAddr) || Number.isNaN(thisAddr)) {
+              delete cached[key]
+              continue
+            }
+            // Prefer non-254; if both non-254, prefer lower address
+            const keepExisting =
+              thisAddr === 254 ||
+              (existingAddr !== 254 && existingAddr < thisAddr)
+            const toRemove = keepExisting ? key : existing
+            delete cached[toRemove]
+            if (!keepExisting) byCanName.set(fullCn, key)
+          } else {
+            byCanName.set(fullCn, key)
+          }
+        }
+        this.sourceDeltas = cached
+        const addDelta = this.app.signalk.addDelta.bind(this.app.signalk)
+        _.values(this.sourceDeltas).forEach(addDelta)
+        debug(
+          'Loaded %d cached sources from %s',
+          Object.keys(cached).length,
+          cachePath
+        )
+      }
+    } catch (e: any) {
+      if (e.code !== 'ENOENT') {
+        debug('Failed to load sources cache: %s', e.message)
+      }
+    }
+  }
+
+  private scheduleSaveSourcesCache() {
+    if (this.saveTimer) {
+      return
+    }
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null
+      this.saveSourcesCache()
+    }, 5000)
+  }
+
+  private saveSourcesCache() {
+    const cachePath = this.getSourcesCachePath()
+    if (!cachePath) {
+      return
+    }
+    const data = JSON.stringify(this.sourceDeltas, null, 2)
+    writeFile(cachePath, data, (err) => {
+      if (err) {
+        debug('Failed to save sources cache: %s', err.message)
+      } else {
+        debug(
+          'Saved %d sources to %s',
+          Object.keys(this.sourceDeltas).length,
+          cachePath
+        )
+      }
+    })
   }
 
   deleteContext(contextKey: string) {
@@ -151,6 +460,81 @@ export default class DeltaCache {
     )
   }
 
+  /**
+   * Return paths on the self vessel that have more than one source.
+   * Result: { path: sourceRef[] } for each multi-source path.
+   *
+   * Persisted source priorities are also unioned in. Without this, a path
+   * whose user-ranked sources are temporarily silent (e.g. an MFD that has
+   * been powered off) drops to one or zero live publishers and disappears
+   * from the multi-source view — the admin-ui then shows the path's
+   * persisted entries under "Ungrouped" and surprises the user. Keeping
+   * the persisted view in lets the priorities page render the user's
+   * intent stably across power cycles.
+   */
+  getMultiSourcePaths(): Record<string, string[]> {
+    const selfParts = this.app.selfContext.split('.')
+    let selfBranch: any = this.cache
+    for (const part of selfParts) {
+      if (!selfBranch || !selfBranch[part]) {
+        selfBranch = null
+        break
+      }
+      selfBranch = selfBranch[part]
+    }
+
+    const result: Record<string, Set<string>> = {}
+    if (selfBranch) {
+      const walk = (node: any, pathParts: string[]) => {
+        for (const key of Object.keys(node)) {
+          if (key === 'meta') continue
+          const child = node[key]
+          if (!child || typeof child !== 'object') continue
+          if (child.path !== undefined && child.value !== undefined) {
+            const sources = Object.keys(node).filter((k) => {
+              const v = node[k]
+              return (
+                v &&
+                typeof v === 'object' &&
+                v.path !== undefined &&
+                v.value !== undefined
+              )
+            })
+            if (sources.length > 1) {
+              const path = pathParts.join('.')
+              const set = result[path] ?? (result[path] = new Set<string>())
+              for (const s of sources) set.add(s)
+            }
+            return
+          }
+          walk(child, [...pathParts, key])
+        }
+      }
+      walk(selfBranch, [])
+    }
+
+    const persisted = (this.app.config as any).settings?.sourcePriorities as
+      | Record<string, Array<{ sourceRef?: string }>>
+      | undefined
+    if (persisted) {
+      for (const [path, entries] of Object.entries(persisted)) {
+        if (!Array.isArray(entries) || entries.length < 2) continue
+        const set = result[path] ?? (result[path] = new Set<string>())
+        for (const entry of entries) {
+          if (entry && typeof entry.sourceRef === 'string') {
+            set.add(entry.sourceRef)
+          }
+        }
+      }
+    }
+
+    const out: Record<string, string[]> = {}
+    for (const [path, set] of Object.entries(result)) {
+      out[path] = [...set].sort()
+    }
+    return out
+  }
+
   getSources() {
     const signalk = new FullSignalK(this.app.selfId, this.app.selfType)
 
@@ -183,7 +567,38 @@ export default class DeltaCache {
     return signalk.retrieve()
   }
 
-  getCachedDeltas(contextFilter: ContextMatcher, user?: string, key?: string) {
+  private filterDeltasToPreferred(
+    deltas: NormalizedDelta[]
+  ): NormalizedDelta[] {
+    const byPath = new Map<string, NormalizedDelta>()
+    const result: NormalizedDelta[] = []
+    for (const d of deltas) {
+      // Defensive: getCachedDeltas(key=...) can surface non-leaf branch
+      // objects when the subscription path is a parent of the actual
+      // leaves. Skip anything that isn't a well-formed delta.
+      if (!d || typeof d.path !== 'string') continue
+      if (d.path.length === 0) {
+        // Root multi-value deltas carry distinct data per source — keep all
+        result.push(d)
+        continue
+      }
+      const key = d.context + '\0' + d.path
+      const preferred = this.preferredSources.get(key)
+      if (preferred === d.$source) {
+        byPath.set(key, d)
+      } else if (!byPath.has(key)) {
+        byPath.set(key, d)
+      }
+    }
+    return result.concat(Array.from(byPath.values()))
+  }
+
+  getCachedDeltas(
+    contextFilter: ContextMatcher,
+    user?: string,
+    key?: string,
+    sourcePolicy?: 'preferred' | 'all'
+  ) {
     const contexts: Context[] = []
     _.keys(this.cache).forEach((type) => {
       _.keys(this.cache[type]).forEach((id) => {
@@ -217,10 +632,13 @@ export default class DeltaCache {
       []
     )
 
+    const preferred =
+      sourcePolicy === 'all' ? deltas : this.filterDeltasToPreferred(deltas)
+
     // ISO 8601 Zulu timestamps (as produced by new Date().toISOString() in
     // handleMessage) are lexicographically sortable, so we can avoid
     // allocating two Date objects per comparison.
-    deltas.sort((left, right) =>
+    preferred.sort((left, right) =>
       left.timestamp < right.timestamp
         ? -1
         : left.timestamp > right.timestamp
@@ -228,7 +646,7 @@ export default class DeltaCache {
           : 0
     )
 
-    return deltas.map(toDelta).filter((delta) => {
+    return preferred.map(toDelta).filter((delta) => {
       return this.app.securityStrategy.filterReadDelta(user, delta)
     })
   }

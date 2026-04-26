@@ -22,6 +22,8 @@ import {
   Context,
   Delta,
   DeltaInputHandler,
+  FullSignalK,
+  getSourceId,
   Path,
   PropertyValues,
   SKVersion,
@@ -31,7 +33,6 @@ import {
   Update,
   WithFeatures
 } from '@signalk/server-api'
-import { FullSignalK, getSourceId } from '@signalk/signalk-schema'
 import express, { IRouter, Request, Response } from 'express'
 import http from 'http'
 import https from 'https'
@@ -60,6 +61,7 @@ import SubscriptionManager from './subscriptionmanager'
 import { PluginId, PluginManager } from './interfaces/plugins'
 import { OpenApiDescription, OpenApiRecord } from './api/swagger'
 import { WithProviderStatistics } from './deltastats'
+import { buildProviderTalkerLookups } from './nmea0183TalkerGroups'
 import { pipedProviders } from './pipedproviders'
 import { EventsActorId, WithWrappedEmitter, wrapEmitter } from './events'
 import { Zones } from './zones'
@@ -67,7 +69,24 @@ import checkNodeVersion from './version'
 import helmet from 'helmet'
 const debug = createDebug('signalk-server')
 
+import { migrateSourceRef } from './sourceref-migration'
 import { StreamBundle } from './streambundle'
+
+function cloneDelta(delta: any): any {
+  // Per-element shallow copy of values/meta entries — without it, an
+  // unfilteredDelta consumer that mutates a single value object would
+  // also corrupt the delta still travelling through the main pipeline.
+  return {
+    ...delta,
+    updates: delta.updates?.map((update: any) => ({
+      ...update,
+      values: update.values
+        ? update.values.map((v: any) => ({ ...v }))
+        : update.values,
+      meta: update.meta ? update.meta.map((m: any) => ({ ...m })) : update.meta
+    }))
+  }
+}
 
 class Server {
   app: ServerApp &
@@ -295,6 +314,22 @@ class Server {
     }
     app.activateSourcePriorities()
 
+    app.on(
+      'sourceRefChanged',
+      ({ oldRef, newRef }: { oldRef: string; newRef: string }) => {
+        migrateSourceRef(app, oldRef, newRef)
+      }
+    )
+
+    let providerTalkerLookups = buildProviderTalkerLookups(
+      app.config.settings.pipedProviders
+    )
+    app.on('pipedProvidersStarted', () => {
+      providerTalkerLookups = buildProviderTalkerLookups(
+        app.config.settings.pipedProviders
+      )
+    })
+
     app.handleMessage = (
       providerId: string,
       data: Partial<Delta>,
@@ -321,9 +356,42 @@ class Server {
             }
 
             if (typeof update.source !== 'undefined') {
-              update.source.label = providerId
+              // Respect an existing label if the upstream provider has
+              // already set one that is schema-conformant (no slashes
+              // or other special characters that would fail Signal K
+              // $source validation). Remote Signal K servers forward
+              // deltas that already carry their own label (e.g. canhat,
+              // ydwg02); preserving that lets the receiving server
+              // recognise the same physical device across transports.
+              // Native providers and providers that set illegal labels
+              // (e.g. a raw device path /dev/actisense) get normalised
+              // to providerId.
+              const existing = update.source.label
+              if (
+                typeof existing !== 'string' ||
+                existing.length === 0 ||
+                !/^[A-Za-z0-9-_.]+$/.test(existing)
+              ) {
+                update.source.label = providerId
+              }
               if (!update.$source) {
                 update.$source = getSourceId(update.source)
+              }
+              // Talker-group rewriting is a local-provider feature: only
+              // apply it when this provider actually owns the label.
+              if (
+                update.source.type === 'NMEA0183' &&
+                update.source.talker &&
+                update.source.label === providerId
+              ) {
+                const lookup = providerTalkerLookups.get(providerId)
+                if (lookup) {
+                  const groupName = lookup.get(update.source.talker)
+                  if (groupName) {
+                    update.$source = (providerId + '.' + groupName) as SourceRef
+                    update.source.talker = groupName
+                  }
+                }
               }
             } else {
               if (typeof update.$source === 'undefined') {
@@ -350,6 +418,12 @@ class Server {
 
         try {
           let delta = filterStaticSelfData(data, app.selfContext)
+          if (app.deltaCache) {
+            app.deltaCache.ingestDelta(delta)
+          }
+          if (app.signalk.listenerCount('unfilteredDelta') > 0) {
+            app.signalk.emit('unfilteredDelta', cloneDelta(delta))
+          }
           delta = toPreferredDelta(delta, now, app.selfContext)
 
           if (skVersion === SKVersion.v1) {
@@ -370,6 +444,10 @@ class Server {
       )
     )
     app.signalk.on('delta', app.streambundle.pushDelta.bind(app.streambundle))
+    app.signalk.on(
+      'unfilteredDelta',
+      app.streambundle.pushUnfilteredDelta.bind(app.streambundle)
+    )
     app.subscriptionmanager = new SubscriptionManager(app)
     app.deltaCache = new DeltaCache(app, app.streambundle)
 
