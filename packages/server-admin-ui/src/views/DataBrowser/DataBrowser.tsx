@@ -459,19 +459,6 @@ const DataBrowser: React.FC = () => {
       return pathData?.$source || 'unknown'
     }
 
-    // Build a map of ALL sources and their total path counts (before
-    // search filtering) so collapsed sources always show their header
-    // even when the search eliminates all their visible paths.
-    const allSourceCounts = new Map<string, number>()
-    for (const ctx of contexts) {
-      const contextData = currentData[ctx] || {}
-      for (const data of Object.values(contextData)) {
-        const src = (data as PathData)?.$source || 'unknown'
-        allSourceCounts.set(src, (allSourceCounts.get(src) || 0) + 1)
-      }
-    }
-
-    // Count how many search-matched paths per source
     const matchedSourceCounts = new Map<string, number>()
     for (const key of filtered) {
       const src = getSource(key)
@@ -493,14 +480,9 @@ const DataBrowser: React.FC = () => {
       bySource.get(src)!.push(key)
     }
 
-    // Build result: include headers for ALL sources (even if search
-    // filtered out all their paths), so collapsed sources remain
-    // visible and can be re-expanded.
-    const allSources = [...allSourceCounts.keys()].sort()
     const result: string[] = []
-    for (const src of allSources) {
-      const visibleCount = matchedSourceCounts.get(src) || 0
-      if (visibleCount === 0 && !collapsedSources.has(src)) continue
+    for (const src of [...matchedSourceCounts.keys()].sort()) {
+      const visibleCount = matchedSourceCounts.get(src)!
       result.push(`${HEADER_PREFIX}${src}\0${visibleCount}`)
       if (!collapsedSources.has(src)) {
         const paths = bySource.get(src)
