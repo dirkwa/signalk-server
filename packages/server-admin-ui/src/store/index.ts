@@ -190,6 +190,10 @@ export function useIgnoredInstanceConflicts() {
   return useStore((s) => s.ignoredInstanceConflicts)
 }
 
+export function useActiveConflictCount() {
+  return useStore((s) => s.activeConflictCount)
+}
+
 export function useMultiSourcePaths() {
   return useStore((s) => s.multiSourcePaths)
 }

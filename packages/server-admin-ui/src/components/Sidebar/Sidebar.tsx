@@ -7,19 +7,13 @@ import {
   useAccessRequests,
   useDevices,
   useLoginStatus,
-  useSourcesData,
   useMultiSourcePaths,
   usePriorityGroups,
   useSourcePriorities,
   usePriorityOverrides,
-  useIgnoredInstanceConflicts
+  useActiveConflictCount
 } from '../../store'
 import { computeGroups, reconcileGroups } from '../../utils/sourceGroups'
-import {
-  extractN2kDevices,
-  detectInstanceConflicts,
-  conflictKey
-} from '../../utils/sourceLabels'
 import classNames from 'classnames'
 import './Sidebar.css'
 import SidebarFooter from './../SidebarFooter/SidebarFooter'
@@ -61,19 +55,7 @@ export default function Sidebar({ location }: SidebarProps) {
   const accessRequests = useAccessRequests()
   const devices = useDevices()
   const loginStatus = useLoginStatus()
-  const sourcesData = useSourcesData()
-
-  const ignoredConflicts = useIgnoredInstanceConflicts()
-
-  const conflictCount = useMemo(() => {
-    if (!sourcesData) return 0
-    const n2kDevices = extractN2kDevices(sourcesData)
-    const all = detectInstanceConflicts(n2kDevices)
-    return all.filter(
-      (c) =>
-        !ignoredConflicts[conflictKey(c.deviceA.sourceRef, c.deviceB.sourceRef)]
-    ).length
-  }, [sourcesData, ignoredConflicts])
+  const conflictCount = useActiveConflictCount()
 
   const multiSourcePaths = useMultiSourcePaths()
   const priorityGroupsData = usePriorityGroups()

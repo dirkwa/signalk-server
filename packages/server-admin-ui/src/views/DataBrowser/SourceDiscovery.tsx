@@ -217,6 +217,11 @@ const SourceDiscovery: React.FC = () => {
     [conflicts, ignoredConflicts]
   )
 
+  const setActiveConflictCount = useStore((s) => s.setActiveConflictCount)
+  useEffect(() => {
+    setActiveConflictCount(activeConflicts.length)
+  }, [activeConflicts.length, setActiveConflictCount])
+
   const ignoredConflictList = useMemo(
     () =>
       conflicts.filter(

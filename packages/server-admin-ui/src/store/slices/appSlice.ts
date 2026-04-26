@@ -58,6 +58,7 @@ export interface AppSliceState {
   sourceAliasesLoaded: boolean
   multiSourcePaths: Record<string, string[]>
   ignoredInstanceConflicts: Record<string, string>
+  activeConflictCount: number
   sourceStatus: Record<string, { online: boolean; lastSeen?: number }>
   sourceStatusLoaded: boolean
 }
@@ -82,6 +83,7 @@ export interface AppSliceActions {
   setSourcesData: (data: SourcesData) => void
   setSourceAliases: (aliases: Record<string, string>) => void
   setIgnoredInstanceConflicts: (conflicts: Record<string, string>) => void
+  setActiveConflictCount: (count: number) => void
   setMultiSourcePaths: (paths: Record<string, string[]>) => void
   setSourceStatus: (
     statuses: {
@@ -140,6 +142,7 @@ const initialAppState: AppSliceState = {
   sourceAliasesLoaded: false,
   multiSourcePaths: {},
   ignoredInstanceConflicts: {},
+  activeConflictCount: 0,
   sourceStatus: {},
   sourceStatusLoaded: false
 }
@@ -234,6 +237,10 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
 
   setIgnoredInstanceConflicts: (ignoredInstanceConflicts) => {
     set({ ignoredInstanceConflicts })
+  },
+
+  setActiveConflictCount: (activeConflictCount) => {
+    set({ activeConflictCount })
   },
 
   setMultiSourcePaths: (multiSourcePaths) => {
