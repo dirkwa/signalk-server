@@ -308,6 +308,15 @@ class Server {
         toPreferredDelta = getToPreferredDelta(
           app.config.settings.sourcePriorities
         )
+        // Drop preferredSources entries for paths that no longer have
+        // a priority config. Without this, the bootstrap snapshot
+        // served to admin-ui clients with sourcePolicy=preferred keeps
+        // returning the previously-preferred source for paths whose
+        // group was just deactivated.
+        const activePaths = new Set<string>(
+          Object.keys(app.config.settings.sourcePriorities ?? {})
+        )
+        app.deltaCache?.resetPreferredSourcesNotIn?.(activePaths)
       } catch (e) {
         console.error('getToPreferredDelta failed:', e)
       }

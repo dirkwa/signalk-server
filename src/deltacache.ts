@@ -220,6 +220,26 @@ export default class DeltaCache {
     this.emitMultiSourcePaths()
   }
 
+  /**
+   * Drop preferredSources entries whose path is no longer covered by an
+   * active source-priority config. Without this, the bootstrap snapshot
+   * served by getCachedDeltas('preferred') keeps returning the
+   * formerly-preferred source for paths whose group has just been
+   * deactivated — until a different source's delta happens to overwrite
+   * the cache entry. Called from activateSourcePriorities() after the
+   * priority engine is rebuilt so the snapshot stays in sync with what
+   * the engine will actually enforce.
+   */
+  resetPreferredSourcesNotIn(activePaths: Set<string>): void {
+    for (const key of this.preferredSources.keys()) {
+      const nullIdx = key.indexOf('\0')
+      const path = nullIdx === -1 ? '' : key.slice(nullIdx + 1)
+      if (!activePaths.has(path)) {
+        this.preferredSources.delete(key)
+      }
+    }
+  }
+
   private pickReplacementSource(
     context: string,
     path: string
@@ -631,6 +651,14 @@ export default class DeltaCache {
       }
       const key = d.context + '\0' + d.path
       const preferred = this.preferredSources.get(key)
+      // Without a preferred source the path has no priority enforcement
+      // (group inactive, or never configured). Fan it out — let every
+      // source through — so the bootstrap snapshot matches what the
+      // live unfiltered stream produces.
+      if (preferred === undefined) {
+        result.push(d)
+        continue
+      }
       if (preferred === d.$source) {
         byPath.set(key, d)
       } else if (!byPath.has(key)) {
