@@ -214,11 +214,52 @@ module.exports = (app: N2kDiscoveryApp) => {
   const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
   // Last reported online state per "providerId.src" so we only emit on transitions.
   const onlineStates = new Map<string, boolean>()
+  // Last time *any* parsed N2K frame was seen for a given bus address.
+  // sourceMeta only records lastSeen when a value-bearing delta lands;
+  // a device sending Address Claim, Heartbeat, Product Info etc. but
+  // whose data PGNs don't map (or cycle slower than the 90s threshold)
+  // would age out of sourceMeta and badge Offline despite still being
+  // on the bus. Folding this map into buildSourceStatuses means
+  // "online" reflects "alive on the bus", not "currently producing
+  // mappable Signal K values".
+  const frameLastSeenBySrc = new Map<number, number>()
   let statusTickInterval: ReturnType<typeof setInterval> | undefined
   // First tick always emits a full snapshot so admin-ui clients get
   // initial state via lastServerEvents bootstrap on connect.
   let firstStatusEmit = true
   const api = new Interface()
+
+  // Look up the numeric bus address that currently corresponds to the
+  // given sourceRef. The sources summary tree (populated by fullsignalk
+  // on every N2K delta) maps `<label>[<src>].n2k.canName` — walk it once
+  // to find the entry that matches the suffix. Returns undefined when
+  // the suffix isn't a numeric src and no canName lookup hits.
+  function resolveSrcAddress(sourceRef: string): number | undefined {
+    const dotIdx = sourceRef.indexOf('.')
+    if (dotIdx === -1) return undefined
+    const label = sourceRef.slice(0, dotIdx)
+    const suffix = sourceRef.slice(dotIdx + 1)
+    // suffix may be a numeric src directly
+    const numeric = Number(suffix)
+    if (!Number.isNaN(numeric) && Number.isInteger(numeric)) return numeric
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sources = (app.signalk as any)?.sources
+    if (!sources || typeof sources !== 'object') return undefined
+    const conn = sources[label]
+    if (!conn || typeof conn !== 'object') return undefined
+    for (const [key, dev] of Object.entries(conn)) {
+      if (key === 'type' || key === 'label') continue
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const canName = (dev as any)?.n2k?.canName
+      if (canName === suffix) {
+        const asNumber = Number(key)
+        if (!Number.isNaN(asNumber) && Number.isInteger(asNumber)) {
+          return asNumber
+        }
+      }
+    }
+    return undefined
+  }
 
   function buildSourceStatuses(): SourceStatus[] {
     const now = Date.now()
@@ -233,7 +274,19 @@ module.exports = (app: N2kDiscoveryApp) => {
     // "derived-data") matching getSourceId(). Walk it directly so we
     // cover N2K, NMEA0183 and $source-only (plugin) sources alike.
     for (const sourceRef of Object.keys(sourceMeta)) {
-      const lastSeen = sourceMeta[sourceRef]?.lastSeen
+      const metaLastSeen = sourceMeta[sourceRef]?.lastSeen
+      // For N2K sources, also check when we last saw any parsed frame
+      // for this device's bus address. Devices that emit only meta
+      // PGNs (Address Claim, Product Info, Heartbeat) — or whose data
+      // PGNs aren't mapped to Signal K — would otherwise age out of
+      // sourceMeta and look Offline despite being on the bus.
+      const srcAddr = resolveSrcAddress(sourceRef)
+      const frameLastSeen =
+        srcAddr !== undefined ? frameLastSeenBySrc.get(srcAddr) : undefined
+      const lastSeen =
+        metaLastSeen !== undefined && frameLastSeen !== undefined
+          ? Math.max(metaLastSeen, frameLastSeen)
+          : (metaLastSeen ?? frameLastSeen)
       const online =
         lastSeen !== undefined && now - lastSeen < ONLINE_THRESHOLD_MS
       const dotIdx = sourceRef.indexOf('.')
@@ -300,10 +353,25 @@ module.exports = (app: N2kDiscoveryApp) => {
     const n2k = pgn as N2kPGN
     if (typeof n2k.src === 'number' && n2k.src >= 0 && n2k.src < 254) {
       knownAddresses.add(n2k.src)
+      frameLastSeenBySrc.set(n2k.src, Date.now())
       // Track discovery responses (Address Claim + Product Info)
       if (n2k.pgn === 60928 || n2k.pgn === 126996) {
         discoveredAddresses.add(n2k.src)
       }
+    }
+  }
+
+  // sourceRefChanged fires when n2k-signalk detects that a bus address
+  // now belongs to a different physical device (different CAN Name on
+  // the same src). Drop our frame-freshness entry for that src so the
+  // departing device can age out cleanly — without this, a single
+  // observation timestamp would carry across the reclaim and keep the
+  // old sourceRef looking briefly Online after it should have gone
+  // Offline.
+  const sourceRefChangedListener = (...args: unknown[]) => {
+    const payload = args[0] as { src?: number } | undefined
+    if (payload && typeof payload.src === 'number') {
+      frameLastSeenBySrc.delete(payload.src)
     }
   }
 
@@ -339,6 +407,7 @@ module.exports = (app: N2kDiscoveryApp) => {
   api.start = () => {
     app.on('N2KAnalyzerOut', n2kListener)
     app.on('nmea2000OutAvailable', n2kOutListener)
+    app.on('sourceRefChanged', sourceRefChangedListener)
     statusTickInterval = setInterval(checkSourceStatus, STATUS_TICK_MS)
 
     app.securityStrategy.addAdminMiddleware(
@@ -1341,8 +1410,10 @@ module.exports = (app: N2kDiscoveryApp) => {
       statusTickInterval = undefined
     }
     onlineStates.clear()
+    frameLastSeenBySrc.clear()
     app.removeListener('N2KAnalyzerOut', n2kListener)
     app.removeListener('nmea2000OutAvailable', n2kOutListener)
+    app.removeListener('sourceRefChanged', sourceRefChangedListener)
   }
 
   return api
