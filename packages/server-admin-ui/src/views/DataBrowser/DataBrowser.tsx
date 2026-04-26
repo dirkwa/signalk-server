@@ -414,9 +414,12 @@ const DataBrowser: React.FC = () => {
           return pathData?.$source === preferred
         })
       } else {
-        // By Path + Priority filtered: deduplicate by path, keeping
-        // only the preferred source's entry (or first seen if no
-        // priority is configured).
+        // By Path + Priority filtered: deduplicate paths that have a
+        // preferred source configured down to that one source's entry.
+        // Paths with no priority config (e.g. group was deactivated)
+        // pass through with all sources visible — there is nothing to
+        // filter against, so fanning them out matches the user's
+        // expectation that disabling priority shows the full picture.
         const seenPaths = new Map<string, string>()
         const deduped: string[] = []
         for (const compositeKey of filtered) {
@@ -424,6 +427,10 @@ const DataBrowser: React.FC = () => {
           const realKey =
             nullIdx >= 0 ? compositeKey.slice(nullIdx + 1) : compositeKey
           const path = getPathFromKey(realKey)
+          if (!preferredSourceByPath.has(path)) {
+            deduped.push(compositeKey)
+            continue
+          }
           const ctxPrefix = nullIdx >= 0 ? compositeKey.slice(0, nullIdx) : ''
           const dedupKey = ctxPrefix ? `${ctxPrefix}\0${path}` : path
 
