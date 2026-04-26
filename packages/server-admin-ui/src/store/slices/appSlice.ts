@@ -59,6 +59,10 @@ export interface AppSliceState {
   multiSourcePaths: Record<string, string[]>
   ignoredInstanceConflicts: Record<string, string>
   activeConflictCount: number
+  pgnDataInstances: Record<string, Record<string, number[]>>
+  pgnSourceKeys: Record<string, Record<string, string[]>>
+  discoveredAddresses: number[]
+  n2kDeviceStatusLoaded: boolean
   sourceStatus: Record<string, { online: boolean; lastSeen?: number }>
   sourceStatusLoaded: boolean
 }
@@ -84,6 +88,11 @@ export interface AppSliceActions {
   setSourceAliases: (aliases: Record<string, string>) => void
   setIgnoredInstanceConflicts: (conflicts: Record<string, string>) => void
   setActiveConflictCount: (count: number) => void
+  setN2kDeviceStatus: (status: {
+    pgnDataInstances?: Record<string, Record<string, number[]>>
+    pgnSourceKeys?: Record<string, Record<string, string[]>>
+    discoveredAddresses?: number[]
+  }) => void
   setMultiSourcePaths: (paths: Record<string, string[]>) => void
   setSourceStatus: (
     statuses: {
@@ -143,6 +152,10 @@ const initialAppState: AppSliceState = {
   multiSourcePaths: {},
   ignoredInstanceConflicts: {},
   activeConflictCount: 0,
+  pgnDataInstances: {},
+  pgnSourceKeys: {},
+  discoveredAddresses: [],
+  n2kDeviceStatusLoaded: false,
   sourceStatus: {},
   sourceStatusLoaded: false
 }
@@ -241,6 +254,15 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
 
   setActiveConflictCount: (activeConflictCount) => {
     set({ activeConflictCount })
+  },
+
+  setN2kDeviceStatus: (status) => {
+    set({
+      pgnDataInstances: status.pgnDataInstances ?? {},
+      pgnSourceKeys: status.pgnSourceKeys ?? {},
+      discoveredAddresses: status.discoveredAddresses ?? [],
+      n2kDeviceStatusLoaded: true
+    })
   },
 
   setMultiSourcePaths: (multiSourcePaths) => {

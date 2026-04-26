@@ -69,6 +69,7 @@ export async function fetchAllData(): Promise<void> {
       state.setPriorityOverridesFromServer(data.overrides || [])
     }),
     fetchAndSet('/sourceAliases', state.setSourceAliases),
-    fetchAndSet('/ignoredInstanceConflicts', state.setIgnoredInstanceConflicts)
+    fetchAndSet('/ignoredInstanceConflicts', state.setIgnoredInstanceConflicts),
+    fetchAndSet('/n2kDeviceStatus', state.setN2kDeviceStatus)
   ])
 }

@@ -194,6 +194,22 @@ export function useActiveConflictCount() {
   return useStore((s) => s.activeConflictCount)
 }
 
+export function usePgnDataInstances() {
+  return useStore((s) => s.pgnDataInstances)
+}
+
+export function usePgnSourceKeys() {
+  return useStore((s) => s.pgnSourceKeys)
+}
+
+export function useDiscoveredAddresses() {
+  return useStore((s) => s.discoveredAddresses)
+}
+
+export function useN2kDeviceStatusLoaded() {
+  return useStore((s) => s.n2kDeviceStatusLoaded)
+}
+
 export function useMultiSourcePaths() {
   return useStore((s) => s.multiSourcePaths)
 }

@@ -27,7 +27,10 @@ import {
   useStore,
   useIgnoredInstanceConflicts,
   useSourceStatus,
-  useSourceStatusLoaded
+  useSourceStatusLoaded,
+  usePgnDataInstances,
+  usePgnSourceKeys,
+  useN2kDeviceStatusLoaded
 } from '../../store'
 import SourceLabel from './SourceLabel'
 
@@ -88,15 +91,11 @@ const SourceDiscovery: React.FC = () => {
   const setIgnoredConflicts = useStore((s) => s.setIgnoredInstanceConflicts)
   const sourceStatus = useSourceStatus()
   const sourceStatusLoaded = useSourceStatusLoaded()
-  const [discoveredAddresses, setDiscoveredAddresses] =
-    useState<Set<number> | null>(null)
   const [isResetting, setIsResetting] = useState(false)
-  const [pgnDataInstances, setPgnDataInstances] = useState<
-    Record<string, Record<string, number[]>>
-  >({})
-  const [pgnSourceKeys, setPgnSourceKeys] = useState<
-    Record<string, Record<string, string[]>>
-  >({})
+  const pgnDataInstances = usePgnDataInstances()
+  const pgnSourceKeys = usePgnSourceKeys()
+  const n2kDeviceStatusLoaded = useN2kDeviceStatusLoaded()
+  const setN2kDeviceStatus = useStore((s) => s.setN2kDeviceStatus)
 
   useEffect(() => {
     fetch(`${window.serverRoutesPrefix}/providers`, {
@@ -219,8 +218,9 @@ const SourceDiscovery: React.FC = () => {
 
   const setActiveConflictCount = useStore((s) => s.setActiveConflictCount)
   useEffect(() => {
+    if (!n2kDeviceStatusLoaded) return
     setActiveConflictCount(activeConflicts.length)
-  }, [activeConflicts.length, setActiveConflictCount])
+  }, [activeConflicts.length, n2kDeviceStatusLoaded, setActiveConflictCount])
 
   const ignoredConflictList = useMemo(
     () =>
@@ -316,20 +316,12 @@ const SourceDiscovery: React.FC = () => {
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.discoveredAddresses) {
-          setDiscoveredAddresses(new Set(data.discoveredAddresses))
-        }
-        if (data.pgnDataInstances) {
-          setPgnDataInstances(data.pgnDataInstances)
-        }
-        if (data.pgnSourceKeys) {
-          setPgnSourceKeys(data.pgnSourceKeys)
-        }
+        setN2kDeviceStatus(data)
       })
       .catch((err) => {
         console.warn('Failed to load N2K device status:', err)
       })
-  }, [])
+  }, [setN2kDeviceStatus])
 
   useEffect(() => {
     loadDeviceStatus()
