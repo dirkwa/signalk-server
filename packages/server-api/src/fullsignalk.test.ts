@@ -412,6 +412,38 @@ describe('Source freshness tracking', function () {
     )
   })
 
+  it('stamps both source-derived and $source keys when they disagree', function () {
+    // Remote upstreams can ship deltas carrying a structured `source`
+    // AND a $source string that disagree (e.g. legacy label.src vs
+    // sourceRef-style label.canName). Both keys must be stamped so
+    // SOURCESTATUS lookups by either form keep returning fresh.
+    const fullSignalK = new FullSignalK('urn:mrn:imo:mmsi:200000000')
+    fullSignalK.addDelta({
+      context: 'vessels.urn:mrn:imo:mmsi:200000000',
+      updates: [
+        {
+          source: {
+            label: 'N2K',
+            type: 'NMEA2000',
+            src: '44'
+          },
+          $source: 'N2K.c0789182e765cef5',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          values: [
+            {
+              path: 'navigation.position',
+              value: { latitude: 0, longitude: 0 }
+            }
+          ]
+        }
+      ]
+    })
+    expect(fullSignalK.sourceMeta['N2K.c0789182e765cef5']!.lastSeen).to.be.a(
+      'number'
+    )
+    expect(fullSignalK.sourceMeta['N2K.44']!.lastSeen).to.be.a('number')
+  })
+
   it('records pgnInstances per PGN for instanced N2K sources', function () {
     const fullSignalK = new FullSignalK('urn:mrn:imo:mmsi:200000000')
     const send = (pgn: number, instance: string, timestamp: string) =>

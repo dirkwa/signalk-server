@@ -394,19 +394,25 @@ export class FullSignalK extends EventEmitter {
   ): void {
     if (update.source !== undefined) {
       this.updateSource(update.source, update.timestamp)
-    } else if (update['$source'] !== undefined) {
-      this.updateDollarSource(update['$source'])
-      // Key by the full $source string so SOURCESTATUS lookups by
-      // sourceRef hit (and so a plugin and an N2K device that happen
-      // to share a label first segment don't collide on the same
-      // freshness entry).
+    }
+    if (update['$source'] !== undefined) {
+      // Stamp the $source-keyed meta even when a structured `source`
+      // object is also present. Remote upstream Signal K servers can
+      // alternate between the two shapes on reconnect, leaving a
+      // sourceRef-keyed entry stale forever while a label-keyed twin
+      // ages out — sources end up stuck Offline in priority lists.
+      // Both keys point to independent freshness records so either
+      // lookup hits.
+      if (update.source === undefined) {
+        this.updateDollarSource(update['$source'])
+      }
       const metaKey = update['$source'] as string
       let meta = this.sourceMeta[metaKey]
       if (!meta) {
         meta = this.sourceMeta[metaKey] = { lastSeen: 0 }
       }
       meta.lastSeen = Date.now()
-    } else {
+    } else if (update.source === undefined) {
       console.error('No source in delta update:' + JSON.stringify(update))
     }
     if (update.values) {
