@@ -123,13 +123,11 @@ const PluginCiMatrix: React.FC<PluginCiMatrixProps> = ({ data }) => {
   }
 
   // status === 'ok'
-  const isOffMaster = data.workflow_ref !== 'refs/heads/master'
-
   return (
     <div className="plugin-detail__plugin-ci">
       <h5 className="mt-4">plugin-ci matrix</h5>
       <div className="text-muted small mb-2">
-        Tested against commit{' '}
+        Tested against the published version's commit{' '}
         <a
           href={data.commit_url}
           target="_blank"
@@ -160,12 +158,6 @@ const PluginCiMatrix: React.FC<PluginCiMatrixProps> = ({ data }) => {
               {j.server_version ? ` · sk ${j.server_version}` : ''}
             </Badge>
           ))}
-        </div>
-      )}
-      {isOffMaster && (
-        <div className="text-muted small mt-2">
-          Tested against <code>{data.workflow_ref}</code>, not{' '}
-          <code>refs/heads/master</code>.
         </div>
       )}
     </div>

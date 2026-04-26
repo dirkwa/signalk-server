@@ -75,7 +75,7 @@ describe('PluginCiMatrix', () => {
     expect(screen.getByText('9d951dd')).toBeDefined()
   })
 
-  it('flags non-master workflow_ref', () => {
+  it('does not surface workflow_ref \u2014 it is GitHub runner metadata, not what was tested', () => {
     render(
       <PluginCiMatrix
         data={{
@@ -89,7 +89,10 @@ describe('PluginCiMatrix', () => {
         }}
       />
     )
-    expect(screen.getByText(/refs\/heads\/feature-x/)).toBeDefined()
+    // The matrix should not warn about workflow_ref. The published commit
+    // (head_sha) is what the tarball was built from \u2014 that's what users
+    // install \u2014 and the run link tells the rest of the story.
+    expect(screen.queryByText(/refs\/heads\/feature-x/)).toBeNull()
   })
 
   it('omits cells the plugin author disabled (e.g. armv7 missing)', () => {
