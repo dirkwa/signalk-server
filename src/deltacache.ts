@@ -31,6 +31,45 @@ interface StringKeyed {
   [key: string]: any
 }
 
+/**
+ * Build a `<label>.<src>` → `<label>.<canName>` map from the Signal K
+ * sources summary tree.
+ *
+ * Providers with `useCanName: true` emit deltas tagged with the canName
+ * form once the device's PGN 60928 has been observed. Frames that
+ * arrived before that point — common with UDP gateways that miss the
+ * early ISO Address Claim — leak out tagged by numeric src and create
+ * stale leaves that survive in the cache. Returning a translation map
+ * here lets callers collapse those duplicates back onto the canonical
+ * canName form.
+ *
+ * Providers with `useCanName` off never populate `n2k.canName`; the
+ * map stays empty and callers see refs unchanged.
+ */
+export function buildSrcToCanonicalMap(sources: unknown): Map<string, string> {
+  const out = new Map<string, string>()
+  if (!sources || typeof sources !== 'object') return out
+  try {
+    for (const [label, conn] of Object.entries(sources)) {
+      if (!conn || typeof conn !== 'object') continue
+      for (const [src, dev] of Object.entries(
+        conn as Record<string, unknown>
+      )) {
+        if (src === 'type' || src === 'label') continue
+        if (!dev || typeof dev !== 'object') continue
+        const canName = (dev as any)?.n2k?.canName
+        if (typeof canName === 'string' && canName.length > 0) {
+          out.set(`${label}.${src}`, `${label}.${canName}`)
+        }
+      }
+    }
+  } catch {
+    // best-effort — never block multi-source detection on a malformed
+    // sources tree
+  }
+  return out
+}
+
 export default class DeltaCache {
   cache: StringKeyed = {}
   lastModifieds: StringKeyed = {}
@@ -483,6 +522,11 @@ export default class DeltaCache {
       selfBranch = selfBranch[part]
     }
 
+    const srcToCanonical = buildSrcToCanonicalMap(
+      (this.app.signalk as any)?.sources
+    )
+    const canonical = (ref: string): string => srcToCanonical.get(ref) ?? ref
+
     const result: Record<string, Set<string>> = {}
     if (selfBranch) {
       const walk = (node: any, pathParts: string[]) => {
@@ -500,10 +544,13 @@ export default class DeltaCache {
                 v.value !== undefined
               )
             })
-            if (sources.length > 1) {
-              const path = pathParts.join('.')
-              const set = result[path] ?? (result[path] = new Set<string>())
-              for (const s of sources) set.add(s)
+            if (sources.length > 0) {
+              const canonicalSet = new Set(sources.map(canonical))
+              if (canonicalSet.size > 1) {
+                const path = pathParts.join('.')
+                const set = result[path] ?? (result[path] = new Set<string>())
+                for (const s of canonicalSet) set.add(s)
+              }
             }
             return
           }
@@ -522,7 +569,7 @@ export default class DeltaCache {
         const set = result[path] ?? (result[path] = new Set<string>())
         for (const entry of entries) {
           if (entry && typeof entry.sourceRef === 'string') {
-            set.add(entry.sourceRef)
+            set.add(canonical(entry.sourceRef))
           }
         }
       }
