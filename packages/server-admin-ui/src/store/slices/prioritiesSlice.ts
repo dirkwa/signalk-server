@@ -50,6 +50,7 @@ export interface PrioritiesSliceActions {
   setPriorityGroupsFromServer: (groups: PriorityGroup[]) => void
   reorderGroupSources: (groupId: string, from: number, to: number) => void
   setGroupSources: (groupId: string, sources: string[]) => void
+  setGroupInactive: (groupId: string, inactive: boolean) => void
   setGroupsSaving: () => void
   setGroupsSaved: () => void
   setGroupsSaveFailed: () => void
@@ -382,6 +383,21 @@ export const createPrioritiesSlice: StateCreator<
             g.id === groupId ? { ...g, sources } : g
           )
         : [...state.priorityGroupsData.groups, { id: groupId, sources }]
+      return {
+        priorityGroupsData: {
+          ...state.priorityGroupsData,
+          groups,
+          saveState: { ...state.priorityGroupsData.saveState, dirty: true }
+        }
+      }
+    })
+  },
+
+  setGroupInactive: (groupId, inactive) => {
+    set((state) => {
+      const groups = state.priorityGroupsData.groups.map((g) =>
+        g.id === groupId ? { ...g, inactive } : g
+      )
       return {
         priorityGroupsData: {
           ...state.priorityGroupsData,

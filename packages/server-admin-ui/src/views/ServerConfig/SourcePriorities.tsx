@@ -338,6 +338,7 @@ const SourcePriorities: React.FC = () => {
   const setGroupsSaved = useStore((s) => s.setGroupsSaved)
   const setGroupsSaveFailed = useStore((s) => s.setGroupsSaveFailed)
   const setSourcePriorities = useStore((s) => s.setSourcePriorities)
+  const setGroupInactive = useStore((s) => s.setGroupInactive)
   const setPriorityDefaults = useStore((s) => s.setPriorityDefaults)
   const changePath = useStore((s) => s.changePath)
   const deletePath = useStore((s) => s.deletePath)
@@ -429,14 +430,19 @@ const SourcePriorities: React.FC = () => {
   // reconciled live groups. Reconciled gives us the canonical group identity
   // and membership; the slice supplies the user's latest ordering override.
   const displayed = useMemo(() => {
-    const editsById = new Map(savedGroups.map((g) => [g.id, g.sources]))
+    const savedById = new Map(savedGroups.map((g) => [g.id, g]))
     return reconciled.map((g) => {
-      const edit = editsById.get(g.id)
-      if (!edit) return g
+      const saved = savedById.get(g.id)
+      const inactive = saved?.inactive ?? false
+      if (!saved) return { ...g, inactive }
       const liveSet = new Set(g.sources)
-      const editedOrder = edit.filter((src) => liveSet.has(src))
+      const editedOrder = saved.sources.filter((src) => liveSet.has(src))
       const newcomers = g.sources.filter((src) => !editedOrder.includes(src))
-      return { ...g, sources: [...editedOrder, ...newcomers] }
+      return {
+        ...g,
+        sources: [...editedOrder, ...newcomers],
+        inactive
+      }
     })
   }, [reconciled, savedGroups])
 
@@ -559,6 +565,17 @@ const SourcePriorities: React.FC = () => {
 
     let fannedOut = { ...nextPriorityMap }
     for (const group of displayed) {
+      // Inactive groups keep their saved structure but are not enforced —
+      // strip any path entries left over from a previous fan-out so the
+      // engine sees no per-path config and falls back to first-come,
+      // first-served. The override set is left alone: explicit per-path
+      // overrides outrank the group's active/inactive state.
+      if (group.inactive) {
+        for (const path of group.paths) {
+          if (!overridePathsSet.has(path)) delete fannedOut[path]
+        }
+        continue
+      }
       fannedOut = fanOutGroupRanking(
         { sources: group.sources, paths: group.paths },
         multiSourcePaths,
@@ -568,7 +585,11 @@ const SourcePriorities: React.FC = () => {
       )
     }
     return {
-      groups: displayed.map((g) => ({ id: g.id, sources: g.sources })),
+      groups: displayed.map((g) => ({
+        id: g.id,
+        sources: g.sources,
+        ...(g.inactive ? { inactive: true } : {})
+      })),
       priorities: fannedOut,
       defaults: { fallbackMs: pendingFallbackMs },
       overrides: [...overridePathsSet].sort()
@@ -791,7 +812,9 @@ const SourcePriorities: React.FC = () => {
                 saveState.dirty
               }
               fallbackMs={effectiveFallbackMs}
-              onSaveGroup={handleSave}
+              onToggleActive={(inactive) =>
+                setGroupInactive(group.id, inactive)
+              }
               deviceIdentityIndex={deviceIdentityIndex}
             />
           ))}
@@ -852,7 +875,7 @@ const SourcePriorities: React.FC = () => {
             }
             onClick={handleSave}
           >
-            <FontAwesomeIcon icon={faFloppyDisk} /> Save
+            <FontAwesomeIcon icon={faFloppyDisk} /> Save all changes
           </Button>
           {(saveState.saveFailed || groupsSaveState.saveFailed) &&
             ' Saving priorities settings failed!'}

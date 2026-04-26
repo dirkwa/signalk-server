@@ -101,6 +101,7 @@ export function computeGroups(
  */
 export interface ReconciledGroup extends DerivedGroup {
   matchedSavedId: string | null
+  inactive?: boolean
 }
 
 export function reconcileGroups(
@@ -130,7 +131,8 @@ export function reconcileGroups(
     return {
       ...group,
       sources: [...savedOrder, ...newcomers],
-      matchedSavedId: bestSaved.id
+      matchedSavedId: bestSaved.id,
+      inactive: bestSaved.inactive ?? false
     }
   })
 }

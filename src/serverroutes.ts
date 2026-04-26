@@ -92,7 +92,8 @@ const sourcePrioritiesSchema = Type.Record(
 
 const priorityGroupSchema = Type.Object({
   id: Type.String({ minLength: 1 }),
-  sources: Type.Array(Type.String({ minLength: 1 }))
+  sources: Type.Array(Type.String({ minLength: 1 })),
+  inactive: Type.Optional(Type.Boolean())
 })
 
 const priorityGroupsSchema = Type.Array(priorityGroupSchema)
@@ -109,7 +110,7 @@ const prioritiesPayloadSchema = Type.Object({
 })
 
 type PrioritiesPayload = {
-  groups: Array<{ id: string; sources: string[] }>
+  groups: Array<{ id: string; sources: string[]; inactive?: boolean }>
   priorities: Record<
     string,
     Array<{ sourceRef: string; timeout: number | string }>

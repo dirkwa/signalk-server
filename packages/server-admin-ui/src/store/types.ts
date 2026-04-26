@@ -129,6 +129,11 @@ export interface SourcePrioritiesData {
 export interface PriorityGroup {
   id: string
   sources: string[]
+  // When true, the saved ranking is preserved but not enforced — paths
+  // covered by this group fall back to first-come, first-served. Lets a
+  // user temporarily disable a ranking without losing the order they
+  // configured.
+  inactive?: boolean
 }
 
 export interface PriorityGroupsData {

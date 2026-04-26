@@ -8,7 +8,6 @@ import { faChevronDown } from '@fortawesome/free-solid-svg-icons/faChevronDown'
 import { faChevronRight } from '@fortawesome/free-solid-svg-icons/faChevronRight'
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash'
 import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons/faTriangleExclamation'
-import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk'
 import {
   DndContext,
   closestCenter,
@@ -234,7 +233,7 @@ interface PriorityGroupCardProps {
   overridePaths: Set<string>
   dirty: boolean
   fallbackMs: number
-  onSaveGroup: () => void
+  onToggleActive: (inactive: boolean) => void
   deviceIdentityIndex?: DeviceIdentityIndex
 }
 
@@ -249,7 +248,7 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
   overridePaths,
   dirty,
   fallbackMs,
-  onSaveGroup,
+  onToggleActive,
   deviceIdentityIndex
 }) => {
   const setGroupSources = useStore((s) => s.setGroupSources)
@@ -483,16 +482,25 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
               {overrideRows.length === 1 ? '' : 's'}
             </Badge>
           )}
+          {group.inactive && (
+            <Badge bg="secondary" className="ms-2">
+              Inactive
+            </Badge>
+          )}
         </button>
         <Button
           size="sm"
-          variant={dirty ? 'warning' : 'outline-secondary'}
-          disabled={!dirty || isSaving}
-          onClick={onSaveGroup}
+          variant={group.inactive ? 'outline-success' : 'outline-secondary'}
+          disabled={isSaving}
+          onClick={() => onToggleActive(!group.inactive)}
           className="pg-card-save"
+          title={
+            group.inactive
+              ? 'Resume enforcement using the saved ranking'
+              : 'Keep the ranking but stop enforcing it (paths in this group accept all sources)'
+          }
         >
-          <FontAwesomeIcon icon={faFloppyDisk} className="me-1" />
-          {dirty ? 'Save changes' : 'Saved'}
+          {group.inactive ? 'Activate' : 'Deactivate'}
         </Button>
       </Card.Header>
       {expanded && (

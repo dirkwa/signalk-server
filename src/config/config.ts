@@ -96,7 +96,15 @@ export interface Config {
      * of sources that share output paths; the delta engine never reads
      * this — on save, rankings are fanned out into sourcePriorities for
      * every shared path without an explicit override. */
-    priorityGroups?: Array<{ id: string; sources: string[] }>
+    priorityGroups?: Array<{
+      id: string
+      sources: string[]
+      /** When true, the saved ranking is preserved but not fanned out
+       * into sourcePriorities — paths covered by this group accept all
+       * sources. Lets a user temporarily disable a ranking without
+       * losing the order they configured. */
+      inactive?: boolean
+    }>
 
     /** Global default fallback in ms used when fanning out a group ranking
      * into sourcePriorities. Overrides can still specify their own values. */
