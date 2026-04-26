@@ -20,6 +20,10 @@ import {
   getEnumerationName,
   getEnumerationValue
 } from '@canboat/ts-pgns'
+import {
+  buildPgnDataInstancesFromTree,
+  buildPgnSourceKeysFromTree
+} from '../n2k-discovery-instances'
 
 const debug = createDebug('signalk-server:interfaces:n2k-discovery')
 
@@ -70,18 +74,15 @@ interface N2kPGN {
   fields?: Record<string, unknown>
 }
 
-// Derive PGN sets from canboat.json metadata at module load time.
-// DATA_INSTANCE_PGNS: temp/humidity PGNs where the unique key is instance+source
-// INSTANCE_FIELD_PGNS: all PGNs with a data-instance field (PartOfPrimaryKey)
+// Derive temp/humidity PGN set from canboat.json — used by the
+// instance-discovery endpoint to decide which frames to listen for.
 const DATA_INSTANCE_PGNS = new Set<number>()
-const INSTANCE_FIELD_PGNS = new Set<number>()
 
 for (const def of getAllPGNs()) {
   const hasInstanceKey = def.Fields.some(
     (f) => f.Id === 'instance' && f.PartOfPrimaryKey
   )
   if (!hasInstanceKey) continue
-  INSTANCE_FIELD_PGNS.add(def.PGN)
 
   const hasSourceKey = def.Fields.some(
     (f) =>
@@ -211,10 +212,6 @@ module.exports = (app: N2kDiscoveryApp) => {
   const knownAddresses = new Set<number>()
   const discoveredAddresses = new Set<number>()
   const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
-  // Passive tracking: src -> pgn -> Set<dataInstance>
-  const pgnDataInstances = new Map<number, Map<number, Set<number>>>()
-  // Compound keys for temp/humidity PGNs: src -> pgn -> Set<"instance:source">
-  const pgnSourceKeys = new Map<number, Map<number, Set<string>>>()
   // Last reported online state per "providerId.src" so we only emit on transitions.
   const onlineStates = new Map<string, boolean>()
   let statusTickInterval: ReturnType<typeof setInterval> | undefined
@@ -307,45 +304,6 @@ module.exports = (app: N2kDiscoveryApp) => {
       if (n2k.pgn === 60928 || n2k.pgn === 126996) {
         discoveredAddresses.add(n2k.src)
       }
-      // Track data instances per PGN per device
-      if (INSTANCE_FIELD_PGNS.has(n2k.pgn) && n2k.fields) {
-        const inst = Number(
-          (n2k.fields as Record<string, unknown>).instance ??
-            (n2k.fields as Record<string, unknown>).Instance
-        )
-        if (!isNaN(inst)) {
-          let deviceMap = pgnDataInstances.get(n2k.src)
-          if (!deviceMap) {
-            deviceMap = new Map()
-            pgnDataInstances.set(n2k.src, deviceMap)
-          }
-          let instances = deviceMap.get(n2k.pgn)
-          if (!instances) {
-            instances = new Set()
-            deviceMap.set(n2k.pgn, instances)
-          }
-          instances.add(inst)
-          // For temp/humidity PGNs, also track instance:source compound keys
-          if (DATA_INSTANCE_PGNS.has(n2k.pgn)) {
-            const sourceField =
-              (n2k.fields as Record<string, unknown>).source ??
-              (n2k.fields as Record<string, unknown>).Source
-            if (sourceField !== undefined) {
-              let srcDeviceMap = pgnSourceKeys.get(n2k.src)
-              if (!srcDeviceMap) {
-                srcDeviceMap = new Map()
-                pgnSourceKeys.set(n2k.src, srcDeviceMap)
-              }
-              let keys = srcDeviceMap.get(n2k.pgn)
-              if (!keys) {
-                keys = new Set()
-                srcDeviceMap.set(n2k.pgn, keys)
-              }
-              keys.add(`${inst}:${sourceField}`)
-            }
-          }
-        }
-      }
     }
   }
 
@@ -429,22 +387,15 @@ module.exports = (app: N2kDiscoveryApp) => {
     app.get(
       `${SERVERROUTESPREFIX}/n2kDeviceStatus`,
       (_req: Request, res: Response) => {
-        const instanceData: Record<string, Record<string, number[]>> = {}
-        for (const [src, pgns] of pgnDataInstances) {
-          const pgnMap: Record<string, number[]> = {}
-          for (const [pgn, insts] of pgns) {
-            pgnMap[String(pgn)] = Array.from(insts).sort((a, b) => a - b)
-          }
-          instanceData[String(src)] = pgnMap
-        }
-        const sourceKeyData: Record<string, Record<string, string[]>> = {}
-        for (const [src, pgns] of pgnSourceKeys) {
-          const pgnMap: Record<string, string[]> = {}
-          for (const [pgn, keys] of pgns) {
-            pgnMap[String(pgn)] = Array.from(keys).sort()
-          }
-          sourceKeyData[String(src)] = pgnMap
-        }
+        // Derive currently-published instance values from the SK tree
+        // rather than from a passive listener. The tree is the
+        // authoritative current state — paths only exist while a
+        // device is actively publishing them — so a stale instance
+        // emitted briefly during boot can't haunt conflict detection.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const selfTree = (app.signalk as any)?.self
+        const instanceData = buildPgnDataInstancesFromTree(selfTree)
+        const sourceKeyData = buildPgnSourceKeysFromTree(selfTree)
         const sourceStatuses = buildSourceStatuses()
         res.json({
           knownAddresses: Array.from(knownAddresses),
@@ -738,8 +689,6 @@ module.exports = (app: N2kDiscoveryApp) => {
               if (!Number.isNaN(addrNum)) {
                 knownAddresses.delete(addrNum)
                 discoveredAddresses.delete(addrNum)
-                pgnDataInstances.delete(addrNum)
-                pgnSourceKeys.delete(addrNum)
               }
               delete labelNode[subKey]
               if (sourceMeta) {
@@ -845,8 +794,6 @@ module.exports = (app: N2kDiscoveryApp) => {
         for (const addr of addressesToRemove) {
           knownAddresses.delete(addr)
           discoveredAddresses.delete(addr)
-          pgnDataInstances.delete(addr)
-          pgnSourceKeys.delete(addr)
         }
 
         // Clean up source aliases (in-memory; persisted below)

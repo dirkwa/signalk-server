@@ -312,8 +312,8 @@ export function detectInstanceConflicts(
 
           // For temperature/humidity PGNs, use compound key (instance:source)
           if (COMPOUND_KEY_PGNS.has(pgn) && pgnSourceKeys) {
-            const aKeys = pgnSourceKeys[a.src ?? '']?.[pgn]
-            const bKeys = pgnSourceKeys[b.src ?? '']?.[pgn]
+            const aKeys = pgnSourceKeys[a.sourceRef]?.[pgn]
+            const bKeys = pgnSourceKeys[b.sourceRef]?.[pgn]
             if (aKeys && aKeys.length > 0 && bKeys && bKeys.length > 0) {
               const aSet = new Set(aKeys)
               return bKeys.some((k) => aSet.has(k))
@@ -324,9 +324,9 @@ export function detectInstanceConflicts(
           // Check actual data instance overlap.
           // Priority: sources API (pgnInstances) > n2k-discovery (pgnDataInstances)
           const aInst =
-            a.pgnInstances?.[pgn] ?? pgnDataInstances?.[a.src ?? '']?.[pgn]
+            a.pgnInstances?.[pgn] ?? pgnDataInstances?.[a.sourceRef]?.[pgn]
           const bInst =
-            b.pgnInstances?.[pgn] ?? pgnDataInstances?.[b.src ?? '']?.[pgn]
+            b.pgnInstances?.[pgn] ?? pgnDataInstances?.[b.sourceRef]?.[pgn]
 
           if (aInst && aInst.length > 0 && bInst && bInst.length > 0) {
             // Both have instance data — only conflict if instances overlap

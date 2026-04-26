@@ -377,8 +377,8 @@ describe('detectInstanceConflicts', () => {
       })
     ]
     const pgnDataInstances = {
-      '1': { '127508': [0] },
-      '2': { '127508': [100, 101, 102, 103] }
+      'C.1': { '127508': [0] },
+      'C.2': { '127508': [100, 101, 102, 103] }
     }
     expect(detectInstanceConflicts(devices, pgnDataInstances)).toHaveLength(0)
   })
@@ -401,8 +401,8 @@ describe('detectInstanceConflicts', () => {
       })
     ]
     const pgnDataInstances = {
-      '1': { '127508': [0, 1] },
-      '2': { '127508': [1, 2] }
+      'C.1': { '127508': [0, 1] },
+      'C.2': { '127508': [1, 2] }
     }
     const conflicts = detectInstanceConflicts(devices, pgnDataInstances)
     expect(conflicts).toHaveLength(1)
@@ -450,8 +450,8 @@ describe('detectInstanceConflicts', () => {
     // 127501: different instances → no conflict
     // 127508: no instance data → conservative flag
     const pgnDataInstances = {
-      '1': { '127501': [20] },
-      '2': { '127501': [21] }
+      'C.1': { '127501': [20] },
+      'C.2': { '127501': [21] }
     }
     const conflicts = detectInstanceConflicts(devices, pgnDataInstances)
     expect(conflicts).toHaveLength(1)
@@ -499,8 +499,8 @@ describe('detectInstanceConflicts', () => {
       })
     ]
     const pgnSourceKeys = {
-      '111': { '130312': ['0:Inside Temperature'] },
-      '109': { '130312': ['0:Main Cabin Temperature'] }
+      'C.1': { '130312': ['0:Inside Temperature'] },
+      'C.2': { '130312': ['0:Main Cabin Temperature'] }
     }
     // Same instance 0 but different source → no conflict
     expect(
@@ -526,8 +526,8 @@ describe('detectInstanceConflicts', () => {
       })
     ]
     const pgnSourceKeys = {
-      '111': { '130312': ['0:Inside Temperature'] },
-      '109': { '130312': ['0:Inside Temperature'] }
+      'C.1': { '130312': ['0:Inside Temperature'] },
+      'C.2': { '130312': ['0:Inside Temperature'] }
     }
     const conflicts = detectInstanceConflicts(devices, undefined, pgnSourceKeys)
     expect(conflicts).toHaveLength(1)
@@ -553,8 +553,8 @@ describe('detectInstanceConflicts', () => {
     ]
     // No pgnSourceKeys, but pgnDataInstances shows different instances
     const pgnDataInstances = {
-      '111': { '130312': [0] },
-      '109': { '130312': [1] }
+      'C.1': { '130312': [0] },
+      'C.2': { '130312': [1] }
     }
     expect(detectInstanceConflicts(devices, pgnDataInstances)).toHaveLength(0)
   })
@@ -577,8 +577,8 @@ describe('detectInstanceConflicts', () => {
       })
     ]
     const pgnSourceKeys = {
-      '1': { '127505': ['0:Fuel'] },
-      '2': { '127505': ['0:Water'] }
+      'C.1': { '127505': ['0:Fuel'] },
+      'C.2': { '127505': ['0:Water'] }
     }
     // 127505 is NOT a compound key PGN — pgnSourceKeys ignored, falls through
     // to conservative check (no pgnDataInstances → conflict flagged)
