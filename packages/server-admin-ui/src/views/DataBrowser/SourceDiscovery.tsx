@@ -665,7 +665,7 @@ const SourceDiscovery: React.FC = () => {
                       onToggle={toggleSort}
                     />
                     <SortableTh
-                      label="Data Instance"
+                      label="Dev Inst. Lower"
                       sortKey="deviceInstanceLower"
                       currentSort={sort}
                       onToggle={toggleSort}
