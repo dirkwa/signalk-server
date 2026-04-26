@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import Badge from 'react-bootstrap/Badge'
 import { usePathData, useMetaData } from './usePathData'
 import TimestampCell from './TimestampCell'
 import CopyToClipboardWithFade from './CopyToClipboardWithFade'
@@ -206,16 +207,13 @@ function DataRow({
 
       <div className="virtual-table-cell source-cell" data-label="Source">
         {isPreferred && (
-          <span
+          <Badge
+            bg="success"
             title="Preferred source"
-            style={{
-              color: '#2e7d32',
-              marginRight: '4px',
-              fontSize: '0.85em'
-            }}
+            style={{ marginRight: '4px', fontSize: '0.7em' }}
           >
-            &#10003;
-          </span>
+            Preferred
+          </Badge>
         )}
         <CopyToClipboardWithFade text={source}>
           <SourceLabel sourceRef={source} sourcesData={sourcesData} />{' '}
