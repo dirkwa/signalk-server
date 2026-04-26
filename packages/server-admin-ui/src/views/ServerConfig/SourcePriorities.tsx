@@ -28,21 +28,6 @@ import type { SourcePriority } from '../../store/types'
 import PrefsEditor from './PrefsEditor'
 import PriorityGroupCard from './PriorityGroupCard'
 
-function fetchAvailablePaths(cb: (paths: string[]) => void) {
-  fetch(`${window.serverRoutesPrefix}/availablePaths`, {
-    credentials: 'include'
-  })
-    .then((response) => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      return response.json()
-    })
-    .then(cb)
-    .catch((err) => {
-      console.warn('Failed to load available paths:', err)
-      cb([])
-    })
-}
-
 interface DeviceIdentity {
   canName: string
   manufacturerCode?: string
@@ -420,7 +405,6 @@ const SourcePriorities: React.FC = () => {
   }
 
   const [sourcesData, setSourcesData] = useState<SourcesData | null>(null)
-  const [availablePaths, setAvailablePaths] = useState<string[]>([])
   const [deviceIdentityIndex, setDeviceIdentityIndex] =
     useState<DeviceIdentityIndex>({
       canNameBySourceRef: new Map(),
@@ -491,13 +475,6 @@ const SourcePriorities: React.FC = () => {
   }, [pathParam, sourcePriorities, changePath, setSearchParams])
 
   useEffect(() => {
-    fetchAvailablePaths((pathsArray) => {
-      setAvailablePaths(
-        pathsArray.filter(
-          (p) => p !== 'notifications' && !p.startsWith('notifications.')
-        )
-      )
-    })
     fetch('/signalk/v1/api/sources', { credentials: 'include' })
       .then((r) => r.json())
       .then(setSourcesData)
@@ -857,7 +834,7 @@ const SourcePriorities: React.FC = () => {
           )}
 
           <AddUngroupedOverride
-            availablePaths={availablePaths}
+            availablePaths={Object.keys(multiSourcePaths)}
             groupPathSet={groupPathSet}
             configuredPaths={new Set(sourcePriorities.map((p) => p.path))}
             onAdd={(path) => changePath(sourcePriorities.length, path)}
@@ -915,9 +892,15 @@ const AddUngroupedOverride: React.FC<AddUngroupedOverrideProps> = ({
   const [value, setValue] = useState('')
   const options = useMemo(
     () =>
-      availablePaths.filter(
-        (p) => !groupPathSet.has(p) && !configuredPaths.has(p)
-      ),
+      availablePaths
+        .filter(
+          (p) =>
+            p !== 'notifications' &&
+            !p.startsWith('notifications.') &&
+            !groupPathSet.has(p) &&
+            !configuredPaths.has(p)
+        )
+        .sort((a, b) => a.localeCompare(b)),
     [availablePaths, groupPathSet, configuredPaths]
   )
   if (options.length === 0) return null
