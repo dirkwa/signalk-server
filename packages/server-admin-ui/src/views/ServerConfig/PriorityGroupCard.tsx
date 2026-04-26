@@ -13,6 +13,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent
@@ -94,6 +95,9 @@ const SortableSourceRow: React.FC<SortableSourceRowProps> = ({
         {...attributes}
         {...listeners}
         aria-label={`Drag ${label}`}
+        // Without touch-action: none, iOS Safari treats a vertical
+        // drag on the handle as page scroll and DnD never starts.
+        style={{ touchAction: 'none' }}
       >
         <FontAwesomeIcon icon={faGripVertical} />
       </button>
@@ -264,8 +268,17 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
 
+  // PointerSensor handles mouse + most pen/pointer-aware browsers, but
+  // iOS Safari maps touch into pointer events tied to scroll gestures
+  // and the drag never starts. A separate TouchSensor with a hold delay
+  // makes touch DnD reliable and keeps a tap from being misread as a
+  // drag. The drag handle also sets touch-action: none so the browser
+  // doesn't preempt the gesture for scroll.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 5 }
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates
     })
