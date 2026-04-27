@@ -458,16 +458,33 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
   const handleRemoveSource = (sourceRef: string, label: string) => {
     const ok = window.confirm(
       `Remove ${label} from this priority group?\n\n` +
-        'Click Save afterwards to persist. If this source is still ' +
-        "publishing one of the group's paths it will reappear as a new " +
-        'source — restart the server (or stop the source for good) to ' +
-        'drop it permanently.'
+        'Any path-level overrides in this group that mention the source ' +
+        'will be pruned of it as well. Click Save afterwards to persist. ' +
+        "If this source is still publishing one of the group's paths it " +
+        'will reappear as a new source — restart the server (or stop the ' +
+        'source for good) to drop it permanently.'
     )
     if (!ok) return
     setGroupSources(
       group.id,
       group.sources.filter((src) => src !== sourceRef)
     )
+    // Prune the source from any path-level override that references it.
+    // Walk the array back-to-front so a deletePath on an empty override
+    // does not shift indices of overrides we haven't visited yet.
+    for (let i = sourcePriorities.length - 1; i >= 0; i--) {
+      const pp = sourcePriorities[i]
+      if (!groupPathSet.has(pp.path)) continue
+      if (!overridePaths.has(pp.path)) continue
+      if (!pp.priorities.some((p) => p.sourceRef === sourceRef)) continue
+      const remaining = pp.priorities.filter((p) => p.sourceRef !== sourceRef)
+      if (remaining.length === 0) {
+        removePriorityOverride(pp.path)
+        deletePath(i)
+      } else {
+        setPathPriorities(pp.path, remaining)
+      }
+    }
     if (selectedSource === sourceRef) setSelectedSource(null)
   }
 
@@ -789,7 +806,14 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                 <div className="pg-overrides-list">
                   {overrideRows.map(({ pp, index }) => {
                     const kinds = pathKinds.get(pp.path) ?? []
-                    const publishers = multiSourcePaths[pp.path] ?? []
+                    // Restrict missing-sources detection to the group's
+                    // current source list — sources the user removed from
+                    // the group should not reappear via the "Add them"
+                    // helper, even if they still echo into multiSourcePaths.
+                    const groupSrcSet = new Set(group.sources)
+                    const publishers = (multiSourcePaths[pp.path] ?? []).filter(
+                      (ref) => groupSrcSet.has(ref)
+                    )
                     const listed = new Set(
                       pp.priorities.map((p) => p.sourceRef).filter(Boolean)
                     )
@@ -866,6 +890,7 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                           isSaving={isSaving}
                           sourcesData={sourcesData}
                           multiSourcePaths={multiSourcePaths}
+                          restrictToSources={group.sources}
                         />
                       </div>
                     )

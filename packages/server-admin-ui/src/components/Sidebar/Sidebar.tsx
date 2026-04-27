@@ -99,16 +99,34 @@ export default function Sidebar({ location }: SidebarProps) {
   // Path-level overrides where not every current publisher is listed. The
   // scan is scoped to paths the user has flagged as an explicit override —
   // fan-out entries (which only list group sources that actually publish
-  // the path) are intentional and must not trigger a warning.
+  // the path) are intentional and must not trigger a warning. Publishers
+  // are further restricted to the group's saved source list so a source
+  // the user trashed from the group does not haunt the override warning.
   const overridesWithMissingSourcesCount = useMemo(() => {
     if (!multiSourcePaths || !sourcePrioritiesData?.sourcePriorities) return 0
     const overrideSet = new Set(priorityOverridesData?.paths ?? [])
     if (overrideSet.size === 0) return 0
+
+    const groupSourcesByPath = new Map<string, Set<string>>()
+    for (const g of priorityGroupsData.groups) {
+      const set = new Set(g.sources)
+      const derivedGroup = computeGroups(multiSourcePaths).find((d) =>
+        d.sources.some((s) => set.has(s))
+      )
+      const paths = derivedGroup?.paths ?? []
+      for (const p of paths) groupSourcesByPath.set(p, set)
+    }
+
     let count = 0
     for (const pp of sourcePrioritiesData.sourcePriorities) {
       if (!overrideSet.has(pp.path)) continue
-      const publishers = multiSourcePaths[pp.path]
-      if (!publishers || publishers.length === 0) continue
+      const allPublishers = multiSourcePaths[pp.path]
+      if (!allPublishers || allPublishers.length === 0) continue
+      const restrict = groupSourcesByPath.get(pp.path)
+      const publishers = restrict
+        ? allPublishers.filter((ref) => restrict.has(ref))
+        : allPublishers
+      if (publishers.length === 0) continue
       const listed = new Set(
         pp.priorities.map((p) => p.sourceRef).filter(Boolean)
       )
@@ -116,7 +134,12 @@ export default function Sidebar({ location }: SidebarProps) {
       if (hasMissing) count++
     }
     return count
-  }, [multiSourcePaths, sourcePrioritiesData, priorityOverridesData])
+  }, [
+    multiSourcePaths,
+    sourcePrioritiesData,
+    priorityOverridesData,
+    priorityGroupsData
+  ])
 
   const nowMs = Date.now() // eslint-disable-line react-hooks/purity -- expired status is stable
   const expiredDeviceCount = devices.filter(

@@ -28,6 +28,14 @@ interface PrefsEditorProps {
   isSaving: boolean
   sourcesData: SourcesData | null
   multiSourcePaths: Record<string, string[]>
+  /**
+   * When set, restrict the picker (and the auto-add row) to sources that
+   * are also in this list. Used by group-scoped overrides so a source the
+   * user removed from the group cannot reappear via the override picker.
+   * Ungrouped overrides leave it undefined, falling back to all
+   * multiSourcePaths publishers.
+   */
+  restrictToSources?: string[]
 }
 
 export const PrefsEditor: React.FC<PrefsEditorProps> = ({
@@ -36,7 +44,8 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
   pathIndex,
   isSaving,
   sourcesData,
-  multiSourcePaths
+  multiSourcePaths,
+  restrictToSources
 }) => {
   const changePriority = useStore((s) => s.changePriority)
   const deletePriority = useStore((s) => s.deletePriority)
@@ -45,10 +54,12 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
   const sourceStatusLoaded = useSourceStatusLoaded()
   const { getDisplayName } = useSourceAliases()
 
-  const sourceRefs = useMemo(
-    () => (path && multiSourcePaths[path]) || [],
-    [path, multiSourcePaths]
-  )
+  const sourceRefs = useMemo(() => {
+    const publishers = (path && multiSourcePaths[path]) || []
+    if (!restrictToSources) return publishers
+    const allowed = new Set(restrictToSources)
+    return publishers.filter((ref) => allowed.has(ref))
+  }, [path, multiSourcePaths, restrictToSources])
 
   const allOptions: SelectOption[] = useMemo(
     () =>
