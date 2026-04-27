@@ -519,13 +519,13 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
               bg="warning"
               text="dark"
               className="ms-2"
-              title="A new source has started publishing a path in this group since the ranking was saved. Drag it into place and Save."
+              title="A new source has started publishing a path in this group since the ranking was saved. Click Save to append it at the bottom, or drag it into place first."
             >
               {group.newcomerSources.length} new source
               {group.newcomerSources.length === 1 ? '' : 's'}
             </Badge>
           )}
-          {dirty && (
+          {dirty && group.newcomerSources.length === 0 && (
             <Badge bg="warning" text="dark" className="ms-2">
               Unsaved
             </Badge>

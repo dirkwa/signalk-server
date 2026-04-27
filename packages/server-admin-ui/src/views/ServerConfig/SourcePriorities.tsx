@@ -525,16 +525,18 @@ const SourcePriorities: React.FC = () => {
     for (const g of displayed) {
       const saved =
         g.matchedSavedId !== null ? savedById.get(g.matchedSavedId) : undefined
-      // Compare only the ordering of sources that are common to both —
-      // newcomers are flagged separately and must not by themselves mark
-      // the group dirty.
+      // Compare only the ordering of sources that are common to both,
+      // then also flip dirty when newcomers are present so the user can
+      // click Save to accept the appended sources without having to
+      // drag anything first.
       const liveOrder = g.sources.filter(
         (src) => !g.newcomerSources.includes(src)
       )
-      const groupDirty =
+      const orderingDirty =
         !saved ||
         saved.length !== liveOrder.length ||
         saved.some((src, i) => src !== liveOrder[i])
+      const groupDirty = orderingDirty || g.newcomerSources.length > 0
       map.set(g.id, groupDirty)
     }
     return map
