@@ -32,6 +32,7 @@ import {
   useShallow,
   useUnitPrefsLoaded,
   useConfiguredPriorityPaths,
+  useConfiguredSourcesByPath,
   usePreferredSourceByPath
 } from '../../store'
 
@@ -140,6 +141,7 @@ const DataBrowser: React.FC = () => {
   const unitPrefsLoaded = useUnitPrefsLoaded()
   const fetchUnitPreferences = useStore((s) => s.fetchUnitPreferences)
   const configuredPriorityPaths = useConfiguredPriorityPaths()
+  const configuredSourcesByPath = useConfiguredSourcesByPath()
   const preferredSourceByPath = usePreferredSourceByPath()
 
   const didSubscribeRef = useRef(false)
@@ -397,21 +399,25 @@ const DataBrowser: React.FC = () => {
     // sources for the same path.
     if (sourceFilter) {
       if (viewBySource) {
-        // By Source + Priority filtered: remove entries where a different
-        // source is configured as preferred for this path. Paths without
-        // priority config keep all sources (server sends first-wins).
+        // By Source + Priority filtered: keep every source that participates
+        // in the path's configured ranking — not just the top-ranked one.
+        // The engine's live filter already gates which source actually wins
+        // at any moment; the browser shows the full set of contenders so a
+        // freshly-activated group with a momentarily-silent preferred source
+        // does not look empty.
         filtered = filtered.filter((compositeKey) => {
           const nullIdx = compositeKey.indexOf('\0')
           const realKey =
             nullIdx >= 0 ? compositeKey.slice(nullIdx + 1) : compositeKey
           const path = getPathFromKey(realKey)
-          const preferred = preferredSourceByPath.get(path)
-          if (!preferred) return true
+          const ranked = configuredSourcesByPath.get(path)
+          if (!ranked || ranked.size === 0) return true
           const ctxPrefix = nullIdx >= 0 ? compositeKey.slice(0, nullIdx) : ''
           const pathData = currentData[ctxPrefix || context]?.[realKey] as
             | PathData
             | undefined
-          return pathData?.$source === preferred
+          const src = pathData?.$source
+          return !!src && ranked.has(src)
         })
       } else {
         // By Path + Priority filtered: deduplicate paths that have a
@@ -503,6 +509,7 @@ const DataBrowser: React.FC = () => {
     dataVersion,
     viewBySource,
     sourceFilter,
+    configuredSourcesByPath,
     preferredSourceByPath,
     collapsedSources,
     rawSourcesData
