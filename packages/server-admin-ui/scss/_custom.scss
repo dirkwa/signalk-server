@@ -475,6 +475,22 @@ form.rjsf {
   white-space: nowrap;
 }
 
+.pg-source-remove {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  color: var(--bs-danger);
+  border-radius: 0.25rem;
+
+  &:hover {
+    background: rgba(var(--bs-danger-rgb), 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bs-danger);
+  }
+}
+
 // Paths column
 .pg-path-list {
   list-style: none;

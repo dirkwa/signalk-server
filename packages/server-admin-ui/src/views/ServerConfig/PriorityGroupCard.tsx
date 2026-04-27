@@ -46,7 +46,9 @@ interface SortableSourceRowProps {
   isOffline: boolean
   isNewcomer: boolean
   isPlugin: boolean
+  canRemove: boolean
   onSelect: () => void
+  onRemove?: () => void
   deviceDot?: { color: string; canName: string }
   deviceLabel?: string
 }
@@ -62,7 +64,9 @@ const SortableSourceRow: React.FC<SortableSourceRowProps> = ({
   isOffline,
   isNewcomer,
   isPlugin,
+  canRemove,
   onSelect,
+  onRemove,
   deviceDot,
   deviceLabel
 }) => {
@@ -172,6 +176,17 @@ const SortableSourceRow: React.FC<SortableSourceRowProps> = ({
           wins {wins}/{publishes}
         </span>
       </button>
+      {canRemove && onRemove && (
+        <button
+          type="button"
+          className="pg-source-remove"
+          aria-label={`Remove ${label} from this group`}
+          title="Remove this source from the group. It will be re-added automatically if it starts publishing again."
+          onClick={onRemove}
+        >
+          <FontAwesomeIcon icon={faTrash} />
+        </button>
+      )}
     </li>
   )
 }
@@ -440,6 +455,22 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
     setSelectedSource(null)
   }
 
+  const handleRemoveSource = (sourceRef: string, label: string) => {
+    const ok = window.confirm(
+      `Remove ${label} from this priority group?\n\n` +
+        'Click Save afterwards to persist. If this source is still ' +
+        "publishing one of the group's paths it will reappear as a new " +
+        'source — restart the server (or stop the source for good) to ' +
+        'drop it permanently.'
+    )
+    if (!ok) return
+    setGroupSources(
+      group.id,
+      group.sources.filter((src) => src !== sourceRef)
+    )
+    if (selectedSource === sourceRef) setSelectedSource(null)
+  }
+
   const handleToggleOverride = (path: string) => {
     if (overridePaths.has(path)) {
       // Remove override: drop from overrides list AND delete the stored row
@@ -638,24 +669,37 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                               : undefined
                             const deviceLabel =
                               identity?.modelId ?? identity?.manufacturerCode
-                            // Offline = server positively reports it offline.
-                            // Absence of an entry is "unknown" (e.g. plugin
-                            // was disabled before any delta could be stamped,
-                            // or transient sourceMeta drift across an
-                            // upstream reconnect) — don't badge those as
-                            // Offline so a recovered-but-not-yet-republished
-                            // source isn't stuck looking down.
+                            // Offline either means the server explicitly
+                            // reports the source down, or — once the
+                            // status snapshot has loaded — that the
+                            // source has been silent since boot. The
+                            // slice merges incoming snapshots, so an
+                            // entry that was once present can never
+                            // disappear due to transient upstream
+                            // reconnect drift; missing-after-loaded
+                            // therefore means "never seen this session".
                             const statusEntry = sourceStatus[src]
-                            const isOffline =
-                              sourceStatusLoaded && statusEntry
+                            const isOffline = !sourceStatusLoaded
+                              ? false
+                              : statusEntry
                                 ? !statusEntry.online
-                                : false
+                                : true
+                            const isPlugin = isPluginSource(src)
+                            // Only offer removal when the source is
+                            // plainly not contributing right now: the
+                            // Offline badge has fired. Drag-rank stays
+                            // the right tool for online sources.
+                            const canRemove = isOffline
+                            const displayLabel = getDisplayName(
+                              src,
+                              sourcesData
+                            )
                             return (
                               <SortableSourceRow
                                 key={src}
                                 sourceRef={src}
                                 index={i}
-                                label={getDisplayName(src, sourcesData)}
+                                label={displayLabel}
                                 wonPaths={pathsWonBySource.get(src) ?? []}
                                 pathsPublished={
                                   pathsPublishedBySource.get(src) ?? new Set()
@@ -664,8 +708,15 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                                 dimmed={dimmed}
                                 isOffline={isOffline}
                                 isNewcomer={newcomerSet.has(src)}
-                                isPlugin={isPluginSource(src)}
+                                isPlugin={isPlugin}
+                                canRemove={canRemove}
                                 onSelect={() => handleSelectSource(src)}
+                                onRemove={
+                                  canRemove
+                                    ? () =>
+                                        handleRemoveSource(src, displayLabel)
+                                    : undefined
+                                }
                                 deviceDot={deviceDot}
                                 deviceLabel={deviceLabel}
                               />

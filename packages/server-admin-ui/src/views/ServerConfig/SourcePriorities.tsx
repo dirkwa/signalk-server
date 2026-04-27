@@ -16,7 +16,9 @@ import {
   useMultiSourcePaths,
   usePriorityGroups,
   usePriorityDefaults,
-  usePriorityOverrides
+  usePriorityOverrides,
+  useSourceStatus,
+  useSourceStatusLoaded
 } from '../../store'
 import type { SourcesData } from '../../utils/sourceLabels'
 import {
@@ -329,6 +331,8 @@ const SourcePriorities: React.FC = () => {
   const priorityDefaultsData = usePriorityDefaults()
   const priorityOverridesData = usePriorityOverrides()
   const multiSourcePaths = useMultiSourcePaths()
+  const sourceStatus = useSourceStatus()
+  const sourceStatusLoaded = useSourceStatusLoaded()
 
   const setSaving = useStore((s) => s.setSaving)
   const setSaved = useStore((s) => s.setSaved)
@@ -421,9 +425,25 @@ const SourcePriorities: React.FC = () => {
     () => computeGroups(multiSourcePaths),
     [multiSourcePaths]
   )
+
+  // Sources the server reports as offline, plus any source absent from a
+  // loaded snapshot — both mean "not currently publishing", so reconcile
+  // should not promote them as newcomers or display them outside saved.
+  const offlineSources = useMemo(() => {
+    if (!sourceStatusLoaded) return new Set<string>()
+    const offline = new Set<string>()
+    for (const refs of Object.values(multiSourcePaths)) {
+      for (const ref of refs) {
+        const entry = sourceStatus[ref]
+        if (!entry || !entry.online) offline.add(ref)
+      }
+    }
+    return offline
+  }, [multiSourcePaths, sourceStatus, sourceStatusLoaded])
+
   const reconciled = useMemo(
-    () => reconcileGroups(derived, savedGroups),
-    [derived, savedGroups]
+    () => reconcileGroups(derived, savedGroups, offlineSources),
+    [derived, savedGroups, offlineSources]
   )
 
   // Merge the user's in-progress DnD edits (stored in the slice) with the
