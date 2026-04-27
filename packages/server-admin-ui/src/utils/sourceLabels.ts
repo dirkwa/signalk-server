@@ -120,6 +120,20 @@ export function buildSourceLabel(
   return `${label} (${sourceRef})`
 }
 
+/**
+ * True if the source is a Signal K plugin emitting deltas directly into
+ * the server, not a device on a bus. Detected structurally by the
+ * absence of a "${connection}.${address}" form — plugin sourceRefs are
+ * plain strings like "derived-data" or "signalk-to-nmea2000".
+ *
+ * The user usually wants to rank these explicitly: a derived-data
+ * fallback should sit below the real sensor; a plugin acting as
+ * authoritative should sit on top.
+ */
+export function isPluginSource(sourceRef: string): boolean {
+  return sourceRef.length > 0 && sourceRef.indexOf('.') === -1
+}
+
 export interface N2kDeviceEntry extends N2kDeviceInfo {
   sourceRef: string
   connection: string

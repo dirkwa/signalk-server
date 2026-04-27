@@ -28,7 +28,7 @@ import { CSS } from '@dnd-kit/utilities'
 
 import { useStore, useSourceStatus, useSourceStatusLoaded } from '../../store'
 import type { ReconciledGroup } from '../../utils/sourceGroups'
-import type { SourcesData } from '../../utils/sourceLabels'
+import { isPluginSource, type SourcesData } from '../../utils/sourceLabels'
 import { useSourceAliases } from '../../hooks/useSourceAliases'
 import PrefsEditor from './PrefsEditor'
 import type { PathPriority } from '../../store/types'
@@ -44,6 +44,8 @@ interface SortableSourceRowProps {
   highlighted: boolean
   dimmed: boolean
   isOffline: boolean
+  isNewcomer: boolean
+  isPlugin: boolean
   onSelect: () => void
   deviceDot?: { color: string; canName: string }
   deviceLabel?: string
@@ -58,6 +60,8 @@ const SortableSourceRow: React.FC<SortableSourceRowProps> = ({
   highlighted,
   dimmed,
   isOffline,
+  isNewcomer,
+  isPlugin,
   onSelect,
   deviceDot,
   deviceLabel
@@ -141,6 +145,27 @@ const SortableSourceRow: React.FC<SortableSourceRowProps> = ({
             title="No frames seen from this source in the last 90s — its rank is preserved so it auto-recovers when it returns."
           >
             Offline
+          </Badge>
+        )}
+        {isNewcomer && (
+          <Badge
+            bg="warning"
+            text="dark"
+            className="ms-2"
+            style={{ fontSize: '0.7em' }}
+            title="This source started publishing a path in this group after the ranking was saved. Drag it where you want it and Save to include it."
+          >
+            New
+          </Badge>
+        )}
+        {isPlugin && (
+          <Badge
+            bg="info"
+            className="ms-2"
+            style={{ fontSize: '0.7em' }}
+            title="This source is a Signal K plugin emitting deltas directly into the server (no bus address). Rank it explicitly — a derived/fallback plugin usually belongs at the bottom, an authoritative one at the top."
+          >
+            Plugin
           </Badge>
         )}
         <span className="pg-source-stats text-muted small">
@@ -286,6 +311,11 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
 
   // Paths in this group that publish >=2 of the group's sources.
   const groupPathSet = useMemo(() => new Set(group.paths), [group.paths])
+
+  const newcomerSet = useMemo(
+    () => new Set(group.newcomerSources),
+    [group.newcomerSources]
+  )
 
   // Lookup from path → configured priorities, for paths within this group.
   // Prefer entries with a populated rank-1 sourceRef when duplicates exist.
@@ -484,6 +514,17 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
               Unranked
             </Badge>
           )}
+          {isRanked && group.newcomerSources.length > 0 && (
+            <Badge
+              bg="warning"
+              text="dark"
+              className="ms-2"
+              title="A new source has started publishing a path in this group since the ranking was saved. Drag it into place and Save."
+            >
+              {group.newcomerSources.length} new source
+              {group.newcomerSources.length === 1 ? '' : 's'}
+            </Badge>
+          )}
           {dirty && (
             <Badge bg="warning" text="dark" className="ms-2">
               Unsaved
@@ -622,6 +663,8 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                                 highlighted={highlighted}
                                 dimmed={dimmed}
                                 isOffline={isOffline}
+                                isNewcomer={newcomerSet.has(src)}
+                                isPlugin={isPluginSource(src)}
                                 onSelect={() => handleSelectSource(src)}
                                 deviceDot={deviceDot}
                                 deviceLabel={deviceLabel}

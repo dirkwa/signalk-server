@@ -102,6 +102,12 @@ export function computeGroups(
 export interface ReconciledGroup extends DerivedGroup {
   matchedSavedId: string | null
   inactive?: boolean
+  /**
+   * Sources that are publishing this group's paths now but weren't in the
+   * matched saved ranking. Empty for unranked groups (everything is new
+   * by definition — the "Unranked" badge already covers that case).
+   */
+  newcomerSources: string[]
 }
 
 export function reconcileGroups(
@@ -122,7 +128,7 @@ export function reconcileGroups(
     }
 
     if (!bestSaved || bestOverlap === 0) {
-      return { ...group, matchedSavedId: null }
+      return { ...group, matchedSavedId: null, newcomerSources: [] }
     }
 
     const savedOrder = bestSaved.sources.filter((src) => liveSet.has(src))
@@ -132,7 +138,8 @@ export function reconcileGroups(
       ...group,
       sources: [...savedOrder, ...newcomers],
       matchedSavedId: bestSaved.id,
-      inactive: bestSaved.inactive ?? false
+      inactive: bestSaved.inactive ?? false,
+      newcomerSources: newcomers
     }
   })
 }

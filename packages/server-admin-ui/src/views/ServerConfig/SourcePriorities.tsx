@@ -429,10 +429,14 @@ const SourcePriorities: React.FC = () => {
   // Merge the user's in-progress DnD edits (stored in the slice) with the
   // reconciled live groups. Reconciled gives us the canonical group identity
   // and membership; the slice supplies the user's latest ordering override.
+  // Look up saved state via matchedSavedId, not live id — the live id
+  // changes the moment a new source joins the group, while matchedSavedId
+  // tracks the persisted group across membership changes.
   const displayed = useMemo(() => {
     const savedById = new Map(savedGroups.map((g) => [g.id, g]))
     return reconciled.map((g) => {
-      const saved = savedById.get(g.id)
+      const saved =
+        g.matchedSavedId !== null ? savedById.get(g.matchedSavedId) : undefined
       const inactive = saved?.inactive ?? false
       if (!saved) return { ...g, inactive }
       const liveSet = new Set(g.sources)
@@ -511,15 +515,26 @@ const SourcePriorities: React.FC = () => {
 
   // Per-group dirty detection: a group is dirty if its ranking differs from
   // the saved one, or if any of its paths has a pending override edit.
+  // Use matchedSavedId so that a new source joining the live group does
+  // not by itself flip the group to "Unsaved" — the existing ranking is
+  // preserved as a prefix, the newcomer is appended, and the explicit
+  // "N new sources" badge tells the user it needs a Save.
   const dirtyByGroupId = useMemo(() => {
     const map = new Map<string, boolean>()
     const savedById = new Map(savedGroups.map((g) => [g.id, g.sources]))
     for (const g of displayed) {
-      const saved = savedById.get(g.id)
+      const saved =
+        g.matchedSavedId !== null ? savedById.get(g.matchedSavedId) : undefined
+      // Compare only the ordering of sources that are common to both —
+      // newcomers are flagged separately and must not by themselves mark
+      // the group dirty.
+      const liveOrder = g.sources.filter(
+        (src) => !g.newcomerSources.includes(src)
+      )
       const groupDirty =
         !saved ||
-        saved.length !== g.sources.length ||
-        saved.some((src, i) => src !== g.sources[i])
+        saved.length !== liveOrder.length ||
+        saved.some((src, i) => src !== liveOrder[i])
       map.set(g.id, groupDirty)
     }
     return map
@@ -747,6 +762,16 @@ const SourcePriorities: React.FC = () => {
                 override row to block a source on that path entirely. Data from
                 unlisted sources can only take over after a default of 10
                 seconds of silence from every listed source.
+              </p>
+              <p>
+                A blue <b>Plugin</b> badge on a source row means the source is a
+                Signal K plugin (e.g. <code>derived-data</code>) emitting deltas
+                directly into the server, not a device on a bus. Rank these
+                explicitly — a derived or fallback plugin usually belongs at the
+                bottom, an authoritative one at the top. If your plugin also
+                injects N2K frames that come back through your gateway, you may
+                see an extra row from the gateway address — rank that one
+                explicitly too.
               </p>
               <p>
                 Debug by activating <b>signalk-server:sourcepriorities</b> in{' '}

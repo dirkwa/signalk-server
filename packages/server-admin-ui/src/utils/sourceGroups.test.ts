@@ -88,6 +88,21 @@ describe('reconcileGroups', () => {
     const saved = [{ id: 'g1', sources: ['c', 'a'] }]
     const result = reconcileGroups(derived, saved)
     expect(result[0].sources).toEqual(['c', 'a', 'b', 'z'])
+    expect(result[0].newcomerSources).toEqual(['b', 'z'])
+  })
+
+  it('reports no newcomers when saved ranking already covers the live group', () => {
+    const derived = computeGroups({ p: ['a', 'b'] })
+    const saved = [{ id: 'g1', sources: ['b', 'a'] }]
+    const result = reconcileGroups(derived, saved)
+    expect(result[0].newcomerSources).toEqual([])
+  })
+
+  it('reports no newcomers for unranked groups (matchedSavedId null)', () => {
+    const derived = computeGroups({ p: ['a', 'b'] })
+    const result = reconcileGroups(derived, [])
+    expect(result[0].matchedSavedId).toBeNull()
+    expect(result[0].newcomerSources).toEqual([])
   })
 
   it('picks the saved group with maximal overlap', () => {

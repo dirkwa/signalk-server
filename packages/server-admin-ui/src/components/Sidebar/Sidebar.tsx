@@ -62,11 +62,21 @@ export default function Sidebar({ location }: SidebarProps) {
   const sourcePrioritiesData = useSourcePriorities()
   const priorityOverridesData = usePriorityOverrides()
 
+  // Two reasons a group needs the user's attention:
+  //   1. it has no saved ranking yet ("Unranked"), or
+  //   2. it has a saved ranking but a new source has started publishing
+  //      one of the group's paths since the last save — that source sits
+  //      unranked at the bottom and will only take over after the
+  //      configured timeouts elapse on every ranked source.
+  // Both feed the same warning badge so a user notices the new device
+  // without having to open the page.
   const unconfiguredPriorityCount = useMemo(() => {
     if (!multiSourcePaths) return 0
     const derived = computeGroups(multiSourcePaths)
     const reconciled = reconcileGroups(derived, priorityGroupsData.groups)
-    return reconciled.filter((g) => g.matchedSavedId === null).length
+    return reconciled.filter(
+      (g) => g.matchedSavedId === null || g.newcomerSources.length > 0
+    ).length
   }, [multiSourcePaths, priorityGroupsData])
 
   // Path-level overrides where not every current publisher is listed. The
