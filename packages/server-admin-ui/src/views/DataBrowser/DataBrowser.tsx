@@ -32,7 +32,6 @@ import {
   useShallow,
   useUnitPrefsLoaded,
   useConfiguredPriorityPaths,
-  useConfiguredSourcesByPath,
   usePreferredSourceByPath
 } from '../../store'
 
@@ -137,11 +136,11 @@ const DataBrowser: React.FC = () => {
   const updatePath = useStore((s) => s.updatePath)
   const updateMeta = useStore((s) => s.updateMeta)
   const getPathData = useStore((s) => s.getPathData)
+  const removePath = useStore((s) => s.removePath)
 
   const unitPrefsLoaded = useUnitPrefsLoaded()
   const fetchUnitPreferences = useStore((s) => s.fetchUnitPreferences)
   const configuredPriorityPaths = useConfiguredPriorityPaths()
-  const configuredSourcesByPath = useConfiguredSourcesByPath()
   const preferredSourceByPath = usePreferredSourceByPath()
 
   const didSubscribeRef = useRef(false)
@@ -332,6 +331,27 @@ const DataBrowser: React.FC = () => {
     }
   }, [])
 
+  // Drop cached entries whose $source no longer matches the path's
+  // configured preferred. Without this the cached dump can keep showing
+  // a now-deprioritized source after a group activates, even though the
+  // live stream has switched away from it.
+  useEffect(() => {
+    if (preferredSourceByPath.size === 0) return
+    const data = getSignalkData()
+    for (const ctx of Object.keys(data)) {
+      const contextData = data[ctx]
+      for (const key of Object.keys(contextData)) {
+        const path = getPathFromKey(key)
+        const preferred = preferredSourceByPath.get(path)
+        if (!preferred) continue
+        const src = contextData[key]?.$source
+        if (src && src !== preferred) {
+          removePath(ctx, key)
+        }
+      }
+    }
+  }, [preferredSourceByPath, removePath])
+
   const handleContextChange = useCallback(
     (selectedOption: SingleValue<SelectOption>) => {
       const value = selectedOption ? selectedOption.value : 'none'
@@ -392,71 +412,44 @@ const DataBrowser: React.FC = () => {
       }
     }
 
-    // In "Priority filtered" mode, deduplicate by path — keep only the
-    // preferred source's entry (or the first one seen if no priority is
-    // configured for that path). The server's live delta stream already
-    // filters, but the initial cached-data dump may contain multiple
-    // sources for the same path.
+    // In "Priority filtered" mode, paths that have a preferred source
+    // configured collapse to a single row keyed on that one source. Paths
+    // with no priority config (e.g. a deactivated group) fan out — there
+    // is nothing to filter against, so showing every source matches the
+    // user's expectation that disabling priority reveals the full picture.
+    // Both layouts apply the same rule so toggling By Path / By Source
+    // never appears to bypass the filter.
     if (sourceFilter) {
-      if (viewBySource) {
-        // By Source + Priority filtered: keep every source that participates
-        // in the path's configured ranking — not just the top-ranked one.
-        // The engine's live filter already gates which source actually wins
-        // at any moment; the browser shows the full set of contenders so a
-        // freshly-activated group with a momentarily-silent preferred source
-        // does not look empty.
-        filtered = filtered.filter((compositeKey) => {
-          const nullIdx = compositeKey.indexOf('\0')
-          const realKey =
-            nullIdx >= 0 ? compositeKey.slice(nullIdx + 1) : compositeKey
-          const path = getPathFromKey(realKey)
-          const ranked = configuredSourcesByPath.get(path)
-          if (!ranked || ranked.size === 0) return true
-          const ctxPrefix = nullIdx >= 0 ? compositeKey.slice(0, nullIdx) : ''
+      const seenPaths = new Map<string, string>()
+      const deduped: string[] = []
+      for (const compositeKey of filtered) {
+        const nullIdx = compositeKey.indexOf('\0')
+        const realKey =
+          nullIdx >= 0 ? compositeKey.slice(nullIdx + 1) : compositeKey
+        const path = getPathFromKey(realKey)
+        if (!preferredSourceByPath.has(path)) {
+          deduped.push(compositeKey)
+          continue
+        }
+        const ctxPrefix = nullIdx >= 0 ? compositeKey.slice(0, nullIdx) : ''
+        const dedupKey = ctxPrefix ? `${ctxPrefix}\0${path}` : path
+
+        if (!seenPaths.has(dedupKey)) {
+          seenPaths.set(dedupKey, compositeKey)
+          deduped.push(compositeKey)
+        } else {
           const pathData = currentData[ctxPrefix || context]?.[realKey] as
             | PathData
             | undefined
           const src = pathData?.$source
-          return !!src && ranked.has(src)
-        })
-      } else {
-        // By Path + Priority filtered: deduplicate paths that have a
-        // preferred source configured down to that one source's entry.
-        // Paths with no priority config (e.g. group was deactivated)
-        // pass through with all sources visible — there is nothing to
-        // filter against, so fanning them out matches the user's
-        // expectation that disabling priority shows the full picture.
-        const seenPaths = new Map<string, string>()
-        const deduped: string[] = []
-        for (const compositeKey of filtered) {
-          const nullIdx = compositeKey.indexOf('\0')
-          const realKey =
-            nullIdx >= 0 ? compositeKey.slice(nullIdx + 1) : compositeKey
-          const path = getPathFromKey(realKey)
-          if (!preferredSourceByPath.has(path)) {
-            deduped.push(compositeKey)
-            continue
-          }
-          const ctxPrefix = nullIdx >= 0 ? compositeKey.slice(0, nullIdx) : ''
-          const dedupKey = ctxPrefix ? `${ctxPrefix}\0${path}` : path
-
-          if (!seenPaths.has(dedupKey)) {
+          if (src && preferredSourceByPath.get(path) === src) {
+            const oldIdx = deduped.indexOf(seenPaths.get(dedupKey)!)
+            if (oldIdx >= 0) deduped[oldIdx] = compositeKey
             seenPaths.set(dedupKey, compositeKey)
-            deduped.push(compositeKey)
-          } else {
-            const pathData = currentData[ctxPrefix || context]?.[realKey] as
-              | PathData
-              | undefined
-            const src = pathData?.$source
-            if (src && preferredSourceByPath.get(path) === src) {
-              const oldIdx = deduped.indexOf(seenPaths.get(dedupKey)!)
-              if (oldIdx >= 0) deduped[oldIdx] = compositeKey
-              seenPaths.set(dedupKey, compositeKey)
-            }
           }
         }
-        filtered = deduped
       }
+      filtered = deduped
     }
 
     if (!viewBySource) {
@@ -509,7 +502,6 @@ const DataBrowser: React.FC = () => {
     dataVersion,
     viewBySource,
     sourceFilter,
-    configuredSourcesByPath,
     preferredSourceByPath,
     collapsedSources,
     rawSourcesData
