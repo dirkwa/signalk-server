@@ -159,11 +159,18 @@ function visit(node: any, out: Set<string>): void {
 }
 
 /**
- * Build sourceRef → pgn → list of compound `<instance>:<source>` keys
- * for temperature/humidity PGNs whose unique key includes the source
- * enum. The SK tree expresses these as `<prefix>.<sourceLabel>.<instance>`
- * — e.g. `environment.inside.0.temperature` — so the compound key here
- * is `<instance>:<sourceLabel>` rather than the raw enum.
+ * Build sourceRef → pgn → list of compound keys for temperature/humidity
+ * PGNs whose unique key includes the source-type enum.
+ *
+ * The n2k-signalk mapping for PGN 130312/130316 routes each source-type
+ * (Outside, Inside, Main Cabin, Freezer, …) to a different SK path,
+ * usually flat — `environment.outside.temperature`,
+ * `environment.inside.mainCabin.temperature`, etc. The numeric instance
+ * is generally not part of the path either (only Live/Bait Well and
+ * Exhaust Gas use pathWithIndex). Two devices "share" a 130312 stream
+ * only when they publish the same SK leaf path; the path already
+ * encodes the (instance, source-type) tuple uniquely. Use the relative
+ * SK path as the compound key.
  */
 export function buildPgnSourceKeysFromTree(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -178,27 +185,7 @@ export function buildPgnSourceKeysFromTree(
       if (shape !== 'source-inst') continue
       const node = getAt(selfTree, prefix)
       if (!node || typeof node !== 'object') continue
-      for (const [sourceLabel, sourceSubtree] of Object.entries(node)) {
-        if (!sourceSubtree || typeof sourceSubtree !== 'object') continue
-        for (const [instKey, instSubtree] of Object.entries(sourceSubtree)) {
-          const inst = Number(instKey)
-          if (!Number.isFinite(inst)) continue
-          const compoundKey = `${inst}:${sourceLabel}`
-          for (const sourceRef of collectSources(instSubtree)) {
-            let pgnMap = out[sourceRef]
-            if (!pgnMap) {
-              pgnMap = {}
-              out[sourceRef] = pgnMap
-            }
-            let set = pgnMap[pgn]
-            if (!set) {
-              set = new Set()
-              pgnMap[pgn] = set
-            }
-            set.add(compoundKey)
-          }
-        }
-      }
+      collectLeafPaths(node, prefix, pgn, out)
     }
   }
 
@@ -211,4 +198,40 @@ export function buildPgnSourceKeysFromTree(
     final[src] = dst
   }
   return final
+}
+
+// Walk the subtree under a PGN's prefix and, for every leaf that carries
+// data, record its full SK path against each contributing sourceRef.
+function collectLeafPaths(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  node: any,
+  path: string,
+  pgn: string,
+  out: Record<string, Record<string, Set<string>>>
+): void {
+  if (!node || typeof node !== 'object') return
+  const isLeaf =
+    Object.prototype.hasOwnProperty.call(node, 'value') ||
+    Object.prototype.hasOwnProperty.call(node, 'values') ||
+    typeof node.$source === 'string'
+  if (isLeaf) {
+    for (const sourceRef of collectSources(node)) {
+      let pgnMap = out[sourceRef]
+      if (!pgnMap) {
+        pgnMap = {}
+        out[sourceRef] = pgnMap
+      }
+      let set = pgnMap[pgn]
+      if (!set) {
+        set = new Set()
+        pgnMap[pgn] = set
+      }
+      set.add(path)
+    }
+    return
+  }
+  for (const [k, v] of Object.entries(node)) {
+    if (k === 'meta' || k === 'timestamp') continue
+    collectLeafPaths(v, `${path}.${k}`, pgn, out)
+  }
 }

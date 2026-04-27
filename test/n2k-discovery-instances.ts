@@ -108,24 +108,58 @@ describe('buildPgnDataInstancesFromTree', function () {
 })
 
 describe('buildPgnSourceKeysFromTree', function () {
-  it('builds compound instance:sourceLabel keys for temperature PGNs', function () {
+  it('keys temperature publishers by their full SK leaf path', function () {
+    // Reflects the real n2k-signalk mapping for PGN 130312: each
+    // source-type enum routes to a fixed flat path. Two devices on
+    // the same instance but different source-type publish different
+    // paths and must not be flagged as conflicts.
     const tree = {
       environment: {
         inside: {
-          '0': {
-            temperature: { value: 295, $source: 'N2K.cabin-sensor' }
+          temperature: { value: 295, $source: 'N2K.inside-sensor' },
+          mainCabin: {
+            temperature: { value: 296, $source: 'N2K.cabin-sensor' }
           }
         },
         outside: {
-          '0': {
-            temperature: { value: 285, $source: 'N2K.outdoor-sensor' }
+          temperature: { value: 285, $source: 'N2K.outdoor-sensor' }
+        }
+      }
+    }
+    const out = buildPgnSourceKeysFromTree(tree)
+    expect(out['N2K.inside-sensor']['130312']).to.deep.equal([
+      'environment.inside.temperature'
+    ])
+    expect(out['N2K.cabin-sensor']['130312']).to.deep.equal([
+      'environment.inside.mainCabin.temperature'
+    ])
+    expect(out['N2K.outdoor-sensor']['130312']).to.deep.equal([
+      'environment.outside.temperature'
+    ])
+  })
+
+  it('handles multi-source leaves (values block)', function () {
+    const tree = {
+      environment: {
+        outside: {
+          temperature: {
+            value: 285,
+            $source: 'N2K.preferred',
+            values: {
+              'N2K.preferred': { value: 285 },
+              'N2K.backup': { value: 285.5 }
+            }
           }
         }
       }
     }
     const out = buildPgnSourceKeysFromTree(tree)
-    expect(out['N2K.cabin-sensor']['130312']).to.deep.equal(['0:inside'])
-    expect(out['N2K.outdoor-sensor']['130312']).to.deep.equal(['0:outside'])
+    expect(out['N2K.preferred']['130312']).to.deep.equal([
+      'environment.outside.temperature'
+    ])
+    expect(out['N2K.backup']['130312']).to.deep.equal([
+      'environment.outside.temperature'
+    ])
   })
 
   it('returns empty object for tree without temp/humidity paths', function () {

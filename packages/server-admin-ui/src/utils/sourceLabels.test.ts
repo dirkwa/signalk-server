@@ -534,7 +534,11 @@ describe('detectInstanceConflicts', () => {
     expect(conflicts[0].sharedPGNs).toEqual(['130312'])
   })
 
-  it('falls back to instance-only check when pgnSourceKeys unavailable for temp PGN', () => {
+  it('temp PGN with no pgnSourceKeys data for either device clears the conflict', () => {
+    // Temp/humidity PGNs are keyed by full SK path. If neither device
+    // currently publishes the PGN to the SK tree, there is nothing to
+    // collide on — falling back to the bare device instance would
+    // re-introduce false positives for separately-keyed sources.
     const devices: N2kDeviceEntry[] = [
       makeDevice({
         sourceRef: 'C.1',
@@ -551,12 +555,35 @@ describe('detectInstanceConflicts', () => {
         pgns: { '130312': '' }
       })
     ]
-    // No pgnSourceKeys, but pgnDataInstances shows different instances
-    const pgnDataInstances = {
-      'C.1': { '130312': [0] },
-      'C.2': { '130312': [1] }
+    const pgnSourceKeys = {}
+    expect(
+      detectInstanceConflicts(devices, undefined, pgnSourceKeys)
+    ).toHaveLength(0)
+  })
+
+  it('temp PGN with pgnSourceKeys for only one device clears the conflict', () => {
+    const devices: N2kDeviceEntry[] = [
+      makeDevice({
+        sourceRef: 'C.1',
+        connection: 'C',
+        src: '111',
+        deviceInstance: 0,
+        pgns: { '130312': '' }
+      }),
+      makeDevice({
+        sourceRef: 'C.2',
+        connection: 'C',
+        src: '109',
+        deviceInstance: 0,
+        pgns: { '130312': '' }
+      })
+    ]
+    const pgnSourceKeys = {
+      'C.1': { '130312': ['environment.inside.temperature'] }
     }
-    expect(detectInstanceConflicts(devices, pgnDataInstances)).toHaveLength(0)
+    expect(
+      detectInstanceConflicts(devices, undefined, pgnSourceKeys)
+    ).toHaveLength(0)
   })
 
   it('non-temp PGNs still use instance-only check even when pgnSourceKeys present', () => {
@@ -647,6 +674,43 @@ describe('detectInstanceConflicts', () => {
     const conflicts = detectInstanceConflicts(devices)
     expect(conflicts).toHaveLength(1)
     expect(conflicts[0].sharedPGNs).toEqual(['127488'])
+  })
+
+  // Reproduces the false-positive nmbath reported: a YDTC-13 (Main Cabin
+  // Temperature, instance 0) and a YDHS-01 (Inside Temperature,
+  // instance 0) share PGN 130312 but route to disjoint SK leaf paths,
+  // so they are not in conflict. The keys here are the same shape
+  // buildPgnSourceKeysFromTree produces server-side from the live tree.
+  it('YDTC-13 vs YDHS-01 on instance 0 is not a 130312 conflict', () => {
+    const devices: N2kDeviceEntry[] = [
+      makeDevice({
+        sourceRef: 'N2K.c096820059aabb99',
+        connection: 'N2K',
+        src: '109',
+        deviceInstance: 0,
+        pgns: { '130312': '', '130316': '' }
+      }),
+      makeDevice({
+        sourceRef: 'N2K.c096aa0059a164be',
+        connection: 'N2K',
+        src: '111',
+        deviceInstance: 0,
+        pgns: { '130312': '', '130316': '' }
+      })
+    ]
+    const pgnSourceKeys = {
+      'N2K.c096820059aabb99': {
+        '130312': ['environment.inside.mainCabin.temperature'],
+        '130316': ['environment.inside.mainCabin.temperature']
+      },
+      'N2K.c096aa0059a164be': {
+        '130312': ['environment.inside.temperature'],
+        '130316': ['environment.inside.temperature']
+      }
+    }
+    expect(
+      detectInstanceConflicts(devices, undefined, pgnSourceKeys)
+    ).toHaveLength(0)
   })
 })
 

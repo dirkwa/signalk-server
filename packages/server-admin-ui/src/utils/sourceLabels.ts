@@ -324,15 +324,25 @@ export function detectInstanceConflicts(
         const shared = aPGNs.filter((pgn) => {
           if (!bPGNs.has(pgn)) return false
 
-          // For temperature/humidity PGNs, use compound key (instance:source)
-          if (COMPOUND_KEY_PGNS.has(pgn) && pgnSourceKeys) {
+          // Temperature / humidity PGNs are keyed by the full SK leaf
+          // path (which encodes the source-type enum and any instance
+          // index), not by the bare instance number — see
+          // buildPgnSourceKeysFromTree. The SK tree is authoritative
+          // for "currently publishing"; if we have a path-keys map at
+          // all, trust it. Two devices conflict only when their
+          // currently-published paths overlap. A device temporarily
+          // missing from the map (e.g. between PGN emissions) is no
+          // longer a conflict signal — the alternative (falling back
+          // to the bare instance) re-introduces the very false
+          // positive these compound keys exist to suppress.
+          if (COMPOUND_KEY_PGNS.has(pgn)) {
+            if (!pgnSourceKeys) return true
             const aKeys = pgnSourceKeys[a.sourceRef]?.[pgn]
             const bKeys = pgnSourceKeys[b.sourceRef]?.[pgn]
-            if (aKeys && aKeys.length > 0 && bKeys && bKeys.length > 0) {
-              const aSet = new Set(aKeys)
-              return bKeys.some((k) => aSet.has(k))
-            }
-            // Fall through to instance-only check if source keys unavailable
+            if (!aKeys || aKeys.length === 0) return false
+            if (!bKeys || bKeys.length === 0) return false
+            const aSet = new Set(aKeys)
+            return bKeys.some((k) => aSet.has(k))
           }
 
           // Check actual data instance overlap.
