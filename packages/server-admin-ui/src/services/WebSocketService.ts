@@ -291,6 +291,11 @@ export class WebSocketService {
           .getState()
           .setMultiSourcePaths((data ?? {}) as Record<string, string[]>)
         break
+      case 'LIVEPREFERREDSOURCES':
+        useStore
+          .getState()
+          .mergeLivePreferredSources((data ?? {}) as Record<string, string>)
+        break
       case 'SOURCESTATUS':
         useStore
           .getState()

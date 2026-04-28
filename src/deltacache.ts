@@ -86,6 +86,8 @@ export default class DeltaCache {
   private preferredSources: Map<string, SourceRef> = new Map()
   private multiSourceTimer: ReturnType<typeof setTimeout> | null = null
   private lastEmittedMultiSourceCount = 0
+  private livePreferredEmitTimer: ReturnType<typeof setTimeout> | null = null
+  private livePreferredDirtyPaths: Set<string> = new Set()
 
   private subscribedPaths = new Set<string>()
 
@@ -150,7 +152,16 @@ export default class DeltaCache {
 
     if (msg.path.length !== 0) {
       leaf[sourceRef] = msg
-      this.preferredSources.set(msg.context + '\0' + msg.path, sourceRef)
+      const prefKey = msg.context + '\0' + msg.path
+      const prevSource = this.preferredSources.get(prefKey)
+      this.preferredSources.set(prefKey, sourceRef)
+      // Only mark the path dirty for the LIVEPREFERRED stream when the
+      // winning source actually changed — otherwise every accepted
+      // delta would queue a redundant emit.
+      if (prevSource !== sourceRef) {
+        this.livePreferredDirtyPaths.add(prefKey)
+        this.scheduleLivePreferredEmit()
+      }
     } else if (msg.value) {
       _.keys(msg.value).forEach((key) => {
         if (!leaf[key]) {
@@ -168,6 +179,39 @@ export default class DeltaCache {
       this.multiSourceTimer = null
       this.emitMultiSourcePaths()
     }, 2000)
+  }
+
+  private scheduleLivePreferredEmit() {
+    if (this.livePreferredEmitTimer) return
+    // 1s debounce: priority transitions are user-visible but not
+    // latency-critical; coalescing many flips into one event keeps the
+    // admin-ui WS quiet during noisy startup or heavy reconnect.
+    this.livePreferredEmitTimer = setTimeout(() => {
+      this.livePreferredEmitTimer = null
+      const dirty = this.livePreferredDirtyPaths
+      this.livePreferredDirtyPaths = new Set()
+      const data: Record<string, string> = {}
+      for (const key of dirty) {
+        const sourceRef = this.preferredSources.get(key)
+        if (sourceRef) data[key] = sourceRef
+      }
+      if (Object.keys(data).length === 0) return
+      ;(this.app as any).emit('serverevent', {
+        type: 'LIVEPREFERREDSOURCES',
+        data
+      })
+    }, 1000)
+  }
+
+  /**
+   * Snapshot of the current "winning" source per path, keyed as
+   * `${context}\0${path}`. Updated by onValue on every accepted delta;
+   * reflects what the priority engine is actually routing right now.
+   */
+  getLivePreferredSources(): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const [key, ref] of this.preferredSources) out[key] = ref
+    return out
   }
 
   private emitMultiSourcePaths() {

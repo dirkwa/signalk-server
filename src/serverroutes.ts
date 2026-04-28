@@ -1364,6 +1364,20 @@ module.exports = function (
   )
 
   app.securityStrategy.addAdminMiddleware(
+    `${SERVERROUTESPREFIX}/livePreferredSources`
+  )
+  // The currently-winning source per path according to the priority
+  // engine — distinct from sourcePriorities (the saved configuration).
+  // Used by the admin-ui to label and dedup against the actual live
+  // winner instead of the rank-1 source from config.
+  app.get(
+    `${SERVERROUTESPREFIX}/livePreferredSources`,
+    (_req: Request, res: Response) => {
+      res.json(app.deltaCache.getLivePreferredSources())
+    }
+  )
+
+  app.securityStrategy.addAdminMiddleware(
     `${SERVERROUTESPREFIX}/deviceIdentities`
   )
   app.get(

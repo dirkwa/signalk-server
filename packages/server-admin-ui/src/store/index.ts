@@ -214,6 +214,14 @@ export function useMultiSourcePaths() {
   return useStore((s) => s.multiSourcePaths)
 }
 
+export function useLivePreferredSources() {
+  return useStore((s) => s.livePreferredSources)
+}
+
+export function useLivePreferredSourcesLoaded() {
+  return useStore((s) => s.livePreferredSourcesLoaded)
+}
+
 export function useSourceStatus() {
   return useStore((s) => s.sourceStatus)
 }

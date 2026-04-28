@@ -57,6 +57,17 @@ export interface AppSliceState {
   sourceAliases: Record<string, string>
   sourceAliasesLoaded: boolean
   multiSourcePaths: Record<string, string[]>
+  /**
+   * Live "currently winning" source per path according to the server's
+   * priority engine. Keys are `${context}\0${path}`. Distinct from the
+   * saved priority configuration: this reflects what the engine is
+   * actually routing right now, including fallback to a lower-ranked
+   * source when the configured rank-1 has been silent past its
+   * timeout. Loaded once via REST and merged on each LIVEPREFERRED
+   * server event.
+   */
+  livePreferredSources: Record<string, string>
+  livePreferredSourcesLoaded: boolean
   ignoredInstanceConflicts: Record<string, string>
   activeConflictCount: number
   pgnDataInstances: Record<string, Record<string, number[]>>
@@ -94,6 +105,8 @@ export interface AppSliceActions {
     discoveredAddresses?: number[]
   }) => void
   setMultiSourcePaths: (paths: Record<string, string[]>) => void
+  setLivePreferredSources: (paths: Record<string, string>) => void
+  mergeLivePreferredSources: (paths: Record<string, string>) => void
   setSourceStatus: (
     statuses: {
       sourceRef?: string
@@ -150,6 +163,8 @@ const initialAppState: AppSliceState = {
   sourceAliases: {},
   sourceAliasesLoaded: false,
   multiSourcePaths: {},
+  livePreferredSources: {},
+  livePreferredSourcesLoaded: false,
   ignoredInstanceConflicts: {},
   activeConflictCount: 0,
   pgnDataInstances: {},
@@ -267,6 +282,20 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
 
   setMultiSourcePaths: (multiSourcePaths) => {
     set({ multiSourcePaths })
+  },
+
+  setLivePreferredSources: (livePreferredSources) => {
+    set({ livePreferredSources, livePreferredSourcesLoaded: true })
+  },
+
+  // Server emits only the paths whose winner CHANGED since the last
+  // tick, so we merge over the existing snapshot instead of replacing.
+  // The full snapshot is loaded once via REST at startup.
+  mergeLivePreferredSources: (changes) => {
+    set((state) => ({
+      livePreferredSources: { ...state.livePreferredSources, ...changes },
+      livePreferredSourcesLoaded: true
+    }))
   },
 
   setSourceStatus: (statuses) => {

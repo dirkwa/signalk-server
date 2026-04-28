@@ -32,7 +32,8 @@ import {
   useShallow,
   useUnitPrefsLoaded,
   useConfiguredPriorityPaths,
-  usePreferredSourceByPath
+  usePreferredSourceByPath,
+  useLivePreferredSources
 } from '../../store'
 
 const getSignalkData = () => useStore.getState().signalkData
@@ -142,6 +143,7 @@ const DataBrowser: React.FC = () => {
   const fetchUnitPreferences = useStore((s) => s.fetchUnitPreferences)
   const configuredPriorityPaths = useConfiguredPriorityPaths()
   const preferredSourceByPath = usePreferredSourceByPath()
+  const livePreferredSourcesRaw = useLivePreferredSources()
 
   const didSubscribeRef = useRef(false)
   const webSocketRef = useRef<WebSocket | null>(null)
@@ -375,6 +377,51 @@ const DataBrowser: React.FC = () => {
 
   const showContext = context === 'all'
 
+  // Live "currently winning" source per path according to the server's
+  // priority engine. Distinct from preferredSourceByPath (the saved
+  // configuration's rank-1): the engine falls back to a lower-ranked
+  // source when rank-1 is silent past its timeout, and that change is
+  // pushed to us via the LIVEPREFERREDSOURCES server event. The DataBrowser
+  // uses this for the "Preferred" badge and for "Priority filtered"
+  // dedup so display tracks the actual winner instead of the user's
+  // configured #1.
+  //
+  // Server keys are `${context}\0${path}` (e.g.
+  // `vessels.urn:mrn:signalk:uuid:...\0environment.wind.speedApparent`)
+  // while the DataBrowser keys self-data as `'self'`. Build a per-context
+  // map keyed by path so consumers can look up "self" or full vessel
+  // contexts uniformly.
+  const liveWinnerByPath: Map<string, Map<string, string>> = useMemo(() => {
+    const out = new Map<string, Map<string, string>>()
+    for (const [composite, src] of Object.entries(livePreferredSourcesRaw)) {
+      const sep = composite.indexOf('\0')
+      if (sep < 0) continue
+      const ctxKey = composite.slice(0, sep)
+      const path = composite.slice(sep + 1)
+      const uiCtx = skSelf && ctxKey === skSelf ? 'self' : ctxKey
+      let perCtx = out.get(uiCtx)
+      if (!perCtx) {
+        perCtx = new Map<string, string>()
+        out.set(uiCtx, perCtx)
+      }
+      perCtx.set(path, src)
+    }
+    return out
+  }, [livePreferredSourcesRaw, skSelf])
+
+  const liveWinnerForCurrentContext: Map<string, string> = useMemo(() => {
+    if (context === 'all') {
+      // Flatten across contexts — when displaying everything we still
+      // only care about path → source for badge/dedup purposes.
+      const flat = new Map<string, string>()
+      for (const perCtx of liveWinnerByPath.values()) {
+        for (const [path, src] of perCtx) flat.set(path, src)
+      }
+      return flat
+    }
+    return liveWinnerByPath.get(context) ?? new Map<string, string>()
+  }, [liveWinnerByPath, context])
+
   const filteredPathKeys: string[] = useMemo(() => {
     const currentData = dataVersion >= 0 ? getSignalkData() : {}
     const contexts = context === 'all' ? Object.keys(currentData) : [context]
@@ -413,12 +460,17 @@ const DataBrowser: React.FC = () => {
     }
 
     // In "Priority filtered" mode, paths that have a preferred source
-    // configured collapse to a single row keyed on that one source. Paths
-    // with no priority config (e.g. a deactivated group) fan out — there
-    // is nothing to filter against, so showing every source matches the
-    // user's expectation that disabling priority reveals the full picture.
-    // Both layouts apply the same rule so toggling By Path / By Source
-    // never appears to bypass the filter.
+    // configured collapse to a single row — the one whose source matches
+    // the live winner reported by the server's priority engine. The
+    // engine handles fallback (rank-2 takes over after rank-1 has been
+    // silent past its timeout); the LIVEPREFERREDSOURCES feed tells us
+    // who is currently winning so display tracks that decision.
+    //
+    // Paths with no priority config (e.g. a deactivated group) fan out
+    // — there is nothing to filter against, so showing every source
+    // matches the user's expectation that disabling priority reveals
+    // the full picture. Both layouts apply the same rule so toggling
+    // By Path / By Source never appears to bypass the filter.
     if (sourceFilter) {
       const seenPaths = new Map<string, string>()
       const deduped: string[] = []
@@ -433,20 +485,24 @@ const DataBrowser: React.FC = () => {
         }
         const ctxPrefix = nullIdx >= 0 ? compositeKey.slice(0, nullIdx) : ''
         const dedupKey = ctxPrefix ? `${ctxPrefix}\0${path}` : path
+        const liveWinner =
+          context === 'all'
+            ? (liveWinnerByPath.get(ctxPrefix)?.get(path) ?? null)
+            : (liveWinnerForCurrentContext.get(path) ?? null)
+        const incomingData = currentData[ctxPrefix || context]?.[realKey] as
+          | PathData
+          | undefined
+        const incomingMatches =
+          !!liveWinner && incomingData?.$source === liveWinner
 
         if (!seenPaths.has(dedupKey)) {
           seenPaths.set(dedupKey, compositeKey)
           deduped.push(compositeKey)
-        } else {
-          const pathData = currentData[ctxPrefix || context]?.[realKey] as
-            | PathData
-            | undefined
-          const src = pathData?.$source
-          if (src && preferredSourceByPath.get(path) === src) {
-            const oldIdx = deduped.indexOf(seenPaths.get(dedupKey)!)
-            if (oldIdx >= 0) deduped[oldIdx] = compositeKey
-            seenPaths.set(dedupKey, compositeKey)
-          }
+        } else if (incomingMatches) {
+          const incumbentKey = seenPaths.get(dedupKey)!
+          const oldIdx = deduped.indexOf(incumbentKey)
+          if (oldIdx >= 0) deduped[oldIdx] = compositeKey
+          seenPaths.set(dedupKey, compositeKey)
         }
       }
       filtered = deduped
@@ -503,6 +559,8 @@ const DataBrowser: React.FC = () => {
     viewBySource,
     sourceFilter,
     preferredSourceByPath,
+    liveWinnerByPath,
+    liveWinnerForCurrentContext,
     collapsedSources,
     rawSourcesData
   ])
@@ -726,7 +784,7 @@ const DataBrowser: React.FC = () => {
                   sourcesData={rawSourcesData}
                   configuredPriorityPaths={configuredPriorityPaths}
                   preferredSourceByPath={
-                    !sourceFilter ? preferredSourceByPath : undefined
+                    !sourceFilter ? liveWinnerForCurrentContext : undefined
                   }
                   collapsedSources={viewBySource ? collapsedSources : undefined}
                   onToggleSourceCollapse={
