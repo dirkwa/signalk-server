@@ -395,9 +395,22 @@ export const createPrioritiesSlice: StateCreator<
 
   setGroupInactive: (groupId, inactive) => {
     set((state) => {
-      const groups = state.priorityGroupsData.groups.map((g) =>
-        g.id === groupId ? { ...g, inactive } : g
+      const existing = state.priorityGroupsData.groups.find(
+        (g) => g.id === groupId
       )
+      // Unranked groups don't have a saved entry yet. Without inserting
+      // one here a Deactivate click would be a silent no-op: map() would
+      // not touch anything, the displayed group would re-derive inactive
+      // from the missing saved entry, and the only on-screen feedback
+      // (Save going dirty) would be misleading.
+      const groups = existing
+        ? state.priorityGroupsData.groups.map((g) =>
+            g.id === groupId ? { ...g, inactive } : g
+          )
+        : [
+            ...state.priorityGroupsData.groups,
+            { id: groupId, sources: [], inactive }
+          ]
       return {
         priorityGroupsData: {
           ...state.priorityGroupsData,

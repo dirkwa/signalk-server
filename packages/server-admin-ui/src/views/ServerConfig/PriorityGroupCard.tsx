@@ -607,11 +607,18 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
       </Card.Header>
       {expanded && (
         <Card.Body className="pg-card-body">
-          {!isRanked && (
+          {!isRanked && !group.inactive && (
             <div className="pg-unranked-hint mb-2">
               {hasLocalEdit
                 ? 'Unsaved ranking — hit Save changes to apply.'
                 : 'No ranking saved yet — drag sources on the left to set the order, then Save.'}
+            </div>
+          )}
+          {group.inactive && (
+            <div className="pg-unranked-hint mb-2">
+              Group inactive — paths in this group accept every source
+              first-come, first-served. Click Activate to enforce the saved
+              ranking again.
             </div>
           )}
           <div className="pg-three-col">

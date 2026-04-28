@@ -457,7 +457,14 @@ const SourcePriorities: React.FC = () => {
     return reconciled.map((g) => {
       const saved =
         g.matchedSavedId !== null ? savedById.get(g.matchedSavedId) : undefined
-      const inactive = saved?.inactive ?? false
+      // For an unranked group the user might still have toggled
+      // Deactivate, which writes a stub saved entry under the live id
+      // (sources: [], inactive: true). reconcileGroups can't match that
+      // to anything via overlap, so fall back to a direct live-id
+      // lookup to surface the pending inactive state.
+      const stub =
+        !saved && g.matchedSavedId === null ? savedById.get(g.id) : undefined
+      const inactive = saved?.inactive ?? stub?.inactive ?? false
       if (!saved) return { ...g, inactive }
       const liveSet = new Set(g.sources)
       const editedOrder = saved.sources.filter((src) => liveSet.has(src))
