@@ -1,6 +1,7 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
 import Badge from 'react-bootstrap/Badge'
+import Spinner from 'react-bootstrap/Spinner'
 import PluginIcon from '../components/PluginIcon'
 
 export interface DependencyReference {
@@ -14,12 +15,17 @@ interface DependenciesSectionProps {
   title: string
   tone: 'required' | 'recommended'
   deps: DependencyReference[]
+  installingByName?: Record<
+    string,
+    { isInstalling: boolean; isWaiting: boolean }
+  >
 }
 
 const DependenciesSection: React.FC<DependenciesSectionProps> = ({
   title,
   tone,
-  deps
+  deps,
+  installingByName
 }) => {
   if (!deps || deps.length === 0) return null
   return (
@@ -38,32 +44,68 @@ const DependenciesSection: React.FC<DependenciesSectionProps> = ({
         )}
       </div>
       <div className="d-flex flex-wrap gap-2">
-        {deps.map((d) => (
-          <NavLink
-            key={d.name}
-            to={`/apps/store/plugin/${encodeURIComponent(d.name)}`}
-            className="text-decoration-none"
-          >
-            <div className="plugin-detail__dep-card d-flex align-items-center gap-2">
-              <PluginIcon
-                name={d.name}
-                displayName={d.displayName}
-                appIcon={d.appIcon}
-                size={28}
-              />
-              <div className="flex-grow-1 min-w-0">
-                <div className="plugin-detail__dep-name text-truncate">
-                  {d.displayName || d.name}
+        {deps.map((d) => {
+          const busy = installingByName?.[d.name]
+          const status: 'installing' | 'waiting' | 'installed' | 'not-installed' =
+            busy?.isInstalling
+              ? 'installing'
+              : busy?.isWaiting
+                ? 'waiting'
+                : d.installed
+                  ? 'installed'
+                  : 'not-installed'
+          return (
+            <NavLink
+              key={d.name}
+              to={`/apps/store/plugin/${encodeURIComponent(d.name)}`}
+              className="text-decoration-none"
+            >
+              <div className="plugin-detail__dep-card d-flex align-items-center gap-2">
+                <PluginIcon
+                  name={d.name}
+                  displayName={d.displayName}
+                  appIcon={d.appIcon}
+                  size={28}
+                />
+                <div className="flex-grow-1 min-w-0">
+                  <div className="plugin-detail__dep-name text-truncate">
+                    {d.displayName || d.name}
+                  </div>
+                  {status === 'installed' && (
+                    <small className="text-success">Installed</small>
+                  )}
+                  {status === 'not-installed' && (
+                    <small className="text-muted">Not installed</small>
+                  )}
+                  {status === 'waiting' && (
+                    <small className="text-muted d-inline-flex align-items-center gap-1">
+                      <Spinner
+                        as="span"
+                        animation="border"
+                        size="sm"
+                        role="status"
+                        aria-hidden="true"
+                      />
+                      Waiting…
+                    </small>
+                  )}
+                  {status === 'installing' && (
+                    <small className="text-primary d-inline-flex align-items-center gap-1">
+                      <Spinner
+                        as="span"
+                        animation="border"
+                        size="sm"
+                        role="status"
+                        aria-hidden="true"
+                      />
+                      Installing…
+                    </small>
+                  )}
                 </div>
-                {d.installed ? (
-                  <small className="text-success">Installed</small>
-                ) : (
-                  <small className="text-muted">Not installed</small>
-                )}
               </div>
-            </div>
-          </NavLink>
-        ))}
+            </NavLink>
+          )
+        })}
       </div>
     </div>
   )

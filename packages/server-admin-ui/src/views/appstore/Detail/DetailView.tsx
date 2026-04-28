@@ -5,6 +5,7 @@ import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
 import Card from 'react-bootstrap/Card'
 import Nav from 'react-bootstrap/Nav'
+import Spinner from 'react-bootstrap/Spinner'
 import Tab from 'react-bootstrap/Tab'
 import { useAppStore } from '../../../store'
 import type { AppStoreState, AppInfo } from '../../../store/types'
@@ -63,6 +64,22 @@ const DetailView: React.FC = () => {
 
   const isInstalled = !!listEntry?.installedVersion
   const updateAvailable = !!appStore.updates.find((u) => u.name === decodedName)
+
+  const installingByName = useMemo(() => {
+    const map: Record<string, { isInstalling: boolean; isWaiting: boolean }> = {}
+    for (const i of appStore.installing) {
+      map[i.name] = {
+        isInstalling: !!i.isInstalling,
+        isWaiting: !!i.isWaiting
+      }
+    }
+    return map
+  }, [appStore.installing])
+  const isBusy = (name: string) => {
+    const s = installingByName[name]
+    return !!s && (s.isInstalling || s.isWaiting)
+  }
+  const thisIsBusy = isBusy(decodedName)
 
   useEffect(() => {
     let cancelled = false
@@ -248,11 +265,13 @@ const DetailView: React.FC = () => {
                 title="Requires"
                 tone="required"
                 deps={detail.requires}
+                installingByName={installingByName}
               />
               <DependenciesSection
                 title="Works well with"
                 tone="recommended"
                 deps={detail.recommends}
+                installingByName={installingByName}
               />
 
               <div className="plugin-detail__actions mt-4 d-flex justify-content-end gap-2 flex-wrap">
@@ -267,8 +286,26 @@ const DetailView: React.FC = () => {
                       Configure
                     </NavLink>
                     {updateAvailable && (
-                      <Button variant="success" onClick={handleInstall}>
-                        Update to v{detail.version}
+                      <Button
+                        variant="success"
+                        onClick={handleInstall}
+                        disabled={thisIsBusy}
+                      >
+                        {thisIsBusy ? (
+                          <>
+                            <Spinner
+                              as="span"
+                              animation="border"
+                              size="sm"
+                              role="status"
+                              aria-hidden="true"
+                              className="me-2"
+                            />
+                            Updating…
+                          </>
+                        ) : (
+                          <>Update to v{detail.version}</>
+                        )}
                       </Button>
                     )}
                     <Button
@@ -294,13 +331,49 @@ const DetailView: React.FC = () => {
                       <Button
                         variant="warning"
                         onClick={handleInstallWithDeps}
+                        disabled={thisIsBusy}
                         title={`Installs this plugin plus ${missingRequired.length} required dependencies`}
                       >
-                        Install required plugins ({missingRequired.length + 1})
+                        {thisIsBusy ? (
+                          <>
+                            <Spinner
+                              as="span"
+                              animation="border"
+                              size="sm"
+                              role="status"
+                              aria-hidden="true"
+                              className="me-2"
+                            />
+                            Installing…
+                          </>
+                        ) : (
+                          <>
+                            Install required plugins (
+                            {missingRequired.length + 1})
+                          </>
+                        )}
                       </Button>
                     )}
-                    <Button variant="primary" onClick={handleInstall}>
-                      Install
+                    <Button
+                      variant="primary"
+                      onClick={handleInstall}
+                      disabled={thisIsBusy}
+                    >
+                      {thisIsBusy ? (
+                        <>
+                          <Spinner
+                            as="span"
+                            animation="border"
+                            size="sm"
+                            role="status"
+                            aria-hidden="true"
+                            className="me-2"
+                          />
+                          Installing…
+                        </>
+                      ) : (
+                        <>Install</>
+                      )}
                     </Button>
                   </>
                 )}
