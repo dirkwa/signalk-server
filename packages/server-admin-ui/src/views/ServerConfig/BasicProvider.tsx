@@ -1506,6 +1506,13 @@ function NMEA2000({ value, onChange, hasAnalyzer }: TypeComponentProps) {
         <div>
           <HostInput value={value.options} onChange={onChange} />
           <PortInput value={value.options} onChange={onChange} />
+          <div className="text-muted small mt-1 mb-2">
+            UDP is receive-only — N2K device discovery and PGN 126208 instance
+            edits are not available. Frames may also occasionally be attributed
+            to the gateway's own N2K address rather than the originating device,
+            producing ghost sources in Source Discovery and priority groups. Use
+            TCP if either matters for your setup.
+          </div>
         </div>
       )}
       {value.options.type === 'navlink2-tcp-canboatjs' && (

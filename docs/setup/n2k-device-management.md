@@ -14,6 +14,12 @@ The server identifies devices by **CAN Name**, the 64-bit unique identifier from
 
 If you connect over a bidirectional gateway (e.g. Yacht Devices YDWG-02 over TCP, or a CAN adapter), pressing **Discover N2K Devices** asks each device for its Product Information so manufacturer/model fields are populated. UDP-only gateways are receive-only and cannot be used for discovery.
 
+### Known limitation: source attribution over Yacht Devices UDP
+
+When the bus is fed via a Yacht Devices YDEN-02 (or similar) over UDP, observed bus frames can occasionally be attributed to the gateway's own N2K address instead of the originating device. The same setup over TCP, or a directly attached CAN adapter, does not show this — both the canhat / Actisense direct path and the YDWG-02 TCP path produce a clean source list.
+
+The effect: a device like an IPG100 that physically does not transmit, say, PGN 127258 may nonetheless appear as a source for `navigation.magneticVariation` in Source Discovery and inside priority groups. Trash the row from the group when it goes Offline (see Source Priorities), or — preferably — switch the connection to TCP so the wrong attribution does not happen in the first place.
+
 You can give any device a custom alias via the pencil icon next to its label — useful when two identical devices need to be told apart (e.g. "Bow GPS" vs "Stern GPS").
 
 ## Instance Concepts

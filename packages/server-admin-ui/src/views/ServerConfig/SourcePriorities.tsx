@@ -796,6 +796,14 @@ const SourcePriorities: React.FC = () => {
                 explicitly too.
               </p>
               <p>
+                If you feed the bus through a Yacht Devices YDEN-02 over UDP you
+                may see ghost sources — a gateway-class device showing up as the
+                source for PGNs it does not physically transmit. The same setup
+                over TCP, or a directly attached CAN adapter, does not have this
+                problem. Trash the ghost row once it goes Offline, or switch the
+                connection to TCP for accurate attribution.
+              </p>
+              <p>
                 Debug by activating <b>signalk-server:sourcepriorities</b> in{' '}
                 <a
                   href="./#/serverConfiguration/log"
