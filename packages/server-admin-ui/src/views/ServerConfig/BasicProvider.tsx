@@ -1083,10 +1083,15 @@ function TalkerGroups({
   const persistEntries = (updated: TalkerGroup[]) => {
     setEntries(updated)
     const groups = entriesToTalkerGroups(updated)
+    // Always send the object (empty when the user removed every entry).
+    // Sending `undefined` would silently drop the key from JSON-encoded
+    // body, and the server's merge of source options would then keep
+    // the previously-saved groups — deletion would appear to save but
+    // change nothing on disk.
     onChange({
       target: {
         name: 'options.talkerGroups',
-        value: Object.keys(groups).length > 0 ? groups : undefined
+        value: groups
       }
     })
   }
