@@ -148,6 +148,11 @@ const DataBrowser: React.FC = () => {
   const didSubscribeRef = useRef(false)
   const webSocketRef = useRef<WebSocket | null>(null)
   const isMountedRef = useRef(true)
+  // Mirror of filteredPathKeys, kept fresh so subscribeToDataIfNeeded
+  // can re-request the current paths after a reconnect without taking
+  // a dependency on the memo (which would tear down and rebuild the
+  // discovery flow on every keystroke).
+  const filteredPathKeysRef = useRef<string[]>([])
 
   const loadSources = useCallback(async (): Promise<SourcesData> => {
     const response = await fetch(`/signalk/v1/api/sources`, {
@@ -251,6 +256,7 @@ const DataBrowser: React.FC = () => {
       skSelf &&
       (webSocket !== webSocketRef.current || didSubscribeRef.current === false)
     ) {
+      const isReconnect = webSocketRef.current !== null
       granularSubscriptionManager.setWebSocket(
         webSocket as unknown as WebSocket
       )
@@ -258,6 +264,25 @@ const DataBrowser: React.FC = () => {
         sourceFilter ? 'preferred' : 'all'
       )
       granularSubscriptionManager.startDiscovery()
+
+      // After a reconnect (server reboot / network blip) the store
+      // already holds the previously-subscribed paths, so dataVersion
+      // does not increment when their cached values come back, and
+      // the table's dataKeys memo holds the same reference — its
+      // resubscribe effect never re-fires. Without an explicit
+      // re-request here, the new WS only delivers the discovery
+      // snapshot (one update per path) and then goes silent because
+      // the manager's path subscription set was cleared by
+      // startDiscovery. Re-issue the current paths so the engine
+      // resumes pushing ongoing updates.
+      if (isReconnect) {
+        const dataKeys = filteredPathKeysRef.current.filter(
+          (k) => !k.startsWith(HEADER_PREFIX)
+        )
+        if (dataKeys.length > 0) {
+          granularSubscriptionManager.requestPaths(dataKeys)
+        }
+      }
 
       webSocketRef.current = webSocket
       didSubscribeRef.current = true
@@ -564,6 +589,10 @@ const DataBrowser: React.FC = () => {
     collapsedSources,
     rawSourcesData
   ])
+
+  // Keep the ref in sync with the current memoised path list so the
+  // reconnect handler can read it without taking a dep on the memo.
+  filteredPathKeysRef.current = filteredPathKeys
 
   const toggleSourceCollapse = useCallback((sourceRef: string) => {
     setCollapsedSources((prev) => {
