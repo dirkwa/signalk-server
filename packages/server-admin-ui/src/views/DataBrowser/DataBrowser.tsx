@@ -498,6 +498,9 @@ const DataBrowser: React.FC = () => {
     // By Path / By Source never appears to bypass the filter.
     if (sourceFilter) {
       const seenPaths = new Map<string, string>()
+      // Tracks each incumbent's index in `deduped` so the swap below is
+      // O(1) instead of O(n) — important when the path set is large.
+      const indexByKey = new Map<string, number>()
       const deduped: string[] = []
       for (const compositeKey of filtered) {
         const nullIdx = compositeKey.indexOf('\0')
@@ -530,11 +533,16 @@ const DataBrowser: React.FC = () => {
 
         if (!seenPaths.has(dedupKey)) {
           seenPaths.set(dedupKey, compositeKey)
+          indexByKey.set(compositeKey, deduped.length)
           deduped.push(compositeKey)
         } else if (incomingMatches) {
           const incumbentKey = seenPaths.get(dedupKey)!
-          const oldIdx = deduped.indexOf(incumbentKey)
-          if (oldIdx >= 0) deduped[oldIdx] = compositeKey
+          const oldIdx = indexByKey.get(incumbentKey)
+          if (oldIdx !== undefined) {
+            deduped[oldIdx] = compositeKey
+            indexByKey.delete(incumbentKey)
+            indexByKey.set(compositeKey, oldIdx)
+          }
           seenPaths.set(dedupKey, compositeKey)
         }
       }

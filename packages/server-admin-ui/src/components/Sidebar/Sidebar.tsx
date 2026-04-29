@@ -90,10 +90,11 @@ export default function Sidebar({ location }: SidebarProps) {
     const overrideSet = new Set(priorityOverridesData?.paths ?? [])
     if (overrideSet.size === 0) return 0
 
+    const allDerived = computeGroups(multiSourcePaths)
     const groupSourcesByPath = new Map<string, Set<string>>()
     for (const g of priorityGroupsData.groups) {
       const set = new Set(g.sources)
-      const derivedGroup = computeGroups(multiSourcePaths).find((d) =>
+      const derivedGroup = allDerived.find((d) =>
         d.sources.some((s) => set.has(s))
       )
       const paths = derivedGroup?.paths ?? []

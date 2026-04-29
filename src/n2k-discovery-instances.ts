@@ -73,8 +73,7 @@ export function buildPgnDataInstancesFromTree(
   const out: Record<string, Record<string, Set<number>>> = {}
   if (!selfTree || typeof selfTree !== 'object') return {}
 
-  for (const [pgnStr, paths] of Object.entries(PGN_TREE_PATHS)) {
-    const pgn = String(pgnStr)
+  for (const [pgn, paths] of Object.entries(PGN_TREE_PATHS)) {
     for (const { prefix, shape } of paths) {
       const node = getAt(selfTree, prefix)
       if (!node || typeof node !== 'object') continue
@@ -179,8 +178,7 @@ export function buildPgnSourceKeysFromTree(
   const out: Record<string, Record<string, Set<string>>> = {}
   if (!selfTree || typeof selfTree !== 'object') return {}
 
-  for (const [pgnStr, paths] of Object.entries(PGN_TREE_PATHS)) {
-    const pgn = String(pgnStr)
+  for (const [pgn, paths] of Object.entries(PGN_TREE_PATHS)) {
     for (const { prefix, shape } of paths) {
       if (shape !== 'source-inst') continue
       const node = getAt(selfTree, prefix)
