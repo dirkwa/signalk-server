@@ -878,6 +878,7 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                             className="pg-override-delete ms-auto"
                             aria-label={`Delete override for ${pp.path}`}
                             title="Delete override (path will follow group ranking)"
+                            disabled={isSaving}
                             onClick={() => {
                               if (isSaving) return
                               removePriorityOverride(pp.path)

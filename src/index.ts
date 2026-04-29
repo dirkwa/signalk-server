@@ -76,6 +76,9 @@ function cloneDelta(delta: any): any {
   // Per-element shallow copy of values/meta entries — without it, an
   // unfilteredDelta consumer that mutates a single value object would
   // also corrupt the delta still travelling through the main pipeline.
+  // Deep cloning (structuredClone) would isolate nested mutations too
+  // but is too expensive on the per-delta hot path; consumers must not
+  // mutate nested objects within a value.
   return {
     ...delta,
     updates: delta.updates?.map((update: any) => ({

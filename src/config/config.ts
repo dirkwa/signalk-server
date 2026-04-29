@@ -518,15 +518,16 @@ export function writeSettingsFile(app: ConfigApp, settings: any, cb: any) {
   }
   const { settingsWithoutPriorities, priorities } =
     splitPrioritiesFromSettings(settings)
+  // Always overwrite priorities.json — when the user resets all priority
+  // state, the in-memory `priorities` is `{}` and the file must be cleared
+  // too, otherwise stale entries from a previous save reload on next start.
   const tasks: Promise<void>[] = [
     atomicWriteFile(
       getSettingsFilename(app),
       JSON.stringify(settingsWithoutPriorities, null, 2)
-    )
+    ),
+    writePrioritiesFile(app, priorities)
   ]
-  if (Object.keys(priorities).length > 0) {
-    tasks.push(writePrioritiesFile(app, priorities))
-  }
   Promise.all(tasks)
     .then(() => cb())
     .catch(cb)

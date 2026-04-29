@@ -1095,6 +1095,14 @@ const InlineInstanceCell: React.FC<{
   const [isSaving, setIsSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<'ok' | 'fail' | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Verify-poll guard: prevents setState calls after the cell unmounts
+  // mid-poll (e.g. user navigates away during the 8s verification).
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -1162,9 +1170,11 @@ const InlineInstanceCell: React.FC<{
         // Poll sources API to verify the device accepted the change
         const deadline = Date.now() + VERIFY_TIMEOUT_MS
         const poll = () => {
+          if (!isMountedRef.current) return
           fetch('/signalk/v1/api/sources', { credentials: 'include' })
             .then((r) => r.json())
             .then((data) => {
+              if (!isMountedRef.current) return
               useStore.getState().setSourcesData(data)
               const updated = extractN2kDevices(data).find(
                 (d) => d.sourceRef === device.sourceRef
@@ -1182,6 +1192,7 @@ const InlineInstanceCell: React.FC<{
               }
             })
             .catch(() => {
+              if (!isMountedRef.current) return
               setSaveResult('fail')
               setIsSaving(false)
               setIsEditing(false)
@@ -1190,6 +1201,7 @@ const InlineInstanceCell: React.FC<{
         setTimeout(poll, VERIFY_INTERVAL_MS)
       })
       .catch(() => {
+        if (!isMountedRef.current) return
         setSaveResult('fail')
         setIsSaving(false)
         setIsEditing(false)
@@ -1379,6 +1391,14 @@ const InstanceRow: React.FC<{
   const [editValue, setEditValue] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<'ok' | 'fail' | null>(null)
+  // Verify-poll guard: prevents setState calls after the row unmounts
+  // mid-poll (e.g. user navigates away during the 8s verification).
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (saveResult === null) return
@@ -1424,6 +1444,7 @@ const InstanceRow: React.FC<{
         const sourceRef = device.sourceRef
         const deadline = Date.now() + VERIFY_TIMEOUT_MS
         const poll = () => {
+          if (!isMountedRef.current) return
           Promise.all(
             signalkPaths.map((p) =>
               fetch(`/signalk/v1/api/vessels/self/${p}`, {
@@ -1433,6 +1454,7 @@ const InstanceRow: React.FC<{
                 .catch(() => ({}))
             )
           ).then((results) => {
+            if (!isMountedRef.current) return
             const allInstances = new Set<number>()
             for (const data of results) {
               for (const [instKey, instData] of Object.entries(data)) {
@@ -1470,6 +1492,7 @@ const InstanceRow: React.FC<{
         setTimeout(poll, VERIFY_INTERVAL_MS)
       })
       .catch(() => {
+        if (!isMountedRef.current) return
         setSaveResult('fail')
         setIsSaving(false)
       })

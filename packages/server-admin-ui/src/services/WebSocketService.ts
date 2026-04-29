@@ -248,7 +248,7 @@ export class WebSocketService {
         useStore
           .getState()
           .setSourcePrioritiesFromServer(
-            data as Record<
+            (data ?? {}) as Record<
               string,
               { sourceRef: string; timeout: string | number }[]
             >
@@ -258,7 +258,7 @@ export class WebSocketService {
         useStore
           .getState()
           .setPriorityGroupsFromServer(
-            data as unknown as Parameters<
+            (data ?? { groups: [] }) as unknown as Parameters<
               SignalKStore['setPriorityGroupsFromServer']
             >[0]
           )
@@ -309,7 +309,9 @@ export class WebSocketService {
       case 'VESSEL_INFO':
         useStore
           .getState()
-          .setVesselInfo(data as Parameters<SignalKStore['setVesselInfo']>[0])
+          .setVesselInfo(
+            (data ?? {}) as Parameters<SignalKStore['setVesselInfo']>[0]
+          )
         break
       case 'RECEIVE_APPSTORE_LIST':
       case 'APP_STORE_CHANGED':
