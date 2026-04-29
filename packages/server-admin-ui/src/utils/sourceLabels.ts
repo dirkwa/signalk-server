@@ -106,18 +106,34 @@ export function buildSourceLabel(
   sourceRef: string,
   sourcesData: SourcesData | null
 ): string {
-  if (!sourcesData) return sourceRef
+  const { primary, secondary } = buildSourceLabelParts(sourceRef, sourcesData)
+  return secondary ? `${primary} (${secondary})` : primary
+}
+
+/**
+ * Same data as buildSourceLabel but split into two parts so the UI can
+ * render the human name on one line and the raw sourceRef on a second.
+ * On portrait phones the combined string truncates with ellipsis, hiding
+ * the bit that distinguishes two physical instances of the same model.
+ */
+export function buildSourceLabelParts(
+  sourceRef: string,
+  sourcesData: SourcesData | null
+): { primary: string; secondary: string | null } {
+  if (!sourcesData) return { primary: sourceRef, secondary: null }
 
   const n2k = getDeviceInfo(sourceRef, sourcesData)
-  if (!n2k) return sourceRef
+  if (!n2k) return { primary: sourceRef, secondary: null }
 
   const { manufacturerCode, modelId } = n2k
   const mfr = manufacturerCode || ''
   const model = modelId || ''
-  if (!mfr && !model) return sourceRef
+  if (!mfr && !model) return { primary: sourceRef, secondary: null }
 
-  const label = [mfr, model].filter(Boolean).join(' ')
-  return `${label} (${sourceRef})`
+  return {
+    primary: [mfr, model].filter(Boolean).join(' '),
+    secondary: sourceRef
+  }
 }
 
 /**

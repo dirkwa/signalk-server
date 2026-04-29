@@ -1,6 +1,10 @@
 import { useCallback, useEffect } from 'react'
 import { useStore } from '../store'
-import { buildSourceLabel, type SourcesData } from '../utils/sourceLabels'
+import {
+  buildSourceLabel,
+  buildSourceLabelParts,
+  type SourcesData
+} from '../utils/sourceLabels'
 
 const LEGACY_STORAGE_KEY = 'admin.v1.sourceAliases'
 
@@ -135,5 +139,18 @@ export function useSourceAliases() {
     [aliases]
   )
 
-  return { aliases, setAlias, removeAlias, getDisplayName }
+  const getDisplayParts = useCallback(
+    (
+      sourceRef: string,
+      sourcesData?: SourcesData | null
+    ): { primary: string; secondary: string | null } => {
+      if (aliases[sourceRef]) {
+        return { primary: aliases[sourceRef], secondary: sourceRef }
+      }
+      return buildSourceLabelParts(sourceRef, sourcesData ?? null)
+    },
+    [aliases]
+  )
+
+  return { aliases, setAlias, removeAlias, getDisplayName, getDisplayParts }
 }

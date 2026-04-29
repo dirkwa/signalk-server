@@ -39,6 +39,7 @@ interface SortableSourceRowProps {
   sourceRef: string
   index: number
   label: string
+  secondaryLabel?: string | null
   wonPaths: string[]
   pathsPublished: Set<string>
   highlighted: boolean
@@ -57,6 +58,7 @@ const SortableSourceRow: React.FC<SortableSourceRowProps> = ({
   sourceRef,
   index,
   label,
+  secondaryLabel,
   wonPaths,
   pathsPublished,
   highlighted,
@@ -131,7 +133,17 @@ const SortableSourceRow: React.FC<SortableSourceRowProps> = ({
             }}
           />
         )}
-        <span className="pg-source-label">{label}</span>
+        <span className="pg-source-name">
+          <span className="pg-source-label">{label}</span>
+          {secondaryLabel && secondaryLabel !== label && (
+            <span
+              className="pg-source-canname text-muted"
+              title={secondaryLabel}
+            >
+              {secondaryLabel}
+            </span>
+          )}
+        </span>
         {deviceLabel && (
           <span
             className="pg-device-label text-muted small ms-2"
@@ -302,7 +314,7 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
   const deletePath = useStore((s) => s.deletePath)
   const sourceStatus = useSourceStatus()
   const sourceStatusLoaded = useSourceStatusLoaded()
-  const { getDisplayName } = useSourceAliases()
+  const { getDisplayName, getDisplayParts } = useSourceAliases()
 
   const [expanded, setExpanded] = useState(false)
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
@@ -718,12 +730,17 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                               src,
                               sourcesData
                             )
+                            const displayParts = getDisplayParts(
+                              src,
+                              sourcesData
+                            )
                             return (
                               <SortableSourceRow
                                 key={src}
                                 sourceRef={src}
                                 index={i}
-                                label={displayLabel}
+                                label={displayParts.primary}
+                                secondaryLabel={displayParts.secondary}
                                 wonPaths={pathsWonBySource.get(src) ?? []}
                                 pathsPublished={
                                   pathsPublishedBySource.get(src) ?? new Set()

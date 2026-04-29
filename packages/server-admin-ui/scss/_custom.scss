@@ -462,13 +462,32 @@ form.rjsf {
   color: var(--bs-secondary-color, #6c757d);
 }
 
-.pg-source-label {
+.pg-source-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.pg-source-label {
   font-family: var(--bs-font-monospace);
   font-size: 0.875rem;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.pg-source-canname {
+  font-family: var(--bs-font-monospace);
+  font-size: 0.7rem;
+  max-width: 100%;
+  // Long hex CAN Names have no breakable character, so wrap mid-string
+  // rather than ellipsis-truncate. The whole point of the second line is
+  // to make this string fully readable on portrait phone.
+  word-break: break-all;
 }
 
 .pg-source-stats {
