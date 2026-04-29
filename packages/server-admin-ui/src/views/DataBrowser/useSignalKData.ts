@@ -321,10 +321,15 @@ export function useSignalKData() {
           .catch((err) => {
             console.warn('Failed to reload sources after unpause:', err)
           })
-        subscribeToDataIfNeeded()
+        // No explicit subscribeToDataIfNeeded() here: setPause is async,
+        // so the closure inside subscribeToDataIfNeeded would still see
+        // pause=true and bail out. The useEffect at the top of this
+        // hook re-runs when subscribeToDataIfNeeded's dependency on
+        // pause flips, so the subscription is re-established with the
+        // fresh pause=false on the next render.
       }
     },
-    [loadSources, subscribeToDataIfNeeded]
+    [loadSources]
   )
 
   const reloadSources = useCallback(() => {

@@ -59,7 +59,7 @@ Scenarios:
 
 A path-level override tells Signal K to use a **different** ranking for one specific path than the group's ranking would imply. Overrides sit inside the group card — they are the exception, not the rule.
 
-A common example: two GPS units land in one group, Furuno is ranked first overall, but the Garmin has a better magnetic-variation (WMM) model. An override on `environment.wind.directionMagnetic` prefers Garmin on that one path while every other shared path still prefers Furuno.
+A common example: two GPS units land in one group, Furuno is ranked first overall, but the Garmin has a better magnetic-variation (WMM) model. An override on `navigation.magneticVariation` prefers Garmin on that one path while every other shared path still prefers Furuno.
 
 ### Disabling a Source on a Path
 

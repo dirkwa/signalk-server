@@ -213,6 +213,15 @@ export default function PathReference() {
                   <tr
                     key={key}
                     onClick={() => setExpandedPath(isExpanded ? null : key)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setExpandedPath(isExpanded ? null : key)
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
                     style={{ cursor: 'pointer' }}
                   >
                     <td>

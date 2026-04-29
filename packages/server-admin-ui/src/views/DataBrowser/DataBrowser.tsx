@@ -379,12 +379,17 @@ const DataBrowser: React.FC = () => {
         // preferred=='*' would wipe every cached row on every run.
         if (preferred === '*') continue
         const src = contextData[key]?.$source
-        if (src && src !== preferred) {
+        // Canonicalise src so a numeric-form delta (`can0.4`) compares
+        // equal to the canName-form rank-1 stored in priorities.json
+        // (`can0.c050a0…`). Without this the prune wrongly removes
+        // legitimate matches whenever the provider runs with
+        // useCanName=false.
+        if (src && canonicaliseSourceRef(src, rawSourcesData) !== preferred) {
           removePath(ctx, key)
         }
       }
     }
-  }, [preferredSourceByPath, removePath])
+  }, [preferredSourceByPath, removePath, rawSourcesData])
 
   const handleContextChange = useCallback(
     (selectedOption: SingleValue<SelectOption>) => {
