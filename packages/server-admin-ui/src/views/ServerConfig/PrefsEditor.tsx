@@ -84,7 +84,7 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
   )
 
   return (
-    <Table size="sm" className="mb-0">
+    <Table size="sm" className="mb-0 pg-prefs-table">
       <thead>
         <tr>
           <th scope="col" style={{ width: '30px' }}>
@@ -114,8 +114,8 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
           const rowKey = sourceRef || `unassigned-${index}`
           return (
             <tr key={rowKey}>
-              <td>{index + 1}.</td>
-              <td>
+              <td data-th="#">{index + 1}.</td>
+              <td data-th="Source">
                 <div className="d-flex align-items-center gap-2">
                   <div style={{ flex: 1 }}>
                     <Creatable
@@ -156,7 +156,7 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
                   })()}
                 </div>
               </td>
-              <td>
+              <td data-th="Fallback after (ms)">
                 {index === 0 && !isDisabled ? (
                   <span className="text-muted small">preferred</span>
                 ) : (
@@ -176,7 +176,7 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
                   />
                 )}
               </td>
-              <td className="text-center">
+              <td data-th="Enabled" className="text-center">
                 <Form.Check
                   type="checkbox"
                   checked={!isDisabled}
@@ -191,7 +191,7 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
                   }
                 />
               </td>
-              <td>
+              <td data-th="Order">
                 {index > 0 && index < priorities.length && (
                   <button
                     type="button"
@@ -213,7 +213,7 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
                   </button>
                 )}
               </td>
-              <td>
+              <td data-th="" className="pg-prefs-actions">
                 {index < priorities.length && (
                   <button
                     type="button"

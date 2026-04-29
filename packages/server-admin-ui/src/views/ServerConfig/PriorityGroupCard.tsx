@@ -860,22 +860,22 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                         key={pp.path}
                         className={`pg-override-row ${focused ? 'is-focused' : ''}`}
                       >
-                        <div className="pg-override-path d-flex align-items-center justify-content-between">
-                          <div>
-                            <code>{pp.path}</code>
-                            {kinds.length > 0 && (
-                              <span className="pg-path-kinds ms-2">
-                                {kinds.map((kind) => (
-                                  <span key={kind} className="pg-path-kind">
-                                    {kind}
-                                  </span>
-                                ))}
-                              </span>
-                            )}
-                          </div>
+                        <div className="pg-override-path d-flex align-items-center">
+                          <code className="pg-override-path-code">
+                            {pp.path}
+                          </code>
+                          {kinds.length > 0 && (
+                            <span className="pg-path-kinds ms-2">
+                              {kinds.map((kind) => (
+                                <span key={kind} className="pg-path-kind">
+                                  {kind}
+                                </span>
+                              ))}
+                            </span>
+                          )}
                           <button
                             type="button"
-                            className="pg-override-delete"
+                            className="pg-override-delete ms-auto"
                             aria-label={`Delete override for ${pp.path}`}
                             title="Delete override (path will follow group ranking)"
                             onClick={() => {
