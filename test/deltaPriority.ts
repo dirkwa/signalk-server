@@ -493,6 +493,66 @@ describe('canonicalise sourceRef (useCanName=false providers)', () => {
     assert(accepted(r), 'rank-2 should take over after rank-1 timeout')
   })
 
+  it('fan-out path passes every source unchanged regardless of ranking', () => {
+    // Path is configured with the FANOUT sentinel; the engine must
+    // deliver every source's value, including unconfigured ones,
+    // without identity matching.
+    const FAN_PATH = 'navigation.gnss.satellitesInView'
+    const cfg: SourcePrioritiesData = {
+      [PATH]: [
+        { sourceRef: `can0.${CAN}` as SourceRef, timeout: 0 },
+        { sourceRef: 'derived-data' as SourceRef, timeout: 5000 }
+      ],
+      [FAN_PATH]: [{ sourceRef: '*' as SourceRef, timeout: 0 }]
+    }
+    const toPreferred = getToPreferredDelta(cfg)
+    const r1 = toPreferred(
+      makeDelta('can0.4', FAN_PATH, 5),
+      new Date(1000000),
+      'self'
+    )
+    const r2 = toPreferred(
+      makeDelta('can0.7', FAN_PATH, 8),
+      new Date(1000010),
+      'self'
+    )
+    const r3 = toPreferred(
+      makeDelta('whatever', FAN_PATH, 12),
+      new Date(1000020),
+      'self'
+    )
+    assert(accepted(r1), 'first source delivered')
+    assert(accepted(r2), 'second source delivered')
+    assert(accepted(r3), 'unconfigured source delivered too')
+  })
+
+  it('fan-out marker on one path does not affect other paths', () => {
+    const FAN_PATH = 'navigation.gnss.satellitesInView'
+    const cfg: SourcePrioritiesData = {
+      [PATH]: [
+        { sourceRef: `can0.${CAN}` as SourceRef, timeout: 0 },
+        { sourceRef: 'other' as SourceRef, timeout: 5000 }
+      ],
+      [FAN_PATH]: [{ sourceRef: '*' as SourceRef, timeout: 0 }]
+    }
+    const canonical = (ref: string) => (ref === 'can0.9' ? `can0.${CAN}` : ref)
+    const toPreferred = getToPreferredDelta(cfg, undefined, canonical)
+    // PATH should still respect rank-1.
+    const r1 = toPreferred(
+      makeDelta('can0.9', PATH, 5),
+      new Date(1000000),
+      'self'
+    )
+    assert(accepted(r1), 'rank-1 wins on the non-fan-out path')
+    // Unranked source on PATH within the timeout window is rejected.
+    const r2 = toPreferred(
+      makeDelta('whatever', PATH, 6),
+      new Date(1001000),
+      'self'
+    )
+    assert(!accepted(r2), 'unranked competitor blocked on non-fan-out path')
+  })
+
   it('falls through unchanged when canonicalise has no translation', () => {
     // Cold-boot: address claim hasn't arrived yet, canonical map empty.
     // Engine must treat the delta as an unknown source per existing

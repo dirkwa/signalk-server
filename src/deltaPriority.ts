@@ -22,6 +22,26 @@ export interface SourcePrioritiesData {
 const CAN_NAME_SUFFIX = /\.([0-9a-f]{16})$/
 
 /**
+ * Sentinel sourceRef that turns a path-level priority entry into a
+ * "fan out" rule: every source's value is delivered unchanged for that
+ * path, regardless of ranking. Stored in priorities.json as a single
+ * entry of the form `[{ sourceRef: '*', timeout: 0 }]` so older code
+ * paths see a sourceRef that doesn't match any real device and fall
+ * through their existing "no match" branches without crashing.
+ */
+export const FANOUT_SOURCEREF = '*'
+
+export function isFanOutPriorities(
+  entries: SourcePriority[] | undefined
+): boolean {
+  return (
+    Array.isArray(entries) &&
+    entries.length === 1 &&
+    entries[0]?.sourceRef === (FANOUT_SOURCEREF as SourceRef)
+  )
+}
+
+/**
  * Device identity for transport-agnostic matching. Returns the CAN Name
  * if the sourceRef encodes one; otherwise the sourceRef itself is
  * returned so exact-match semantics are preserved for non-N2K sources.
@@ -101,6 +121,16 @@ export const getToPreferredDelta = (
     debug('No priorities data')
     return (delta: any, _now: Date, _selfContext: string) => delta
   }
+  // Paths with a single sentinel-source entry bypass priority filtering
+  // entirely — every source's value is delivered unchanged. Used when
+  // the user wants to compare or aggregate readings across sources
+  // (e.g. satellitesInView from multiple GPSes) while still honouring
+  // priorities on the rest of the group.
+  const fanOutPaths = new Set<string>(
+    Object.keys(sourcePrioritiesData).filter((p) =>
+      isFanOutPriorities(sourcePrioritiesData[p])
+    )
+  )
   const precedences = toPrecedences(sourcePrioritiesData)
 
   const contextPathTimestamps = new Map<Context, PathLatestTimestamps>()
@@ -257,6 +287,13 @@ export const getToPreferredDelta = (
                 // delivered unchanged.
                 const p = pathValue.path as string
                 if (p === 'notifications' || p.startsWith('notifications.')) {
+                  acc.push(pathValue)
+                  return acc
+                }
+                // Fan-out path: user explicitly wants every source's
+                // value delivered (e.g. satellitesInView aggregated
+                // from multiple GPSes). Bypass identity matching.
+                if (fanOutPaths.has(p)) {
                   acc.push(pathValue)
                   return acc
                 }

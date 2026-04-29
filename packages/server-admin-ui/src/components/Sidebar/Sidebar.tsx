@@ -104,6 +104,11 @@ export default function Sidebar({ location }: SidebarProps) {
     let count = 0
     for (const pp of sourcePrioritiesData.sourcePriorities) {
       if (!overrideSet.has(pp.path)) continue
+      // Fan-out overrides intentionally accept every source; "missing"
+      // doesn't apply, so they never contribute to the warning badge.
+      if (pp.priorities.length === 1 && pp.priorities[0].sourceRef === '*') {
+        continue
+      }
       const allPublishers = multiSourcePaths[pp.path]
       if (!allPublishers || allPublishers.length === 0) continue
       const restrict = groupSourcesByPath.get(pp.path)

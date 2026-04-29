@@ -375,6 +375,9 @@ const DataBrowser: React.FC = () => {
         const path = getPathFromKey(key)
         const preferred = preferredSourceByPath.get(path)
         if (!preferred) continue
+        // Fan-out paths intentionally accept every source — pruning by
+        // preferred=='*' would wipe every cached row on every run.
+        if (preferred === '*') continue
         const src = contextData[key]?.$source
         if (src && src !== preferred) {
           removePath(ctx, key)
@@ -516,6 +519,14 @@ const DataBrowser: React.FC = () => {
         // the Data Browser must fan them out 1:1 even when a stale priority
         // entry exists for the path.
         if (path === 'notifications' || path.startsWith('notifications.')) {
+          deduped.push(compositeKey)
+          continue
+        }
+        // Fan-out path: the user explicitly opted out of priority
+        // filtering for this path (e.g. satellitesInView from multiple
+        // GPSes). Stored as the sentinel sourceRef '*'; surface every
+        // source like notifications.
+        if (preferredSourceByPath.get(path) === '*') {
           deduped.push(compositeKey)
           continue
         }

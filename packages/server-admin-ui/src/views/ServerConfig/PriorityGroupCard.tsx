@@ -830,10 +830,15 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                 <div className="pg-overrides-list">
                   {overrideRows.map(({ pp, index }) => {
                     const kinds = pathKinds.get(pp.path) ?? []
+                    const isFanOut =
+                      pp.priorities.length === 1 &&
+                      pp.priorities[0].sourceRef === '*'
                     // Restrict missing-sources detection to the group's
                     // current source list — sources the user removed from
                     // the group should not reappear via the "Add them"
                     // helper, even if they still echo into multiSourcePaths.
+                    // Fan-out paths intentionally accept every source, so
+                    // there are no "missing" sources to surface.
                     const groupSrcSet = new Set(group.sources)
                     const publishers = (multiSourcePaths[pp.path] ?? []).filter(
                       (ref) => groupSrcSet.has(ref)
@@ -841,7 +846,9 @@ const PriorityGroupCard: React.FC<PriorityGroupCardProps> = ({
                     const listed = new Set(
                       pp.priorities.map((p) => p.sourceRef).filter(Boolean)
                     )
-                    const missing = publishers.filter((ref) => !listed.has(ref))
+                    const missing = isFanOut
+                      ? []
+                      : publishers.filter((ref) => !listed.has(ref))
                     const handleAddMissing = () => {
                       const appended = [
                         ...pp.priorities.filter((p) => p.sourceRef),

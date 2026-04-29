@@ -38,6 +38,18 @@ interface PrefsEditorProps {
   restrictToSources?: string[]
 }
 
+/**
+ * Server-side sentinel: a single entry with sourceRef '*' marks the
+ * path as "fan out — every source's value is delivered without
+ * priority filtering". Kept in sync with FANOUT_SOURCEREF in
+ * src/deltaPriority.ts.
+ */
+const FANOUT_SOURCEREF = '*'
+
+function isFanOut(priorities: Priority[]): boolean {
+  return priorities.length === 1 && priorities[0].sourceRef === FANOUT_SOURCEREF
+}
+
 export const PrefsEditor: React.FC<PrefsEditorProps> = ({
   path,
   priorities,
@@ -50,9 +62,11 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
   const changePriority = useStore((s) => s.changePriority)
   const deletePriority = useStore((s) => s.deletePriority)
   const movePriority = useStore((s) => s.movePriority)
+  const setPathPriorities = useStore((s) => s.setPathPriorities)
   const sourceStatus = useSourceStatus()
   const sourceStatusLoaded = useSourceStatusLoaded()
   const { getDisplayName } = useSourceAliases()
+  const fanOut = isFanOut(priorities)
 
   const sourceRefs = useMemo(() => {
     const publishers = (path && multiSourcePaths[path]) || []
@@ -83,160 +97,190 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
     [rows]
   )
 
+  const handleFanOutToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setPathPriorities(path, [{ sourceRef: FANOUT_SOURCEREF, timeout: 0 }])
+    } else {
+      // Toggling off restores an empty list — the auto-add row in
+      // PrefsEditor will surface the publishers so the user can rank
+      // them again from scratch.
+      setPathPriorities(path, [])
+    }
+  }
+
+  const fanOutControl = (
+    <Form.Check
+      type="checkbox"
+      id={`pg-fanout-${pathIndex}`}
+      label="Fan out — deliver every source's value (skip priority filtering)"
+      checked={fanOut}
+      disabled={isSaving}
+      onChange={handleFanOutToggle}
+      className="mb-2"
+    />
+  )
+
+  if (fanOut) {
+    return fanOutControl
+  }
+
   return (
-    <Table size="sm" className="mb-0 pg-prefs-table">
-      <thead>
-        <tr>
-          <th scope="col" style={{ width: '30px' }}>
-            #
-          </th>
-          <th scope="col">Source</th>
-          <th scope="col" style={{ width: '140px' }}>
-            Fallback after (ms)
-          </th>
-          <th scope="col" style={{ width: '70px' }}>
-            Enabled
-          </th>
-          <th scope="col" style={{ width: '80px' }}>
-            Order
-          </th>
-          <th scope="col" aria-label="Actions" />
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(({ sourceRef, timeout }, index) => {
-          const availableOptions = allOptions.filter(
-            (o) => o.value === sourceRef || !selectedRefs.has(o.value)
-          )
-          const isDisabled = Number(timeout) === -1
-          // sourceRef is stable across renders even when rows reorder; the
-          // index suffix lets multiple unassigned rows coexist.
-          const rowKey = sourceRef || `unassigned-${index}`
-          return (
-            <tr key={rowKey}>
-              <td data-th="#">{index + 1}.</td>
-              <td data-th="Source">
-                <div className="d-flex align-items-center gap-2">
-                  <div style={{ flex: 1 }}>
-                    <Creatable
-                      menuPortalTarget={document.body}
-                      options={availableOptions}
-                      value={{
-                        value: sourceRef,
-                        label: getDisplayName(sourceRef, sourcesData)
-                      }}
-                      onChange={(e) => {
+    <>
+      {fanOutControl}
+      <Table size="sm" className="mb-0 pg-prefs-table">
+        <thead>
+          <tr>
+            <th scope="col" style={{ width: '30px' }}>
+              #
+            </th>
+            <th scope="col">Source</th>
+            <th scope="col" style={{ width: '140px' }}>
+              Fallback after (ms)
+            </th>
+            <th scope="col" style={{ width: '70px' }}>
+              Enabled
+            </th>
+            <th scope="col" style={{ width: '80px' }}>
+              Order
+            </th>
+            <th scope="col" aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ sourceRef, timeout }, index) => {
+            const availableOptions = allOptions.filter(
+              (o) => o.value === sourceRef || !selectedRefs.has(o.value)
+            )
+            const isDisabled = Number(timeout) === -1
+            // sourceRef is stable across renders even when rows reorder; the
+            // index suffix lets multiple unassigned rows coexist.
+            const rowKey = sourceRef || `unassigned-${index}`
+            return (
+              <tr key={rowKey}>
+                <td data-th="#">{index + 1}.</td>
+                <td data-th="Source">
+                  <div className="d-flex align-items-center gap-2">
+                    <div style={{ flex: 1 }}>
+                      <Creatable
+                        menuPortalTarget={document.body}
+                        options={availableOptions}
+                        value={{
+                          value: sourceRef,
+                          label: getDisplayName(sourceRef, sourcesData)
+                        }}
+                        onChange={(e) => {
+                          changePriority(
+                            pathIndex,
+                            index,
+                            e?.value || '',
+                            timeout
+                          )
+                        }}
+                      />
+                    </div>
+                    {(() => {
+                      if (!sourceRef || !sourceStatusLoaded) return null
+                      const entry = sourceStatus[sourceRef]
+                      // Only badge as Offline when the server positively
+                      // reports it offline. A missing entry is "unknown"
+                      // (plugin disabled, or transient sourceMeta drift
+                      // across an upstream reconnect) — silence is better
+                      // than a stale Offline that won't clear.
+                      if (!entry || entry.online) return null
+                      return (
+                        <Badge
+                          bg="secondary"
+                          style={{ fontSize: '0.7em', flexShrink: 0 }}
+                          title="No frames seen from this source — its rank is preserved so it auto-recovers when it returns."
+                        >
+                          Offline
+                        </Badge>
+                      )
+                    })()}
+                  </div>
+                </td>
+                <td data-th="Fallback after (ms)">
+                  {index === 0 && !isDisabled ? (
+                    <span className="text-muted small">preferred</span>
+                  ) : (
+                    <Form.Control
+                      type="number"
+                      name="timeout"
+                      disabled={isDisabled}
+                      onChange={(e) =>
                         changePriority(
                           pathIndex,
                           index,
-                          e?.value || '',
-                          timeout
+                          sourceRef,
+                          e.target.value
                         )
-                      }}
+                      }
+                      value={isDisabled ? '' : timeout}
                     />
-                  </div>
-                  {(() => {
-                    if (!sourceRef || !sourceStatusLoaded) return null
-                    const entry = sourceStatus[sourceRef]
-                    // Only badge as Offline when the server positively
-                    // reports it offline. A missing entry is "unknown"
-                    // (plugin disabled, or transient sourceMeta drift
-                    // across an upstream reconnect) — silence is better
-                    // than a stale Offline that won't clear.
-                    if (!entry || entry.online) return null
-                    return (
-                      <Badge
-                        bg="secondary"
-                        style={{ fontSize: '0.7em', flexShrink: 0 }}
-                        title="No frames seen from this source — its rank is preserved so it auto-recovers when it returns."
-                      >
-                        Offline
-                      </Badge>
-                    )
-                  })()}
-                </div>
-              </td>
-              <td data-th="Fallback after (ms)">
-                {index === 0 && !isDisabled ? (
-                  <span className="text-muted small">preferred</span>
-                ) : (
-                  <Form.Control
-                    type="number"
-                    name="timeout"
-                    disabled={isDisabled}
+                  )}
+                </td>
+                <td data-th="Enabled" className="text-center">
+                  <Form.Check
+                    type="checkbox"
+                    checked={!isDisabled}
+                    aria-label={`Enable source ${sourceRef || 'row ' + (index + 1)}`}
                     onChange={(e) =>
                       changePriority(
                         pathIndex,
                         index,
                         sourceRef,
-                        e.target.value
+                        e.target.checked ? (index === 0 ? 0 : 5000) : -1
                       )
                     }
-                    value={isDisabled ? '' : timeout}
                   />
-                )}
-              </td>
-              <td data-th="Enabled" className="text-center">
-                <Form.Check
-                  type="checkbox"
-                  checked={!isDisabled}
-                  aria-label={`Enable source ${sourceRef || 'row ' + (index + 1)}`}
-                  onChange={(e) =>
-                    changePriority(
-                      pathIndex,
-                      index,
-                      sourceRef,
-                      e.target.checked ? (index === 0 ? 0 : 5000) : -1
-                    )
-                  }
-                />
-              </td>
-              <td data-th="Order">
-                {index > 0 && index < priorities.length && (
-                  <button
-                    type="button"
-                    aria-label={`Move row ${index + 1} up`}
-                    disabled={isSaving}
-                    onClick={() => movePriority(pathIndex, index, -1)}
-                  >
-                    <FontAwesomeIcon icon={faArrowUp} />
-                  </button>
-                )}
-                {index < priorities.length - 1 && (
-                  <button
-                    type="button"
-                    aria-label={`Move row ${index + 1} down`}
-                    disabled={isSaving}
-                    onClick={() => movePriority(pathIndex, index, 1)}
-                  >
-                    <FontAwesomeIcon icon={faArrowDown} />
-                  </button>
-                )}
-              </td>
-              <td data-th="" className="pg-prefs-actions">
-                {index < priorities.length && (
-                  <button
-                    type="button"
-                    aria-label={`Delete row ${index + 1}`}
-                    disabled={isSaving}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      cursor: isSaving ? 'not-allowed' : 'pointer',
-                      color: 'inherit'
-                    }}
-                    onClick={() => deletePriority(pathIndex, index)}
-                  >
-                    <FontAwesomeIcon icon={faTrash} />
-                  </button>
-                )}
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </Table>
+                </td>
+                <td data-th="Order">
+                  {index > 0 && index < priorities.length && (
+                    <button
+                      type="button"
+                      aria-label={`Move row ${index + 1} up`}
+                      disabled={isSaving}
+                      onClick={() => movePriority(pathIndex, index, -1)}
+                    >
+                      <FontAwesomeIcon icon={faArrowUp} />
+                    </button>
+                  )}
+                  {index < priorities.length - 1 && (
+                    <button
+                      type="button"
+                      aria-label={`Move row ${index + 1} down`}
+                      disabled={isSaving}
+                      onClick={() => movePriority(pathIndex, index, 1)}
+                    >
+                      <FontAwesomeIcon icon={faArrowDown} />
+                    </button>
+                  )}
+                </td>
+                <td data-th="" className="pg-prefs-actions">
+                  {index < priorities.length && (
+                    <button
+                      type="button"
+                      aria-label={`Delete row ${index + 1}`}
+                      disabled={isSaving}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: isSaving ? 'not-allowed' : 'pointer',
+                        color: 'inherit'
+                      }}
+                      onClick={() => deletePriority(pathIndex, index)}
+                    >
+                      <FontAwesomeIcon icon={faTrash} />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </Table>
+    </>
   )
 }
 
