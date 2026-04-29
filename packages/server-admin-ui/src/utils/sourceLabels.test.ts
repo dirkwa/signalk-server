@@ -4,6 +4,7 @@ import {
   getDeviceInfo,
   buildSourceLabel,
   buildSourceLabelMap,
+  canonicaliseSourceRef,
   detectInstanceConflicts,
   isProprietaryPGN,
   type SourcesData,
@@ -138,6 +139,38 @@ describe('buildSourceLabel', () => {
 
   it('returns raw sourceRef for unknown connections', () => {
     expect(buildSourceLabel('UNKNOWN.1', sourcesData)).toBe('UNKNOWN.1')
+  })
+})
+
+describe('canonicaliseSourceRef', () => {
+  it('translates numeric form to canName form when canName is known', () => {
+    expect(canonicaliseSourceRef('YDEN02.44', sourcesData)).toBe(
+      'YDEN02.00:11:22:33:44:55:66:77'
+    )
+  })
+
+  it('returns the ref unchanged when it is already in canName form', () => {
+    expect(
+      canonicaliseSourceRef('YDEN02.00:11:22:33:44:55:66:77', sourcesData)
+    ).toBe('YDEN02.00:11:22:33:44:55:66:77')
+  })
+
+  it('returns the raw ref when the device has no canName', () => {
+    expect(canonicaliseSourceRef('YDEN02.37', sourcesData)).toBe('YDEN02.37')
+  })
+
+  it('returns the raw ref for unknown connections', () => {
+    expect(canonicaliseSourceRef('UNKNOWN.1', sourcesData)).toBe('UNKNOWN.1')
+  })
+
+  it('returns the raw ref for plugin sources (no dot)', () => {
+    expect(canonicaliseSourceRef('derived-data', sourcesData)).toBe(
+      'derived-data'
+    )
+  })
+
+  it('returns the raw ref when sourcesData is null', () => {
+    expect(canonicaliseSourceRef('YDEN02.44', null)).toBe('YDEN02.44')
   })
 })
 

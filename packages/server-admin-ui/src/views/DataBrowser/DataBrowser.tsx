@@ -19,7 +19,11 @@ import Row from 'react-bootstrap/Row'
 import dayjs from 'dayjs'
 import VirtualizedDataTable from './VirtualizedDataTable'
 import type { PathData, MetaData } from '../../store'
-import { buildSourceLabel, type SourcesData } from '../../utils/sourceLabels'
+import {
+  buildSourceLabel,
+  canonicaliseSourceRef,
+  type SourcesData
+} from '../../utils/sourceLabels'
 import granularSubscriptionManager from './GranularSubscriptionManager'
 import { getPath$SourceKey, getPathFromKey } from './pathUtils'
 import {
@@ -528,8 +532,13 @@ const DataBrowser: React.FC = () => {
         const incomingData = currentData[ctxPrefix || context]?.[realKey] as
           | PathData
           | undefined
+        // Server emits livePreferredSources in canonical (canName) form;
+        // canonicalise the incoming raw $source before comparing so the
+        // dedup decision matches the engine's identity rule.
         const incomingMatches =
-          !!liveWinner && incomingData?.$source === liveWinner
+          !!liveWinner &&
+          canonicaliseSourceRef(incomingData?.$source ?? '', rawSourcesData) ===
+            liveWinner
 
         if (!seenPaths.has(dedupKey)) {
           seenPaths.set(dedupKey, compositeKey)

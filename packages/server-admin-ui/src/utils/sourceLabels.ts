@@ -137,6 +137,35 @@ export function buildSourceLabelParts(
 }
 
 /**
+ * Translate a numeric-form `<label>.<src>` ref (e.g. `can0.4`) to the
+ * canonical `<label>.<canName>` form (e.g. `can0.c050a0…`). Returns the
+ * raw ref unchanged when no canName is known — that lets call-sites
+ * compare against server-emitted canonical refs (livePreferredSources)
+ * without breaking on cold boot or when the source isn't an N2K device.
+ *
+ * Mirrors `buildSrcToCanonicalMap` on the server (src/deltacache.ts).
+ */
+export function canonicaliseSourceRef(
+  sourceRef: string,
+  sourcesData: SourcesData | null
+): string {
+  if (!sourcesData) return sourceRef
+  const parsed = parseSourceRef(sourceRef)
+  if (!parsed) return sourceRef
+  const conn = sourcesData[parsed.connection] as
+    | Record<string, unknown>
+    | undefined
+  if (!conn || typeof conn !== 'object') return sourceRef
+  const dev = conn[parsed.src] as SourceDevice | undefined
+  if (!dev || typeof dev !== 'object') return sourceRef
+  const canName = dev.n2k?.canName
+  if (typeof canName !== 'string' || canName.length === 0) return sourceRef
+  // Already canonical — sourceRef looked up directly under canName key.
+  if (parsed.src === canName) return sourceRef
+  return `${parsed.connection}.${canName}`
+}
+
+/**
  * True if the source is a Signal K plugin emitting deltas directly into
  * the server, not a device on a bus. Detected structurally by the
  * absence of a "${connection}.${address}" form — plugin sourceRefs are

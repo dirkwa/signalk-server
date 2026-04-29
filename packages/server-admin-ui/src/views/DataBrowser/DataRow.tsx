@@ -13,7 +13,10 @@ import {
 import type { PathData, MetaData } from '../../store'
 import { convertValue } from '../../utils/unitConversion'
 import type { DefaultCategories } from '../../store/slices/unitPreferencesSlice'
-import type { SourcesData } from '../../utils/sourceLabels'
+import {
+  canonicaliseSourceRef,
+  type SourcesData
+} from '../../utils/sourceLabels'
 
 interface DataRowProps {
   path$SourceKey: string
@@ -168,9 +171,14 @@ function DataRow({
   const source = data.$source ?? ''
   const timestamp = data.timestamp ?? ''
   const sourceCount = path ? sourceCountsByPath.get(path) || 1 : 1
+  // Server emits livePreferredSources in canonical (canName) form, but
+  // delta `$source` may be numeric when the provider has useCanName off.
+  // Canonicalise the row's source before comparing so the badge follows
+  // the same identity rule the priority engine uses.
   const isPreferred =
     preferredSourceByPath && path
-      ? preferredSourceByPath.get(path) === source
+      ? preferredSourceByPath.get(path) ===
+        canonicaliseSourceRef(source, sourcesData)
       : false
 
   return (
