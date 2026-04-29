@@ -21,6 +21,17 @@ interface DependenciesSectionProps {
   >
 }
 
+type InstallStatus = 'installing' | 'waiting' | 'installed' | 'not-installed'
+
+function getInstallStatus(
+  busy: { isInstalling: boolean; isWaiting: boolean } | undefined,
+  installed: boolean
+): InstallStatus {
+  if (busy?.isInstalling) return 'installing'
+  if (busy?.isWaiting) return 'waiting'
+  return installed ? 'installed' : 'not-installed'
+}
+
 const DependenciesSection: React.FC<DependenciesSectionProps> = ({
   title,
   tone,
@@ -45,15 +56,7 @@ const DependenciesSection: React.FC<DependenciesSectionProps> = ({
       </div>
       <div className="d-flex flex-wrap gap-2">
         {deps.map((d) => {
-          const busy = installingByName?.[d.name]
-          const status: 'installing' | 'waiting' | 'installed' | 'not-installed' =
-            busy?.isInstalling
-              ? 'installing'
-              : busy?.isWaiting
-                ? 'waiting'
-                : d.installed
-                  ? 'installed'
-                  : 'not-installed'
+          const status = getInstallStatus(installingByName?.[d.name], d.installed)
           return (
             <NavLink
               key={d.name}
