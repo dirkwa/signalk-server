@@ -353,10 +353,20 @@ class Server {
     }
     app.activateSourcePriorities()
 
+    // Defer migration so that the moved device's own re-arbitration
+    // address claim has time to land in app.signalk.sources first.
+    // Without this delay, every legitimate address takeover would be
+    // misclassified as a reclaim by the takeover guard, since the
+    // arbitration loser only re-claims a fraction of a second later.
+    // 10s is well within an admin-attention window and well past the
+    // worst-case bus settling time observed on busy fleets.
+    const SOURCE_REF_MIGRATION_DELAY_MS = 10_000
     app.on(
       'sourceRefChanged',
       ({ oldRef, newRef }: { oldRef: string; newRef: string }) => {
-        migrateSourceRef(app, oldRef, newRef)
+        setTimeout(() => {
+          migrateSourceRef(app, oldRef, newRef)
+        }, SOURCE_REF_MIGRATION_DELAY_MS)
       }
     )
 

@@ -25,7 +25,58 @@ interface MigrationApp {
   deltaCache: {
     removeSource(sourceRef: SourceRef): void
   }
+  // The Signal K sources tree (`/signalk/v1/api/sources`). Optional so the
+  // existing migration tests don't need to fabricate one — the takeover
+  // guard only fires when the tree is present and the old canName is
+  // still observed under a different bus address.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  signalk?: { sources?: any }
   emit(event: string, ...args: unknown[]): boolean
+}
+
+/**
+ * canboatjs fires `n2kSourceChanged` whenever the same bus address
+ * starts claiming a different CAN Name. That can mean two very
+ * different things:
+ *
+ *   - "Reclaim": one physical device rebooted, was reassigned, or
+ *     swapped its address — the old CAN Name disappears from the bus.
+ *   - "Takeover": a different physical device joined the bus and
+ *     happened to land on an address the original device was already
+ *     using; the original device then arbitrates and moves to a new
+ *     address — both CAN Names continue to exist on the bus.
+ *
+ * The migration code rewrites every reference to oldRef so it points
+ * at newRef. That is correct for a reclaim but corrupts the saved
+ * priority group on a takeover, since the original device's rank
+ * silently moves to the unrelated newcomer.
+ *
+ * Distinguish the two by looking at app.signalk.sources: if any device
+ * under the same provider still carries the old CAN Name (under any
+ * address), this is a takeover and the migration must be skipped.
+ */
+function oldCanNameStillOnBus(app: MigrationApp, oldRef: string): boolean {
+  const sources = app.signalk?.sources
+  if (!sources || typeof sources !== 'object') return false
+  const dotIdx = oldRef.indexOf('.')
+  if (dotIdx === -1) return false
+  const providerId = oldRef.slice(0, dotIdx)
+  const oldCanName = oldRef.slice(dotIdx + 1)
+  // The CAN Name suffix is a 16-hex string; if oldRef doesn't carry one
+  // (e.g. plugin source) there's no canName to look up and the takeover
+  // guard doesn't apply — fall through to the normal migration path.
+  if (!/^[0-9a-f]{16}$/.test(oldCanName)) return false
+  const conn = sources[providerId]
+  if (!conn || typeof conn !== 'object') return false
+  for (const [key, dev] of Object.entries(conn as Record<string, unknown>)) {
+    if (key === 'type' || key === 'label') continue
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const canName = (dev as any)?.n2k?.canName
+    if (typeof canName === 'string' && canName === oldCanName) {
+      return true
+    }
+  }
+  return false
 }
 
 export function migrateSourceRef(
@@ -33,6 +84,14 @@ export function migrateSourceRef(
   oldRef: string,
   newRef: string
 ): void {
+  if (oldCanNameStillOnBus(app, oldRef)) {
+    debug(
+      'Skipping migration %s -> %s: old CAN Name is still claimed by another device on the bus (address takeover, not a reclaim).',
+      oldRef,
+      newRef
+    )
+    return
+  }
   const settings = app.config.settings
   let settingsChanged = false
   const migrated = new Set<string>()
