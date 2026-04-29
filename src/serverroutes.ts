@@ -1718,6 +1718,13 @@ module.exports = function (
             .send('Unable to save ignoredInstanceConflicts in settings file')
         } else {
           app.config.settings = updatedSettings
+          // Match the broadcast pattern used by /sourceAliases and the
+          // priority-related routes so admin-ui subscribers can pick up
+          // changes live without a refetch.
+          app.emit('serverAdminEvent', {
+            type: 'IGNOREDINSTANCECONFLICTS',
+            data: validation.value
+          })
           res.json({ result: 'ok' })
         }
       })

@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import remove from 'lodash.remove'
+import { DEFAULT_FALLBACK_MS } from '../../utils/sourceGroups'
 import type {
   SourcePrioritiesData,
   SourcePriority,
@@ -160,7 +161,10 @@ export const createPrioritiesSlice: StateCreator<
       }
       const prios = [...sourcePriorities[pathIndex].priorities]
       if (index === prios.length) {
-        prios.push({ sourceRef: '', timeout: index > 0 ? 15000 : '' })
+        prios.push({
+          sourceRef: '',
+          timeout: index > 0 ? DEFAULT_FALLBACK_MS : ''
+        })
       }
       prios[index] = { sourceRef, timeout }
       sourcePriorities[pathIndex] = {

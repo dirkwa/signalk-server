@@ -1,6 +1,13 @@
 import type { PriorityGroup, SourcePriority } from '../store/types'
 
-const DEFAULT_FALLBACK_MS = 15000
+/**
+ * Default Fallback timeout (ms) applied to a freshly-added priority row
+ * when no path-level override exists yet. Re-exported so the store
+ * slice and PrefsEditor stay in sync — without a single canonical
+ * value, "+ add row" via the slice and the auto-added row in
+ * PrefsEditor end up with different timeouts.
+ */
+export const DEFAULT_FALLBACK_MS = 15000
 
 export interface DerivedGroup {
   id: string

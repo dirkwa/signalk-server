@@ -9,6 +9,7 @@ import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash'
 import Creatable from 'react-select/creatable'
 import { useStore, useSourceStatus, useSourceStatusLoaded } from '../../store'
 import { type SourcesData } from '../../utils/sourceLabels'
+import { DEFAULT_FALLBACK_MS } from '../../utils/sourceGroups'
 import { useSourceAliases } from '../../hooks/useSourceAliases'
 
 interface Priority {
@@ -88,7 +89,8 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
     const assigned = new Set(priorities.map((p) => p.sourceRef).filter(Boolean))
     if (priorities.length >= sourceRefs.length) return priorities
     const hasUnassigned = sourceRefs.some((ref) => !assigned.has(ref))
-    if (hasUnassigned) return [...priorities, { sourceRef: '', timeout: 5000 }]
+    if (hasUnassigned)
+      return [...priorities, { sourceRef: '', timeout: DEFAULT_FALLBACK_MS }]
     return priorities
   }, [priorities, sourceRefs])
 
@@ -98,9 +100,9 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
   )
 
   // Remember each row's last enabled timeout so re-enabling restores
-  // the previous value instead of clobbering it with a hardcoded 5000.
-  // Keyed by sourceRef|index because a row may briefly have an empty
-  // sourceRef during edits.
+  // the previous value instead of clobbering it with the default
+  // fallback. Keyed by sourceRef|index because a row may briefly have
+  // an empty sourceRef during edits.
   const lastEnabledTimeout = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     for (let i = 0; i < priorities.length; i++) {
@@ -244,7 +246,8 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
                       if (e.target.checked) {
                         // Rank-1 always has timeout 0; lower-ranked rows
                         // restore their previous enabled timeout if we
-                        // remember it, otherwise fall back to 5000.
+                        // remember it, otherwise fall back to the
+                        // configured default.
                         if (index === 0) {
                           nextTimeout = 0
                         } else {
@@ -254,7 +257,7 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
                           nextTimeout =
                             typeof remembered === 'number' && remembered > 0
                               ? remembered
-                              : 5000
+                              : DEFAULT_FALLBACK_MS
                         }
                       } else {
                         nextTimeout = -1

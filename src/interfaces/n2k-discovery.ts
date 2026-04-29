@@ -220,6 +220,19 @@ module.exports = (app: N2kDiscoveryApp) => {
   // from pendingTimers so the first sweep firing does not silently
   // cancel the later retry sweeps that were scheduled alongside it.
   const sweepTimers = new Set<ReturnType<typeof setTimeout>>()
+  // One-shot follow-up requests posted by /n2kConfigDevice handlers
+  // (re-request 60928 or 126998 after a configuration command) so the
+  // sources tree picks up the new instance/description. Tracked here
+  // so api.stop() can cancel them; kept separate from pendingTimers
+  // so an in-flight sweep doesn't clear them.
+  const requestTimers = new Set<ReturnType<typeof setTimeout>>()
+  const schedulePendingRequest = (fn: () => void, delayMs: number) => {
+    const timer = setTimeout(() => {
+      requestTimers.delete(timer)
+      fn()
+    }, delayMs)
+    requestTimers.add(timer)
+  }
   // Last reported online state per "providerId.src" so we only emit on transitions.
   const onlineStates = new Map<string, boolean>()
   // Last time *any* parsed N2K frame was seen for a given bus address.
@@ -1009,7 +1022,7 @@ module.exports = (app: N2kDiscoveryApp) => {
             }
           })
           // Re-request Address Claim so sources data updates
-          setTimeout(() => sendISORequest(app, dst, 60928), 1000)
+          schedulePendingRequest(() => sendISORequest(app, dst, 60928), 1000)
         } else if (field === 'deviceInstanceLower') {
           // PGN 126208 Command targeting PGN 60928 field 3 only (data instance)
           const lower = Number(value)
@@ -1035,7 +1048,7 @@ module.exports = (app: N2kDiscoveryApp) => {
             }
           })
           // Re-request Address Claim so sources data updates
-          setTimeout(() => sendISORequest(app, dst, 60928), 1000)
+          schedulePendingRequest(() => sendISORequest(app, dst, 60928), 1000)
         } else if (
           field === 'installationDescription1' ||
           field === 'installationDescription2'
@@ -1067,8 +1080,8 @@ module.exports = (app: N2kDiscoveryApp) => {
           // Two requests: first after 1.5s (device needs time to process
           // the command), second at 3s as a safety net in case the first
           // response arrived before the device finished updating both fields.
-          setTimeout(() => sendISORequest(app, dst, 126998), 1500)
-          setTimeout(() => sendISORequest(app, dst, 126998), 3000)
+          schedulePendingRequest(() => sendISORequest(app, dst, 126998), 1500)
+          schedulePendingRequest(() => sendISORequest(app, dst, 126998), 3000)
         } else if (field === 'batteryInstance') {
           // PGN 126208 targeting PGN 127508 (Battery Status):
           // field order 1 = instance (8 bits, 0-252)
@@ -1417,6 +1430,10 @@ module.exports = (app: N2kDiscoveryApp) => {
       clearTimeout(timer)
     }
     sweepTimers.clear()
+    for (const timer of requestTimers) {
+      clearTimeout(timer)
+    }
+    requestTimers.clear()
     if (statusTickInterval) {
       clearInterval(statusTickInterval)
       statusTickInterval = undefined

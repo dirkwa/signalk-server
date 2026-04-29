@@ -70,8 +70,11 @@ export default function PathReference() {
       .catch((err) => setError(err.message))
   }, [])
 
-  // Show /vessels/* paths plus root-level paths (/resources/*, /self, etc.)
-  // The same metadata also applies to /aircraft/*, /aton/*, /sar/* contexts
+  // Show /vessels/* paths plus the root-level entries the registry
+  // currently carries (/self, /version, /resources/*). The same vessel
+  // metadata also applies to /aircraft/*, /aton/*, /sar/* contexts but
+  // those are documented under /vessels/*/ in the registry; the
+  // explicit allow-list keeps unknown path families out.
   const vesselPaths = useMemo(() => {
     if (!allMeta) return []
     return Object.entries(allMeta)
@@ -79,9 +82,8 @@ export default function PathReference() {
         ([key]) =>
           key.startsWith('/vessels/*/') ||
           key.startsWith('/resources/') ||
-          (!key.startsWith('/aircraft/') &&
-            !key.startsWith('/aton/') &&
-            !key.startsWith('/sar/'))
+          key === '/self' ||
+          key === '/version'
       )
       .sort(([a], [b]) => a.localeCompare(b))
   }, [allMeta])
