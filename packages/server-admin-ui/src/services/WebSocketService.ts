@@ -258,7 +258,7 @@ export class WebSocketService {
         useStore
           .getState()
           .setPriorityGroupsFromServer(
-            (data ?? { groups: [] }) as unknown as Parameters<
+            (data ?? []) as unknown as Parameters<
               SignalKStore['setPriorityGroupsFromServer']
             >[0]
           )

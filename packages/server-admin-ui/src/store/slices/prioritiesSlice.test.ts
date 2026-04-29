@@ -407,7 +407,7 @@ describe('priorityGroups slice', () => {
   it('setGroupSources creates a new group when id is unknown', () => {
     useStore.getState().setGroupSources('brand-new', ['x', 'y'])
     expect(useStore.getState().priorityGroupsData.groups).toEqual([
-      { id: 'brand-new', sources: ['x', 'y'] }
+      { id: 'brand-new', sources: ['x', 'y'], inactive: false }
     ])
     expect(useStore.getState().priorityGroupsData.saveState.dirty).toBe(true)
   })

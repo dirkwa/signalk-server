@@ -43,7 +43,7 @@ function fetchDeviceIdentities(cb: (identities: DeviceIdentity[]) => void) {
     credentials: 'include'
   })
     .then((r) => r.json())
-    .then(cb)
+    .then((data) => cb(Array.isArray(data) ? data : []))
     .catch((err) => {
       console.warn('Failed to load device identities:', err)
       cb([])

@@ -382,7 +382,10 @@ export const createPrioritiesSlice: StateCreator<
         ? state.priorityGroupsData.groups.map((g) =>
             g.id === groupId ? { ...g, sources } : g
           )
-        : [...state.priorityGroupsData.groups, { id: groupId, sources }]
+        : [
+            ...state.priorityGroupsData.groups,
+            { id: groupId, sources, inactive: false }
+          ]
       return {
         priorityGroupsData: {
           ...state.priorityGroupsData,
