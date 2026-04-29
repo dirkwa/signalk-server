@@ -112,10 +112,8 @@ export interface ReconciledGroup extends DerivedGroup {
 
 export function reconcileGroups(
   derived: DerivedGroup[],
-  saved: PriorityGroup[],
-  offlineSources?: ReadonlySet<string>
+  saved: PriorityGroup[]
 ): ReconciledGroup[] {
-  const offline = offlineSources ?? new Set<string>()
   return derived.map((group) => {
     const liveSet = new Set(group.sources)
     let bestOverlap = 0
@@ -130,13 +128,8 @@ export function reconcileGroups(
     }
 
     if (!bestSaved || bestOverlap === 0) {
-      // Unranked group: drop offline sources from the visible list — there
-      // is no saved rank to preserve them for, so a stale entry from
-      // multiSourcePaths shouldn't haunt the card.
-      const visible = group.sources.filter((src) => !offline.has(src))
       return {
         ...group,
-        sources: visible,
         matchedSavedId: null,
         newcomerSources: []
       }
@@ -144,13 +137,7 @@ export function reconcileGroups(
 
     const savedOrder = bestSaved.sources.filter((src) => liveSet.has(src))
     const savedSet = new Set(savedOrder)
-    // Newcomers are sources that ARE currently publishing (online) and
-    // aren't in the saved ranking. An offline source publishing only via
-    // its sticky multiSourcePaths entry doesn't count — including it
-    // would make a trashed-but-offline source pop right back as "New".
-    const newcomers = group.sources
-      .filter((src) => !savedSet.has(src) && !offline.has(src))
-      .sort()
+    const newcomers = group.sources.filter((src) => !savedSet.has(src)).sort()
     return {
       ...group,
       sources: [...savedOrder, ...newcomers],

@@ -426,24 +426,9 @@ const SourcePriorities: React.FC = () => {
     [multiSourcePaths]
   )
 
-  // Sources the server reports as offline, plus any source absent from a
-  // loaded snapshot — both mean "not currently publishing", so reconcile
-  // should not promote them as newcomers or display them outside saved.
-  const offlineSources = useMemo(() => {
-    if (!sourceStatusLoaded) return new Set<string>()
-    const offline = new Set<string>()
-    for (const refs of Object.values(multiSourcePaths)) {
-      for (const ref of refs) {
-        const entry = sourceStatus[ref]
-        if (!entry || !entry.online) offline.add(ref)
-      }
-    }
-    return offline
-  }, [multiSourcePaths, sourceStatus, sourceStatusLoaded])
-
   const reconciled = useMemo(
-    () => reconcileGroups(derived, savedGroups, offlineSources),
-    [derived, savedGroups, offlineSources]
+    () => reconcileGroups(derived, savedGroups),
+    [derived, savedGroups]
   )
 
   // Merge the user's in-progress DnD edits (stored in the slice) with the

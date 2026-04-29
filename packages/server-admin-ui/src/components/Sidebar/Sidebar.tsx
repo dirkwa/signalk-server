@@ -11,9 +11,7 @@ import {
   usePriorityGroups,
   useSourcePriorities,
   usePriorityOverrides,
-  useActiveConflictCount,
-  useSourceStatus,
-  useSourceStatusLoaded
+  useActiveConflictCount
 } from '../../store'
 import { computeGroups, reconcileGroups } from '../../utils/sourceGroups'
 import classNames from 'classnames'
@@ -63,8 +61,6 @@ export default function Sidebar({ location }: SidebarProps) {
   const priorityGroupsData = usePriorityGroups()
   const sourcePrioritiesData = useSourcePriorities()
   const priorityOverridesData = usePriorityOverrides()
-  const sourceStatus = useSourceStatus()
-  const sourceStatusLoaded = useSourceStatusLoaded()
 
   // Two reasons a group needs the user's attention:
   //   1. it has no saved ranking yet ("Unranked"), or
@@ -76,25 +72,12 @@ export default function Sidebar({ location }: SidebarProps) {
   // without having to open the page.
   const unconfiguredPriorityCount = useMemo(() => {
     if (!multiSourcePaths) return 0
-    const offline = new Set<string>()
-    if (sourceStatusLoaded) {
-      for (const refs of Object.values(multiSourcePaths)) {
-        for (const ref of refs) {
-          const entry = sourceStatus[ref]
-          if (!entry || !entry.online) offline.add(ref)
-        }
-      }
-    }
     const derived = computeGroups(multiSourcePaths)
-    const reconciled = reconcileGroups(
-      derived,
-      priorityGroupsData.groups,
-      offline
-    )
+    const reconciled = reconcileGroups(derived, priorityGroupsData.groups)
     return reconciled.filter(
       (g) => g.matchedSavedId === null || g.newcomerSources.length > 0
     ).length
-  }, [multiSourcePaths, priorityGroupsData, sourceStatus, sourceStatusLoaded])
+  }, [multiSourcePaths, priorityGroupsData])
 
   // Path-level overrides where not every current publisher is listed. The
   // scan is scoped to paths the user has flagged as an explicit override —
