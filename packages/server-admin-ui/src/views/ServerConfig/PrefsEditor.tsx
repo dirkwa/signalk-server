@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import Badge from 'react-bootstrap/Badge'
 import Form from 'react-bootstrap/Form'
 import Table from 'react-bootstrap/Table'
@@ -96,6 +96,21 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
     () => new Set(rows.map((r) => r.sourceRef).filter(Boolean)),
     [rows]
   )
+
+  // Remember each row's last enabled timeout so re-enabling restores
+  // the previous value instead of clobbering it with a hardcoded 5000.
+  // Keyed by sourceRef|index because a row may briefly have an empty
+  // sourceRef during edits.
+  const lastEnabledTimeout = useRef<Map<string, number>>(new Map())
+  useEffect(() => {
+    for (let i = 0; i < priorities.length; i++) {
+      const p = priorities[i]
+      const t = Number(p.timeout)
+      if (Number.isFinite(t) && t !== -1) {
+        lastEnabledTimeout.current.set(`${p.sourceRef}|${i}`, t)
+      }
+    }
+  }, [priorities])
 
   const handleFanOutToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -224,14 +239,28 @@ export const PrefsEditor: React.FC<PrefsEditorProps> = ({
                     type="checkbox"
                     checked={!isDisabled}
                     aria-label={`Enable source ${sourceRef || 'row ' + (index + 1)}`}
-                    onChange={(e) =>
-                      changePriority(
-                        pathIndex,
-                        index,
-                        sourceRef,
-                        e.target.checked ? (index === 0 ? 0 : 5000) : -1
-                      )
-                    }
+                    onChange={(e) => {
+                      let nextTimeout: number
+                      if (e.target.checked) {
+                        // Rank-1 always has timeout 0; lower-ranked rows
+                        // restore their previous enabled timeout if we
+                        // remember it, otherwise fall back to 5000.
+                        if (index === 0) {
+                          nextTimeout = 0
+                        } else {
+                          const remembered = lastEnabledTimeout.current.get(
+                            `${sourceRef}|${index}`
+                          )
+                          nextTimeout =
+                            typeof remembered === 'number' && remembered > 0
+                              ? remembered
+                              : 5000
+                        }
+                      } else {
+                        nextTimeout = -1
+                      }
+                      changePriority(pathIndex, index, sourceRef, nextTimeout)
+                    }}
                   />
                 </td>
                 <td data-th="Order">

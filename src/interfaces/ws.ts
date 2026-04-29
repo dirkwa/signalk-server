@@ -1112,6 +1112,13 @@ function processSubscribe(
       spark.logUnsubscribe = startServerLog(app, spark)
     }
   } else {
+    // Per-message sourcePolicy override is not honoured: the connection-
+    // lifetime delta listener attached in handleRealtimeConnection is
+    // tied to spark.sourcePolicy, so a message that asks for 'all' on
+    // a spark configured for 'preferred' would end up reading from the
+    // unfiltered bus while only seeing preferred deltas. Use the
+    // spark-level policy on both ends of subscribe/unsubscribe so the
+    // two stay symmetric.
     app.subscriptionmanager.subscribe(
       msg,
       unsubscribes,
@@ -1125,7 +1132,7 @@ function processSubscribe(
         spark.backpressureManager!.send(filtered)
       },
       spark.request.skPrincipal,
-      msg.sourcePolicy || spark.sourcePolicy
+      spark.sourcePolicy
     )
   }
 }

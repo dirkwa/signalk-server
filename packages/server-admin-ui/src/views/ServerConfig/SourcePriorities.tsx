@@ -662,6 +662,13 @@ const SourcePriorities: React.FC = () => {
         credentials: 'include'
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // Mirror the optimistic store sync used in handleSave so the page
+      // reflects the empty state immediately, instead of waiting for a
+      // websocket roundtrip or page reload.
+      useStore.getState().setPriorityGroupsFromServer([])
+      useStore.getState().setPriorityDefaultsFromServer({})
+      useStore.getState().setPriorityOverridesFromServer([])
+      setSourcePriorities({})
     } catch (e) {
       setResetError(
         `Reset failed: ${(e as Error).message}. You can also delete priorities.json on the server and restart.`
@@ -669,7 +676,7 @@ const SourcePriorities: React.FC = () => {
     } finally {
       setResetBusy(false)
     }
-  }, [])
+  }, [setSourcePriorities])
 
   const handleSave = useCallback(async () => {
     setGroupsSaving()
@@ -774,8 +781,9 @@ const SourcePriorities: React.FC = () => {
                 The top row is always &quot;preferred&quot; — it has no Fallback
                 value because nothing ranks higher. Uncheck <b>Enabled</b> on an
                 override row to block a source on that path entirely. Data from
-                unlisted sources can only take over after a default of 10
-                seconds of silence from every listed source.
+                unlisted sources can only take over after the configured
+                Fallback timeout ({Math.round(effectiveFallbackMs / 1000)}{' '}
+                seconds by default) of silence from every listed source.
               </p>
               <p>
                 A blue <b>Plugin</b> badge on a source row means the source is a

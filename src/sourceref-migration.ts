@@ -61,10 +61,13 @@ function oldCanNameStillOnBus(app: MigrationApp, oldRef: string): boolean {
   const dotIdx = oldRef.indexOf('.')
   if (dotIdx === -1) return false
   const providerId = oldRef.slice(0, dotIdx)
-  const oldCanName = oldRef.slice(dotIdx + 1)
-  // The CAN Name suffix is a 16-hex string; if oldRef doesn't carry one
-  // (e.g. plugin source) there's no canName to look up and the takeover
-  // guard doesn't apply — fall through to the normal migration path.
+  // CAN Name suffixes are 16-hex strings. Persisted refs are normalised
+  // to lowercase upstream, but a settings file edited by hand or
+  // imported from another tool may still have uppercase characters —
+  // compare case-insensitively so the takeover guard isn't fooled by
+  // mixed casing. Plugin sources have no canName suffix and fall
+  // through to the normal migration path.
+  const oldCanName = oldRef.slice(dotIdx + 1).toLowerCase()
   if (!/^[0-9a-f]{16}$/.test(oldCanName)) return false
   const conn = sources[providerId]
   if (!conn || typeof conn !== 'object') return false
@@ -72,7 +75,7 @@ function oldCanNameStillOnBus(app: MigrationApp, oldRef: string): boolean {
     if (key === 'type' || key === 'label') continue
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const canName = (dev as any)?.n2k?.canName
-    if (typeof canName === 'string' && canName === oldCanName) {
+    if (typeof canName === 'string' && canName.toLowerCase() === oldCanName) {
       return true
     }
   }

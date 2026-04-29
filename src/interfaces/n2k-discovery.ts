@@ -211,7 +211,15 @@ module.exports = (app: N2kDiscoveryApp) => {
   let n2kOutAvailable = false
   const knownAddresses = new Set<number>()
   const discoveredAddresses = new Set<number>()
+  // Timers for in-flight per-address ISO Requests inside a sweep.
+  // requestProductInfo() clears this set at the start of every sweep so
+  // a fresh sweep doesn't pile up on top of a previous incomplete one.
   const pendingTimers = new Set<ReturnType<typeof setTimeout>>()
+  // Timers that schedule the auto-discovery sweeps themselves
+  // (5 s / 3 min / 10 min after nmea2000OutAvailable). Kept separate
+  // from pendingTimers so the first sweep firing does not silently
+  // cancel the later retry sweeps that were scheduled alongside it.
+  const sweepTimers = new Set<ReturnType<typeof setTimeout>>()
   // Last reported online state per "providerId.src" so we only emit on transitions.
   const onlineStates = new Map<string, boolean>()
   // Last time *any* parsed N2K frame was seen for a given bus address.
@@ -385,7 +393,7 @@ module.exports = (app: N2kDiscoveryApp) => {
     // from the Discovery page.
     const sweepAfter = (delayMs: number, resetTracking: boolean) => {
       const timer = setTimeout(() => {
-        pendingTimers.delete(timer)
+        sweepTimers.delete(timer)
         debug(
           'Auto-requesting identity from %d N2K devices',
           knownAddresses.size
@@ -397,7 +405,7 @@ module.exports = (app: N2kDiscoveryApp) => {
           resetTracking ? discoveredAddresses : undefined
         )
       }, delayMs)
-      pendingTimers.add(timer)
+      sweepTimers.add(timer)
     }
     sweepAfter(5_000, true)
     sweepAfter(180_000, false)
@@ -1405,6 +1413,10 @@ module.exports = (app: N2kDiscoveryApp) => {
       clearTimeout(timer)
     }
     pendingTimers.clear()
+    for (const timer of sweepTimers) {
+      clearTimeout(timer)
+    }
+    sweepTimers.clear()
     if (statusTickInterval) {
       clearInterval(statusTickInterval)
       statusTickInterval = undefined

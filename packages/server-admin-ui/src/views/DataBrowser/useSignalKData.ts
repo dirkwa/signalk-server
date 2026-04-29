@@ -283,6 +283,11 @@ export function useSignalKData() {
   }, [])
 
   const handleContextChange = useCallback((value: string) => {
+    // Reset the empty-state guard so the new context shows its own
+    // "no data yet" indicator until its first delta arrives. Without
+    // this, after visiting one populated context the empty state stays
+    // suppressed for every subsequent context.
+    setHasData(false)
     granularSubscriptionManager.cancelPending()
     granularSubscriptionManager.startDiscovery()
     setContext(value)

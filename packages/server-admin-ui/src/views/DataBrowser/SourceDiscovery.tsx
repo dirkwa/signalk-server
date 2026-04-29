@@ -365,7 +365,7 @@ const SourceDiscovery: React.FC = () => {
   const handleReset = useCallback(async () => {
     const confirmed = window.confirm(
       'Reset stale N2K device entries?\n\n' +
-        'This removes devices that have not sent a frame in the last 30s ' +
+        'This removes devices that have not sent a frame in the last 90s ' +
         '(e.g. instruments that were swapped out). Active devices are kept.'
     )
     if (!confirmed) return
@@ -540,7 +540,7 @@ const SourceDiscovery: React.FC = () => {
               variant="outline-danger"
               onClick={handleReset}
               disabled={isResetting}
-              title="Remove stale device entries (idle &gt; 30s)"
+              title="Remove stale device entries (idle &gt; 90s)"
             >
               {isResetting ? (
                 <>
