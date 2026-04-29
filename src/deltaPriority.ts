@@ -80,9 +80,22 @@ export type ToPreferredDelta = (
   selfContext: string
 ) => any
 
+/**
+ * Translate a raw `$source` (e.g. `can0.4`) into its canonical form
+ * (e.g. `can0.c0788c00e7e04312`) so the engine can match it against
+ * priorities saved in canName form. Implementations should return the
+ * raw ref unchanged when no translation is known — that lets the
+ * engine fall through to the existing "unknown source" rules and
+ * keeps non-canName setups (legacy node-red flows) working as before.
+ */
+export type CanonicaliseSourceRef = (sourceRef: string) => string
+
+const identityCanonicaliser: CanonicaliseSourceRef = (s) => s
+
 export const getToPreferredDelta = (
   sourcePrioritiesData: SourcePrioritiesData,
-  unknownSourceTimeout = 10000
+  unknownSourceTimeout = 10000,
+  canonicalise: CanonicaliseSourceRef = identityCanonicaliser
 ): ToPreferredDelta => {
   if (!sourcePrioritiesData || Object.keys(sourcePrioritiesData).length === 0) {
     debug('No priorities data')
@@ -144,13 +157,16 @@ export const getToPreferredDelta = (
       // No config for this path — accept everything
       return HIGHESTPRECEDENCE
     }
-    const p = pathPrecedences.get(sourceRefIdentity(sourceRef))
+    const p = pathPrecedences.get(sourceRefIdentity(canonicalise(sourceRef)))
     if (p) return p
     return isLatest ? HIGHESTPRECEDENCE : LOWESTPRECEDENCE
   }
 
   const isKnownSource = (path: Path, sourceRef: SourceRef): boolean => {
-    return precedences.get(path)?.has(sourceRefIdentity(sourceRef)) ?? false
+    return (
+      precedences.get(path)?.has(sourceRefIdentity(canonicalise(sourceRef))) ??
+      false
+    )
   }
 
   const isPreferredValue = (
@@ -227,6 +243,13 @@ export const getToPreferredDelta = (
       delta.updates &&
         delta.updates.forEach((update: any) => {
           if ('values' in update) {
+            // Translate the source once per update so identity matching,
+            // self-renew (`latest.sourceRef === sourceRef`), and the
+            // setLatest snapshot all key off the same canonical form.
+            // Without this, a saved canName-form ranking never matches
+            // a numeric-form delta and the engine silently ignores the
+            // user's preference.
+            const canonicalSource = canonicalise(update.$source) as SourceRef
             update.values = update.values.reduce(
               (acc: any, pathValue: PathValue) => {
                 // Notifications are events, not measurements — never subject
@@ -244,14 +267,14 @@ export const getToPreferredDelta = (
                 const isPreferred = isPreferredValue(
                   pathValue.path as Path,
                   latest,
-                  update.$source,
+                  canonicalSource,
                   millis
                 )
                 if (isPreferred) {
                   setLatest(
                     delta.context as Context,
                     pathValue.path as Path,
-                    update.$source as SourceRef,
+                    canonicalSource,
                     millis
                   )
                   acc.push(pathValue)

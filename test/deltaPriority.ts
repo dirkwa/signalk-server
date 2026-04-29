@@ -435,3 +435,85 @@ describe('transport-agnostic CAN Name matching', () => {
     assert(accepted(rAllowed), 'serial0.GP is allowed')
   })
 })
+
+describe('canonicalise sourceRef (useCanName=false providers)', () => {
+  const CAN = 'c0788c00e7e04312'
+  const PATH = 'navigation.headingMagnetic'
+
+  it('matches a saved canName ranking against numeric-form deltas', () => {
+    // Provider has useCanName off so $source is "can0.4" but the admin
+    // UI saved the priority in canName form (because multiSourcePaths
+    // canonicalised on read). The canonicalise getter is what closes
+    // the loop.
+    const canonical = (ref: string) => (ref === 'can0.4' ? `can0.${CAN}` : ref)
+    const cfg: SourcePrioritiesData = {
+      [PATH]: [
+        { sourceRef: `can0.${CAN}` as SourceRef, timeout: 0 },
+        { sourceRef: 'derived-data' as SourceRef, timeout: 5000 }
+      ]
+    }
+    const toPreferred = getToPreferredDelta(cfg, undefined, canonical)
+    const r = toPreferred(
+      makeDelta('can0.4', PATH, 5),
+      new Date(1000000),
+      'self'
+    )
+    assert(
+      accepted(r),
+      'numeric-form delta should match canName-form ranking via canonicalise'
+    )
+  })
+
+  it('still respects rank order across canonicalised sources', () => {
+    // Two canName devices both publish; rank-2 must wait for rank-1
+    // to go silent past the timeout. Identity matching is required for
+    // the timeout rule to engage at all.
+    const CAN_A = 'c1111111111aaaaa'
+    const CAN_B = 'c2222222222bbbbb'
+    const canonical = (ref: string) => {
+      if (ref === 'can0.5') return `can0.${CAN_A}`
+      if (ref === 'can0.7') return `can0.${CAN_B}`
+      return ref
+    }
+    const cfg: SourcePrioritiesData = {
+      [PATH]: [
+        { sourceRef: `can0.${CAN_A}` as SourceRef, timeout: 0 },
+        { sourceRef: `can0.${CAN_B}` as SourceRef, timeout: 5000 }
+      ]
+    }
+    const toPreferred = getToPreferredDelta(cfg, undefined, canonical)
+    // Rank-1 wins immediately.
+    let r = toPreferred(makeDelta('can0.5', PATH, 1), new Date(1000000), 'self')
+    assert(accepted(r), 'rank-1 should win')
+    // Rank-2 within the timeout window: rejected.
+    r = toPreferred(makeDelta('can0.7', PATH, 2), new Date(1001000), 'self')
+    assert(!accepted(r), 'rank-2 should be held off while rank-1 is fresh')
+    // Rank-2 after the timeout window: accepted.
+    r = toPreferred(makeDelta('can0.7', PATH, 3), new Date(1010000), 'self')
+    assert(accepted(r), 'rank-2 should take over after rank-1 timeout')
+  })
+
+  it('falls through unchanged when canonicalise has no translation', () => {
+    // Cold-boot: address claim hasn't arrived yet, canonical map empty.
+    // Engine must treat the delta as an unknown source per existing
+    // semantics, not crash.
+    const canonical = (ref: string) => ref
+    const cfg: SourcePrioritiesData = {
+      [PATH]: [
+        { sourceRef: `can0.${CAN}` as SourceRef, timeout: 0 },
+        { sourceRef: 'derived-data' as SourceRef, timeout: 5000 }
+      ]
+    }
+    const toPreferred = getToPreferredDelta(cfg, undefined, canonical)
+    const r = toPreferred(
+      makeDelta('can0.4', PATH, 5),
+      new Date(1000000),
+      'self'
+    )
+    // Path is configured, the only known source has not appeared; the
+    // unknown delta sneaks in as the first arrival per existing
+    // "unknown that briefly wins" semantics. No fix from us — just
+    // confirming we don't crash on missing translation.
+    assert(accepted(r), 'unknown first-arrival is accepted (existing rule)')
+  })
+})

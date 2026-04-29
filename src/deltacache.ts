@@ -89,6 +89,14 @@ export default class DeltaCache {
   private livePreferredEmitTimer: ReturnType<typeof setTimeout> | null = null
   private livePreferredDirtyPaths: Set<string> = new Set()
 
+  // Cached `<label>.<src> → <label>.<canName>` translation, refreshed
+  // whenever `app.signalk.sources` is replaced or sourceRefChanged
+  // fires. Without this, livePreferredSources reports raw refs that
+  // don't match the canName-form ranking saved in priorities.json,
+  // and the admin UI's wins/Preferred badge disagrees with the engine.
+  private canonicalMap: Map<string, string> | null = null
+  private canonicalSnapshot: unknown = null
+
   private subscribedPaths = new Set<string>()
 
   constructor(app: SignalKServer, streambundle: StreamBundle) {
@@ -97,6 +105,12 @@ export default class DeltaCache {
       if (this.subscribedPaths.has(key)) return
       this.subscribedPaths.add(key)
       streambundle.getBus(key).onValue(this.onValue.bind(this))
+    })
+
+    // Refresh the canonical translation when a new device is observed
+    // or a numeric-keyed source is replaced by a canName-keyed one.
+    ;(app as any).on?.('sourceRefChanged', () => {
+      this.canonicalSnapshot = null
     })
 
     this.loadSourcesCache()
@@ -135,6 +149,15 @@ export default class DeltaCache {
     return contextAndPathParts
   }
 
+  private canonicaliseSourceRef(sourceRef: string): string {
+    const sources = (this.app.signalk as any)?.sources
+    if (sources !== this.canonicalSnapshot || this.canonicalMap === null) {
+      this.canonicalSnapshot = sources
+      this.canonicalMap = buildSrcToCanonicalMap(sources)
+    }
+    return this.canonicalMap.get(sourceRef) ?? sourceRef
+  }
+
   onValue(msg: NormalizedDelta) {
     // debug(`onValue ${JSON.stringify(msg)}`)
 
@@ -153,12 +176,18 @@ export default class DeltaCache {
     if (msg.path.length !== 0) {
       leaf[sourceRef] = msg
       const prefKey = msg.context + '\0' + msg.path
+      // The priority engine matches by canonical (canName) form. Store
+      // the same canonical ref in preferredSources so the livePreferred
+      // stream and the wins/Preferred badge in the admin UI compare
+      // like-for-like with the saved priorities.json. Falls through to
+      // the raw ref when no canName is known (cold boot, non-N2K).
+      const canonicalRef = this.canonicaliseSourceRef(sourceRef) as SourceRef
       const prevSource = this.preferredSources.get(prefKey)
-      this.preferredSources.set(prefKey, sourceRef)
+      this.preferredSources.set(prefKey, canonicalRef)
       // Only mark the path dirty for the LIVEPREFERRED stream when the
       // winning source actually changed — otherwise every accepted
       // delta would queue a redundant emit.
-      if (prevSource !== sourceRef) {
+      if (prevSource !== canonicalRef) {
         this.livePreferredDirtyPaths.add(prefKey)
         this.scheduleLivePreferredEmit()
       }
@@ -249,14 +278,21 @@ export default class DeltaCache {
       }
     }
     removeFromNode(this.cache)
+    // preferredSources stores canonical (canName) refs since onValue
+    // canonicalised on write, so compare in the same form whether the
+    // caller passed a raw or canonical ref.
+    const canonicalTarget = this.canonicaliseSourceRef(sourceRef) as SourceRef
     for (const [key, ref] of this.preferredSources) {
-      if (ref !== sourceRef) continue
+      if (ref !== canonicalTarget) continue
       const nullIdx = key.indexOf('\0')
       const context = nullIdx === -1 ? key : key.slice(0, nullIdx)
       const path = nullIdx === -1 ? '' : key.slice(nullIdx + 1)
       const replacement = this.pickReplacementSource(context, path)
       if (replacement) {
-        this.preferredSources.set(key, replacement)
+        this.preferredSources.set(
+          key,
+          this.canonicaliseSourceRef(replacement) as SourceRef
+        )
       } else {
         this.preferredSources.delete(key)
       }

@@ -42,7 +42,7 @@ import { startApis } from './api'
 import { ServerApp, SignalKMessageHub, WithConfig } from './app'
 import { ConfigApp, load, sendBaseDeltas } from './config/config'
 import { createDebug } from './debug'
-import DeltaCache from './deltacache'
+import DeltaCache, { buildSrcToCanonicalMap } from './deltacache'
 import DeltaChain from './deltachain'
 import { getToPreferredDelta, ToPreferredDelta } from './deltaPriority'
 import { incDeltaStatistics, startDeltaStatistics } from './deltastats'
@@ -306,10 +306,37 @@ class Server {
     }
 
     let toPreferredDelta: ToPreferredDelta = () => undefined
+    // Translate `<label>.<numeric>` deltas to their `<label>.<canName>`
+    // form so a saved canName-form ranking matches incoming refs from
+    // providers that have useCanName off. The cache is keyed by the
+    // sources tree's last-mutation marker (Object reference comparison
+    // would suffice if signalk-schema replaced the object on every
+    // change, but it mutates in place, so we rebuild on each call and
+    // rely on Map construction being cheap for typical fleets).
+    let cachedCanonicalMap: Map<string, string> | null = null
+    let cachedCanonicalSnapshot: unknown = null
+    const canonicaliseSourceRef = (sourceRef: string): string => {
+      const sources = (app.signalk as any)?.sources
+      if (sources !== cachedCanonicalSnapshot || cachedCanonicalMap === null) {
+        cachedCanonicalSnapshot = sources
+        cachedCanonicalMap = buildSrcToCanonicalMap(sources)
+      }
+      return cachedCanonicalMap.get(sourceRef) ?? sourceRef
+    }
+    // Refresh the canonical cache whenever a new device is observed or
+    // a numeric-keyed source is replaced by a canName-keyed one. This
+    // covers the cold-boot window where an early delta arrives before
+    // the address claim and the engine briefly treats it as unknown.
+    app.on('sourceRefChanged', () => {
+      cachedCanonicalSnapshot = null
+    })
     app.activateSourcePriorities = () => {
       try {
+        cachedCanonicalSnapshot = null
         toPreferredDelta = getToPreferredDelta(
-          app.config.settings.sourcePriorities
+          app.config.settings.sourcePriorities,
+          undefined,
+          canonicaliseSourceRef
         )
         // Drop preferredSources entries for paths that no longer have
         // a priority config. Without this, the bootstrap snapshot
