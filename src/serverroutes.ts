@@ -1415,7 +1415,7 @@ module.exports = function (
     }
   )
 
-  app.securityStrategy.addAdminWriteMiddleware(
+  app.securityStrategy.addAdminMiddleware(
     `${SERVERROUTESPREFIX}/sourcePriorities`
   )
 
@@ -1464,9 +1464,7 @@ module.exports = function (
   // middleware to routes registered AFTER the middleware call, so the
   // ordering matters — historically the DELETE was registered before
   // this call and silently bypassed auth.
-  app.securityStrategy.addAdminWriteMiddleware(
-    `${SERVERROUTESPREFIX}/priorities`
-  )
+  app.securityStrategy.addAdminMiddleware(`${SERVERROUTESPREFIX}/priorities`)
 
   app.delete(
     `${SERVERROUTESPREFIX}/priorities`,
@@ -1505,9 +1503,7 @@ module.exports = function (
     }
   )
 
-  app.securityStrategy.addAdminWriteMiddleware(
-    `${SERVERROUTESPREFIX}/sourceAliases`
-  )
+  app.securityStrategy.addAdminMiddleware(`${SERVERROUTESPREFIX}/sourceAliases`)
 
   app.get(
     `${SERVERROUTESPREFIX}/sourceAliases`,
@@ -1600,7 +1596,7 @@ module.exports = function (
     })
   })
 
-  app.securityStrategy.addAdminWriteMiddleware(
+  app.securityStrategy.addAdminMiddleware(
     `${SERVERROUTESPREFIX}/priorityGroups`
   )
 
@@ -1643,7 +1639,7 @@ module.exports = function (
     }
   )
 
-  app.securityStrategy.addAdminWriteMiddleware(
+  app.securityStrategy.addAdminMiddleware(
     `${SERVERROUTESPREFIX}/priorityDefaults`
   )
 
@@ -1687,7 +1683,7 @@ module.exports = function (
     }
   )
 
-  app.securityStrategy.addAdminWriteMiddleware(
+  app.securityStrategy.addAdminMiddleware(
     `${SERVERROUTESPREFIX}/ignoredInstanceConflicts`
   )
 
