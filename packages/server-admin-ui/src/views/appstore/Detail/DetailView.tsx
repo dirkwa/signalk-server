@@ -52,6 +52,7 @@ const DetailView: React.FC = () => {
   const appStore = useAppStore() as AppStoreState
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const listEntry = useMemo((): AppInfo | undefined => {
     if (!decodedName) return undefined
@@ -175,22 +176,63 @@ const DetailView: React.FC = () => {
   const heroScreenshot = effectiveScreenshots[0]
   const displayTitle = detail.displayName || detail.name
 
+  const postAction = async (
+    label: string,
+    url: string,
+    init: RequestInit
+  ): Promise<void> => {
+    setActionError(null)
+    try {
+      const res = await fetch(url, { credentials: 'include', ...init })
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        setActionError(
+          body
+            ? `${label} failed (${res.status}): ${body}`
+            : `${label} failed (${res.status}).`
+        )
+      }
+    } catch (err) {
+      setActionError(
+        `${label} failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
+  }
+
   const handleInstall = () => {
-    fetch(
+    postAction(
+      'Install',
       `${window.serverRoutesPrefix}/appstore/install/${encodeURIComponent(
         detail.name
       )}/${encodeURIComponent(detail.version)}`,
-      { method: 'POST', credentials: 'include' }
+      { method: 'POST' }
     )
   }
 
   const handleInstallWithDeps = () => {
-    fetch(`${window.serverRoutesPrefix}/appstore/install-with-deps`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: detail.name, version: detail.version })
-    })
+    postAction(
+      'Install',
+      `${window.serverRoutesPrefix}/appstore/install-with-deps`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: detail.name, version: detail.version })
+      }
+    )
+  }
+
+  const handleRemove = () => {
+    postAction(
+      'Remove',
+      `${window.serverRoutesPrefix}/appstore/remove/${encodeURIComponent(
+        detail.name
+      )}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteData: false })
+      }
+    )
   }
 
   return (
@@ -274,6 +316,16 @@ const DetailView: React.FC = () => {
                 installingByName={installingByName}
               />
 
+              {actionError && (
+                <Alert
+                  variant="danger"
+                  dismissible
+                  onClose={() => setActionError(null)}
+                  className="mt-3 mb-0"
+                >
+                  {actionError}
+                </Alert>
+              )}
               <div className="plugin-detail__actions mt-4 d-flex justify-content-end gap-2 flex-wrap">
                 {isInstalled && listEntry?.id ? (
                   <>
@@ -308,20 +360,7 @@ const DetailView: React.FC = () => {
                         )}
                       </Button>
                     )}
-                    <Button
-                      variant="outline-danger"
-                      onClick={() => {
-                        fetch(
-                          `${window.serverRoutesPrefix}/appstore/remove/${encodeURIComponent(detail.name)}`,
-                          {
-                            method: 'POST',
-                            credentials: 'include',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ deleteData: false })
-                          }
-                        )
-                      }}
-                    >
+                    <Button variant="outline-danger" onClick={handleRemove}>
                       Remove
                     </Button>
                   </>
