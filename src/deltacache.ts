@@ -599,6 +599,10 @@ export default class DeltaCache {
           const child = node[key]
           if (!child || typeof child !== 'object') continue
           if (child.path !== undefined && child.value !== undefined) {
+            // Notifications are events, not measurements — the priority
+            // engine never dedupes them (see deltaPriority.ts), so they
+            // must not surface as multi-source paths in the priorities UI.
+            if (pathParts[0] === 'notifications') return
             const sources = Object.keys(node).filter((k) => {
               const v = node[k]
               return (
@@ -630,6 +634,9 @@ export default class DeltaCache {
     if (persisted) {
       for (const [path, entries] of Object.entries(persisted)) {
         if (!Array.isArray(entries) || entries.length < 2) continue
+        if (path === 'notifications' || path.startsWith('notifications.')) {
+          continue
+        }
         const set = result[path] ?? (result[path] = new Set<string>())
         for (const entry of entries) {
           if (entry && typeof entry.sourceRef === 'string') {

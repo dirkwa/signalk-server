@@ -504,6 +504,14 @@ const DataBrowser: React.FC = () => {
         const realKey =
           nullIdx >= 0 ? compositeKey.slice(nullIdx + 1) : compositeKey
         const path = getPathFromKey(realKey)
+        // Notifications are events, not measurements — the priority engine
+        // delivers every source's notification (see deltaPriority.ts), so
+        // the Data Browser must fan them out 1:1 even when a stale priority
+        // entry exists for the path.
+        if (path === 'notifications' || path.startsWith('notifications.')) {
+          deduped.push(compositeKey)
+          continue
+        }
         if (!preferredSourceByPath.has(path)) {
           deduped.push(compositeKey)
           continue

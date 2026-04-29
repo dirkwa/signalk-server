@@ -321,4 +321,48 @@ describe('Deltacache', () => {
     const sources = magVarDeltas.map((d) => d.updates[0].$source).sort()
     sources.should.deep.equal(['gps.backup', 'gps.primary'])
   })
+
+  it('getMultiSourcePaths excludes notifications', function () {
+    return doSendADelta({
+      context: 'vessels.self',
+      updates: [
+        {
+          $source: 'i70.a',
+          timestamp: '2024-01-15T10:30:00.000Z',
+          values: [
+            {
+              path: 'notifications.instrument.AISConnectionLost',
+              value: { state: 'alarm', message: 'AIS lost' }
+            }
+          ]
+        }
+      ]
+    })
+      .then(() =>
+        doSendADelta({
+          context: 'vessels.self',
+          updates: [
+            {
+              $source: 'i70.b',
+              timestamp: '2024-01-15T10:30:01.000Z',
+              values: [
+                {
+                  path: 'notifications.instrument.AISConnectionLost',
+                  value: { state: 'alarm', message: 'AIS lost' }
+                }
+              ]
+            }
+          ]
+        })
+      )
+      .then(() => {
+        const paths = theServer.app.deltaCache.getMultiSourcePaths()
+        paths.should.not.have.property(
+          'notifications.instrument.AISConnectionLost'
+        )
+        for (const path of Object.keys(paths)) {
+          path.startsWith('notifications').should.equal(false)
+        }
+      })
+  })
 })
