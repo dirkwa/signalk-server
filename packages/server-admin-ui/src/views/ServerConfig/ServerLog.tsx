@@ -7,7 +7,11 @@ import {
   FormEvent
 } from 'react'
 import parse from 'html-react-parser'
-import { useLogEntries, useClearLogEntries } from '../../store'
+import {
+  useLogEntries,
+  useClearLogEntries,
+  useRuntimeConfig
+} from '../../store'
 import Card from 'react-bootstrap/Card'
 import Col from 'react-bootstrap/Col'
 import Form from 'react-bootstrap/Form'
@@ -17,6 +21,7 @@ import { faAlignJustify } from '@fortawesome/free-solid-svg-icons/faAlignJustify
 import LogFiles from './Logging'
 import Creatable from 'react-select/creatable'
 import { useWebSocket } from '../../hooks/useWebSocket'
+import ContainerLogs from './ContainerLogs'
 
 interface LogEntry {
   i: number
@@ -35,6 +40,16 @@ interface SelectOption {
 }
 
 export default function ServerLogs() {
+  const { useKeeper } = useRuntimeConfig()
+
+  if (useKeeper) {
+    return <ContainerLogs />
+  }
+
+  return <WebSocketLogs />
+}
+
+function WebSocketLogs() {
   const log = useLogEntries()
   const clearLogEntries = useClearLogEntries()
   const { ws: webSocket, isConnected } = useWebSocket()
@@ -239,7 +254,7 @@ function LogList({ value }: LogListProps) {
       ref={containerRef}
       style={{
         overflowY: 'scroll',
-        height: '60vh',
+        maxHeight: '60vh',
         border: '1px solid',
         padding: '5px',
         fontFamily: 'monospace'

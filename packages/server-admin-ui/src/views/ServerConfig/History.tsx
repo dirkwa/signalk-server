@@ -1,0 +1,745 @@
+import React, { useState, useEffect, useCallback } from 'react'
+import Alert from 'react-bootstrap/Alert'
+import Badge from 'react-bootstrap/Badge'
+import Button from 'react-bootstrap/Button'
+import Card from 'react-bootstrap/Card'
+import Col from 'react-bootstrap/Col'
+import Form from 'react-bootstrap/Form'
+import Row from 'react-bootstrap/Row'
+import Table from 'react-bootstrap/Table'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faCircleNotch } from '@fortawesome/free-solid-svg-icons/faCircleNotch'
+import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase'
+import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine'
+import { faPlay } from '@fortawesome/free-solid-svg-icons/faPlay'
+import { faStop } from '@fortawesome/free-solid-svg-icons/faStop'
+import { faSync } from '@fortawesome/free-solid-svg-icons/faSync'
+import { faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons/faExternalLinkAlt'
+import { faStethoscope } from '@fortawesome/free-solid-svg-icons/faStethoscope'
+import { Link } from 'react-router-dom'
+import { useRuntimeConfig } from '../../store'
+import {
+  historyApi,
+  shouldUseKeeper,
+  type HistorySystemStatus,
+  type HistorySettings,
+  type HistoryCredentials
+} from '../../services/api'
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const History: React.FC = () => {
+  const { useKeeper } = useRuntimeConfig()
+
+  const [status, setStatus] = useState<HistorySystemStatus | null>(null)
+  const [settings, setSettings] = useState<HistorySettings | null>(null)
+  const [credentials, setCredentials] = useState<HistoryCredentials | null>(
+    null
+  )
+  const [isLoading, setIsLoading] = useState(false)
+  const [isEnabling, setIsEnabling] = useState(false)
+  const [isDisabling, setIsDisabling] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  const [retentionDays, setRetentionDays] = useState(365)
+  const [restartMessage, setRestartMessage] = useState<string | null>(null)
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const [statusResult, settingsResult] = await Promise.all([
+        historyApi.status(),
+        historyApi.settings()
+      ])
+      if (statusResult) setStatus(statusResult)
+      if (settingsResult) {
+        setSettings(settingsResult)
+        setRetentionDays(settingsResult.retentionDays)
+      }
+
+      if (statusResult?.status === 'running') {
+        try {
+          const creds = await historyApi.credentials()
+          if (creds) setCredentials(creds)
+        } catch {
+          // Credentials may not be available yet
+        }
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to load history data'
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Wait for SignalK to come back after a restart, then reload data.
+  // isReady: predicate that checks if the operation is fully complete
+  // (not just "server is back" — e.g. Grafana must also be running for enable)
+  const waitForServerAndReload = useCallback(
+    async (
+      message: string,
+      isReady: (status: HistorySystemStatus) => boolean
+    ) => {
+      setRestartMessage(message)
+      setError(null)
+      // Wait for SignalK to come back and operation to complete
+      const maxAttempts = 60
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((r) => setTimeout(r, 3000))
+        try {
+          const result = await historyApi.status()
+          if (result) {
+            if (isReady(result)) {
+              // Operation complete — reload everything
+              setRestartMessage(null)
+              setSuccess(
+                message.replace('...', '') + ' completed successfully!'
+              )
+              await loadData()
+              return
+            }
+            // Server is back but operation still in progress
+            setRestartMessage(message + ' almost done...')
+          }
+        } catch {
+          // Still restarting, keep waiting
+        }
+      }
+      setRestartMessage(null)
+      // Timed out but server might be up — load whatever state we have
+      await loadData()
+    },
+    [loadData]
+  )
+
+  useEffect(() => {
+    if (useKeeper && shouldUseKeeper()) {
+      loadData()
+    }
+  }, [useKeeper, loadData])
+
+  const handleEnable = useCallback(async () => {
+    if (
+      !confirm(
+        'Enable history database? This will start InfluxDB and Grafana containers.'
+      )
+    ) {
+      return
+    }
+    setIsEnabling(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const result = await historyApi.enable({ retentionDays })
+      if (result.success) {
+        setSuccess('History database enabled successfully!')
+        if (result.credentials) {
+          setCredentials(result.credentials)
+        }
+        await loadData()
+      } else {
+        setError(result.error || 'Failed to enable history')
+      }
+    } catch {
+      // Enable restarts SignalK to load the plugin, which kills the proxy
+      // connection. This is expected — wait for it to come back.
+      setIsEnabling(false)
+      await waitForServerAndReload(
+        'Enabling history database...',
+        (s) =>
+          s.status === 'running' &&
+          s.grafana?.status === 'running' &&
+          s.plugin.configured
+      )
+      return
+    } finally {
+      setIsEnabling(false)
+    }
+  }, [retentionDays, waitForServerAndReload, loadData])
+
+  const handleDisable = useCallback(
+    async (retainData: boolean) => {
+      const message = retainData
+        ? 'Disable history? Data will be preserved for future re-enable.'
+        : 'Disable history and DELETE all data? This cannot be undone!'
+      if (!confirm(message)) {
+        return
+      }
+      setIsDisabling(true)
+      setError(null)
+      setSuccess(null)
+      try {
+        await historyApi.disable(retainData)
+        setSuccess('History database disabled')
+        setCredentials(null)
+        await loadData()
+      } catch {
+        // Disable restarts SignalK to unload the plugin, which kills the proxy
+        // connection. This is expected — wait for it to come back.
+        setIsDisabling(false)
+        setCredentials(null)
+        await waitForServerAndReload(
+          'Disabling history database...',
+          (s) => s.status === 'disabled'
+        )
+        return
+      } finally {
+        setIsDisabling(false)
+      }
+    },
+    [waitForServerAndReload, loadData]
+  )
+
+  const handleUpdateRetention = useCallback(async () => {
+    setError(null)
+    try {
+      const newSettings = await historyApi.updateRetention(retentionDays)
+      setSettings(newSettings)
+      setSuccess('Retention policy updated')
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to update retention'
+      )
+    }
+  }, [retentionDays])
+
+  const handleRefreshGrafana = useCallback(async () => {
+    setError(null)
+    setIsRefreshing(true)
+    try {
+      await historyApi.grafana.refresh()
+      setSuccess('Grafana datasources refreshed')
+      // Reload credentials after refresh
+      const creds = await historyApi.credentials()
+      if (creds) setCredentials(creds)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh Grafana')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [])
+
+  const getStatusBadge = (containerStatus: string) => {
+    const variants: Record<string, string> = {
+      running: 'success',
+      stopped: 'secondary',
+      starting: 'info',
+      error: 'danger',
+      not_found: 'warning'
+    }
+    return (
+      <Badge bg={variants[containerStatus] || 'secondary'}>
+        {containerStatus}
+      </Badge>
+    )
+  }
+
+  const getHealthBadge = (health?: string) => {
+    if (!health || health === 'none') return null
+    const variants: Record<string, string> = {
+      healthy: 'success',
+      unhealthy: 'danger',
+      starting: 'info'
+    }
+    return (
+      <Badge bg={variants[health] || 'secondary'} className="ms-1">
+        {health}
+      </Badge>
+    )
+  }
+
+  if (!useKeeper || !shouldUseKeeper()) {
+    return (
+      <div className="animated fadeIn">
+        <Card>
+          <Card.Header>History Database</Card.Header>
+          <Card.Body>
+            <Alert variant="info">
+              History database management is only available when running with
+              the Universal Installer (Keeper).
+            </Alert>
+          </Card.Body>
+        </Card>
+      </div>
+    )
+  }
+
+  const isRunning = status?.status === 'running'
+  const isDisabled = status?.status === 'disabled'
+  const isError = status?.status === 'error'
+
+  // Grafana is always accessed through Caddy's HTTPS proxy
+  const grafanaHref = `https://${window.location.hostname}/grafana/`
+
+  return (
+    <div className="animated fadeIn">
+      {restartMessage && (
+        <Alert variant="info">
+          <FontAwesomeIcon icon={faCircleNotch} spin className="me-2" />
+          {restartMessage} SignalK server is restarting, please wait...
+        </Alert>
+      )}
+      {error && (
+        <Alert variant="danger" dismissible onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert variant="success" dismissible onClose={() => setSuccess(null)}>
+          {success}
+        </Alert>
+      )}
+
+      {/* Status Overview */}
+      <Card className="mb-4">
+        <Card.Header>
+          <FontAwesomeIcon icon={faDatabase} className="me-2" />
+          History Database
+          {status && (
+            <span className="float-end">
+              <Badge
+                bg={
+                  status.status === 'running'
+                    ? 'success'
+                    : status.status === 'error'
+                      ? 'danger'
+                      : 'secondary'
+                }
+              >
+                {status.status.toUpperCase()}
+              </Badge>
+            </span>
+          )}
+        </Card.Header>
+        <Card.Body>
+          {isLoading ? (
+            <div className="text-center">
+              <FontAwesomeIcon icon={faCircleNotch} spin size="2x" />
+            </div>
+          ) : status ? (
+            <>
+              <p className="text-muted">
+                The history feature stores Signal K data in InfluxDB for
+                historical analysis and visualization with Grafana.
+              </p>
+              {isRunning && (
+                <Row>
+                  <Col md={6}>
+                    <h6>Containers</h6>
+                    <Table size="sm" borderless>
+                      <tbody>
+                        <tr>
+                          <td>InfluxDB</td>
+                          <td className="text-end">
+                            {getStatusBadge(status.influxdb.status)}
+                            {getHealthBadge(status.influxdb.health)}
+                          </td>
+                        </tr>
+                        {status.grafana && (
+                          <tr>
+                            <td>Grafana</td>
+                            <td className="text-end">
+                              {getStatusBadge(status.grafana.status)}
+                              {getHealthBadge(status.grafana.health)}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </Table>
+                  </Col>
+                  <Col md={6}>
+                    <h6>Plugin Status</h6>
+                    <Table size="sm" borderless>
+                      <tbody>
+                        <tr>
+                          <td>Installed</td>
+                          <td className="text-end">
+                            <Badge
+                              bg={
+                                status.plugin.installed ? 'success' : 'warning'
+                              }
+                            >
+                              {status.plugin.installed ? 'Yes' : 'No'}
+                            </Badge>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Enabled</td>
+                          <td className="text-end">
+                            <Badge
+                              bg={
+                                status.plugin.enabled ? 'success' : 'secondary'
+                              }
+                            >
+                              {status.plugin.enabled ? 'Yes' : 'No'}
+                            </Badge>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Configured</td>
+                          <td className="text-end">
+                            <Badge
+                              bg={
+                                status.plugin.configured
+                                  ? 'success'
+                                  : 'secondary'
+                              }
+                            >
+                              {status.plugin.configured ? 'Yes' : 'No'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </Table>
+                  </Col>
+                </Row>
+              )}
+              {status.storageUsed !== undefined && (
+                <p>
+                  <small className="text-muted">
+                    Storage used: {formatBytes(status.storageUsed)}
+                    {status.oldestDataPoint &&
+                      ` | Data since: ${new Date(status.oldestDataPoint).toLocaleDateString()}`}
+                  </small>
+                </p>
+              )}
+              {status.lastError && (
+                <Alert variant="warning" className="mt-2">
+                  Last error: {status.lastError}
+                </Alert>
+              )}
+            </>
+          ) : (
+            <p className="text-muted">Unable to load status</p>
+          )}
+        </Card.Body>
+        <Card.Footer>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={loadData}
+            disabled={isLoading}
+          >
+            <FontAwesomeIcon icon={faSync} spin={isLoading} /> Refresh
+          </Button>
+        </Card.Footer>
+      </Card>
+
+      {/* Error Recovery Card - Links to Doctor */}
+      {isError && (
+        <Card className="mb-4 border-danger">
+          <Card.Header className="text-danger">
+            <FontAwesomeIcon icon={faDatabase} className="me-2" />
+            History Error - Containers Not Running
+          </Card.Header>
+          <Card.Body>
+            <Alert variant="danger">
+              The history containers are in an error state. This can happen if:
+              <ul className="mb-0 mt-2">
+                <li>Containers were removed manually</li>
+                <li>The system was reinstalled</li>
+                <li>Container startup failed</li>
+              </ul>
+            </Alert>
+            <p>
+              Use the System Doctor to diagnose and repair this issue. The
+              Doctor can automatically re-enable the history containers.
+            </p>
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="primary"
+              as={Link as never}
+              to="/serverConfiguration/health"
+            >
+              <FontAwesomeIcon icon={faStethoscope} className="me-1" />
+              Open System Doctor
+            </Button>
+          </Card.Footer>
+        </Card>
+      )}
+
+      {isDisabled && (
+        <Card className="mb-4">
+          <Card.Header>Enable History</Card.Header>
+          <Card.Body>
+            <p>
+              Enable the history database to store Signal K data over time. This
+              will:
+            </p>
+            <ul>
+              <li>Start an InfluxDB container for data storage</li>
+              <li>Start a Grafana container for visualization</li>
+              <li>Install and configure the signalk-to-influxdb2 plugin</li>
+            </ul>
+            <Form>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={4}>
+                  Retention Period (days)
+                </Form.Label>
+                <Col sm={4}>
+                  <Form.Control
+                    type="number"
+                    min={7}
+                    max={3650}
+                    value={retentionDays}
+                    onChange={(e) =>
+                      setRetentionDays(parseInt(e.target.value) || 365)
+                    }
+                  />
+                  <Form.Text className="text-muted">
+                    Data older than this will be automatically deleted (7-3650
+                    days)
+                  </Form.Text>
+                </Col>
+              </Form.Group>
+            </Form>
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="success"
+              onClick={handleEnable}
+              disabled={isEnabling}
+            >
+              {isEnabling ? (
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              ) : (
+                <FontAwesomeIcon icon={faPlay} />
+              )}{' '}
+              Enable History Database
+            </Button>
+          </Card.Footer>
+        </Card>
+      )}
+
+      {/* Running - Settings Card */}
+      {isRunning && settings && (
+        <Card className="mb-4">
+          <Card.Header>Settings</Card.Header>
+          <Card.Body>
+            <Form>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={4}>
+                  Retention Period
+                </Form.Label>
+                <Col sm={4}>
+                  <Form.Control
+                    type="number"
+                    min={7}
+                    max={3650}
+                    value={retentionDays}
+                    onChange={(e) =>
+                      setRetentionDays(parseInt(e.target.value) || 365)
+                    }
+                  />
+                </Col>
+                <Col sm={4}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleUpdateRetention}
+                    disabled={retentionDays === settings.retentionDays}
+                  >
+                    Update
+                  </Button>
+                </Col>
+              </Form.Group>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={4}>
+                  Organization
+                </Form.Label>
+                <Col sm={4}>
+                  <Form.Control type="text" value={settings.org} disabled />
+                </Col>
+              </Form.Group>
+              <Form.Group as={Row} className="mb-3">
+                <Form.Label column sm={4}>
+                  Bucket
+                </Form.Label>
+                <Col sm={4}>
+                  <Form.Control type="text" value={settings.bucket} disabled />
+                </Col>
+              </Form.Group>
+            </Form>
+          </Card.Body>
+        </Card>
+      )}
+
+      {/* Access Links Card */}
+      {isRunning && credentials && (
+        <Card className="mb-4">
+          <Card.Header>
+            <FontAwesomeIcon icon={faChartLine} className="me-2" />
+            Access
+          </Card.Header>
+          <Card.Body>
+            <Row>
+              <Col md={6}>
+                <h6>Grafana Dashboard</h6>
+                <p className="text-muted">
+                  View historical data with pre-configured dashboards
+                </p>
+                {credentials.grafanaUser && (
+                  <Table size="sm" borderless className="mb-2">
+                    <tbody>
+                      <tr>
+                        <td className="text-muted" style={{ width: '80px' }}>
+                          Username:
+                        </td>
+                        <td>
+                          <Form.Control
+                            type="text"
+                            readOnly
+                            size="sm"
+                            value={credentials.grafanaUser}
+                            onClick={(e) =>
+                              (e.target as HTMLInputElement).select()
+                            }
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="text-muted">Password:</td>
+                        <td>
+                          <Form.Control
+                            type="text"
+                            readOnly
+                            size="sm"
+                            value={credentials.grafanaPassword || ''}
+                            onClick={(e) =>
+                              (e.target as HTMLInputElement).select()
+                            }
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </Table>
+                )}
+                <Button
+                  variant="primary"
+                  href={grafanaHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FontAwesomeIcon icon={faExternalLinkAlt} /> Open Grafana
+                </Button>
+              </Col>
+              <Col md={6}>
+                <h6>InfluxDB UI</h6>
+                <p className="text-muted">
+                  Direct access to the database for advanced queries. Only
+                  accessible from the server itself (localhost:3002).
+                </p>
+                {credentials.influxUser && (
+                  <Table size="sm" borderless className="mb-2">
+                    <tbody>
+                      <tr>
+                        <td className="text-muted" style={{ width: '80px' }}>
+                          Username:
+                        </td>
+                        <td>
+                          <Form.Control
+                            type="text"
+                            readOnly
+                            size="sm"
+                            value={credentials.influxUser}
+                            onClick={(e) =>
+                              (e.target as HTMLInputElement).select()
+                            }
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="text-muted">Password:</td>
+                        <td>
+                          <Form.Control
+                            type="text"
+                            readOnly
+                            size="sm"
+                            value={credentials.influxPassword || ''}
+                            onClick={(e) =>
+                              (e.target as HTMLInputElement).select()
+                            }
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </Table>
+                )}
+                <Button
+                  variant="secondary"
+                  href="http://localhost:3002"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FontAwesomeIcon icon={faExternalLinkAlt} /> Open InfluxDB
+                </Button>
+              </Col>
+            </Row>
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="info"
+              size="sm"
+              onClick={handleRefreshGrafana}
+              disabled={isRefreshing}
+            >
+              <FontAwesomeIcon icon={faSync} spin={isRefreshing} />{' '}
+              {isRefreshing ? 'Refreshing...' : 'Refresh Grafana Token'}
+            </Button>
+            <small className="text-muted ms-2">
+              Use this after changing SignalK security settings
+            </small>
+          </Card.Footer>
+        </Card>
+      )}
+
+      {isRunning && (
+        <Card className="border-danger">
+          <Card.Header className="text-danger">Disable History</Card.Header>
+          <Card.Body>
+            <p>
+              Stop the history database containers. You can choose to keep the
+              data for later re-enabling.
+            </p>
+          </Card.Body>
+          <Card.Footer>
+            <Button
+              variant="warning"
+              className="me-2"
+              onClick={() => handleDisable(true)}
+              disabled={isDisabling}
+            >
+              {isDisabling ? (
+                <FontAwesomeIcon icon={faCircleNotch} spin />
+              ) : (
+                <FontAwesomeIcon icon={faStop} />
+              )}{' '}
+              Disable (Keep Data)
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => handleDisable(false)}
+              disabled={isDisabling}
+            >
+              <FontAwesomeIcon icon={faStop} /> Disable and Delete Data
+            </Button>
+          </Card.Footer>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+export default History

@@ -107,6 +107,7 @@
     "geolib": "^3.3.3",
     "get-folder-size": "^5.0.0",
     "helmet": "^8.1.0",
+    "http-proxy-middleware": "^3.0.5",
     "jose": "^6.1.0",
     "json-patch": "^0.7.0",
     "jsonwebtoken": "^9.0.0",

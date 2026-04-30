@@ -1,6 +1,7 @@
 import { webSocketService } from './services/WebSocketService'
 import { useStore } from './store'
 import { authFetch, fetchAllData, fetchLoginStatus } from './dataFetching'
+import { serverApi } from './services/api'
 
 export { fetchAllData, fetchLoginStatus }
 
@@ -20,14 +21,25 @@ export async function logoutAction(): Promise<void> {
   await fetchLoginStatus()
 }
 
-export function restartAction(): void {
+export async function restartAction(): Promise<void> {
   if (confirm('Are you sure you want to restart?')) {
-    fetch(`${window.serverRoutesPrefix}/restart`, {
-      credentials: 'include',
-      method: 'PUT'
-    }).then(() => {
-      useStore.getState().setRestarting(true)
-    })
+    useStore.getState().setRestarting(true)
+    try {
+      await serverApi.restart()
+    } catch (error) {
+      // Network errors and 502s are expected during restart — the server goes down
+      // before the proxied response arrives, breaking the connection.
+      const isExpectedRestartError =
+        error instanceof TypeError ||
+        (error instanceof Error && /502|503|fetch/.test(error.message))
+      if (!isExpectedRestartError) {
+        console.error('Failed to restart server:', error)
+        useStore.getState().setRestarting(false)
+        alert(
+          `Restart failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
+      }
+    }
   }
 }
 
