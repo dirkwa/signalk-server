@@ -544,13 +544,14 @@ const ServerUpdate: React.FC = () => {
                 </thead>
                 <tbody>
                   {/* Current version first */}
-                  {versions.local.find((v) => v.tag === versions.current.tag) &&
-                    renderVersionRow(
-                      versions.local.find(
-                        (v) => v.tag === versions.current.tag
-                      )!,
-                      true
-                    )}
+                  {(() => {
+                    const currentLocal = versions.local.find(
+                      (v) => v.tag === versions.current.tag
+                    )
+                    return currentLocal
+                      ? renderVersionRow(currentLocal, true)
+                      : null
+                  })()}
                   {/* Other local versions */}
                   {versions.local
                     .filter((v) => v.tag !== versions.current.tag)

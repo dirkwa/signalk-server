@@ -365,6 +365,13 @@ module.exports = function (
         },
         on: {
           proxyReq: (proxyReq, req) => {
+            // body-parser only parses JSON bodies, so only re-stream those.
+            // Other content types (multipart, form-urlencoded, raw) flow through
+            // the unparsed request stream untouched.
+            const contentType = req.headers['content-type'] || ''
+            if (!contentType.includes('application/json')) {
+              return
+            }
             const body = (req as Request).body
             if (body && Object.keys(body).length > 0) {
               const bodyData = JSON.stringify(body)

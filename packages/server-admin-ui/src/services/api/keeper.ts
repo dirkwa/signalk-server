@@ -105,10 +105,28 @@ export function createKeeperApi(baseUrl: string) {
           }>
         }>(response)
 
+        const validStates: ContainerInfo['state'][] = [
+          'running',
+          'stopped',
+          'created',
+          'exited',
+          'paused'
+        ]
+        const validHealthStates: NonNullable<
+          ContainerInfo['health']
+        >['status'][] = ['healthy', 'unhealthy', 'starting', 'none']
+
+        const state = (validStates as string[]).includes(rawContainer.status)
+          ? (rawContainer.status as ContainerInfo['state'])
+          : 'stopped'
+        const isHealthy = (validHealthStates as string[]).includes(
+          rawContainer.health
+        )
+
         return {
           id: rawContainer.id,
           name: rawContainer.name,
-          state: rawContainer.status as ContainerInfo['state'],
+          state,
           status: rawContainer.status,
           created: rawContainer.created,
           startedAt: rawContainer.started,
@@ -120,13 +138,11 @@ export function createKeeperApi(baseUrl: string) {
             protocol: p.protocol || 'tcp'
           })),
           health:
-            rawContainer.health !== 'none'
+            isHealthy && rawContainer.health !== 'none'
               ? {
-                  status: rawContainer.health as
-                    | 'healthy'
-                    | 'unhealthy'
-                    | 'starting'
-                    | 'none',
+                  status: rawContainer.health as NonNullable<
+                    ContainerInfo['health']
+                  >['status'],
                   failingStreak: 0
                 }
               : undefined
@@ -175,18 +191,11 @@ export function createKeeperApi(baseUrl: string) {
         const response = await keeperFetch(
           `${apiUrl}/api/container/logs?lines=${lines}&source=${source}`
         )
-        // Strip ANSI escape codes that the terminal renderer would handle
-        const data = await handleResponse<{
+        // Pass ANSI escape codes through; ContainerLogs.tsx renders them via ansi-to-html.
+        return handleResponse<{
           lines: Array<{ timestamp: string; message: string; level: string }>
           count: number
         }>(response)
-        return {
-          ...data,
-          lines: data.lines.map((l) => ({
-            ...l,
-            message: l.message.replace(/\x1b\[[0-9;]*m/g, '')
-          }))
-        }
       },
 
       start: async (): Promise<void> => {
@@ -611,7 +620,8 @@ export function createKeeperApi(baseUrl: string) {
 
       // Returns EventSource for SSE stream
       statusStream: (
-        onMessage: (status: UpdateStatus) => void
+        onMessage: (status: UpdateStatus) => void,
+        onError?: (event: Event) => void
       ): EventSource => {
         const eventSource = new EventSource(
           `${apiUrl}/api/update/status/stream`
@@ -623,6 +633,10 @@ export function createKeeperApi(baseUrl: string) {
           } catch {
             console.error('Failed to parse update status:', event.data)
           }
+        }
+        eventSource.onerror = (event) => {
+          console.error('Update status stream error:', event)
+          onError?.(event)
         }
         return eventSource
       },

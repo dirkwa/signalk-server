@@ -20,17 +20,31 @@ let runtimeConfig: RuntimeConfig = {
 }
 
 export function initializeApi(config: Partial<RuntimeConfig>): void {
-  runtimeConfig = {
+  const next: RuntimeConfig = {
     containerRuntime: config.containerRuntime ?? null,
     keeperUrl: config.keeperUrl ?? null,
     useKeeper: config.useKeeper ?? false
   }
 
+  // Idempotent: skip rebuild when called repeatedly with the same config
+  // (setAppStore fires on every appstore update event).
+  if (
+    signalkApi !== null &&
+    runtimeConfig.containerRuntime === next.containerRuntime &&
+    runtimeConfig.keeperUrl === next.keeperUrl &&
+    runtimeConfig.useKeeper === next.useKeeper
+  ) {
+    return
+  }
+
+  runtimeConfig = next
   signalkApi = createSignalkApi()
 
   if (runtimeConfig.useKeeper) {
     // Proxy through SignalK server — works with HTTPS, remote access, any network topology
     keeperApi = createKeeperApi(`${window.serverRoutesPrefix}/keeper`)
+  } else {
+    keeperApi = null
   }
 }
 
@@ -46,6 +60,10 @@ export function getKeeperApi(): KeeperApi {
   if (!keeperApi) {
     throw new Error('Keeper API not initialized or not available')
   }
+  return keeperApi
+}
+
+export function getKeeperApiOrNull(): KeeperApi | null {
   return keeperApi
 }
 
@@ -417,6 +435,8 @@ export const cloudApi = {
   restoreReset: async () => {
     if (shouldUseKeeper()) {
       await getKeeperApi().cloud.restoreReset()
+    } else {
+      throw new Error('Cloud restore not supported without Keeper')
     }
   }
 }

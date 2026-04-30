@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Alert from 'react-bootstrap/Alert'
 import Badge from 'react-bootstrap/Badge'
 import Button from 'react-bootstrap/Button'
@@ -70,6 +70,16 @@ const SystemHealth: React.FC = () => {
     null
   )
   const [isUpgrading, setIsUpgrading] = useState(false)
+  const keeperPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (keeperPollRef.current) {
+        clearInterval(keeperPollRef.current)
+        keeperPollRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!useKeeper || !shouldUseKeeper()) {
@@ -246,22 +256,26 @@ const SystemHealth: React.FC = () => {
       // Poll for Keeper to come back online
       let attempts = 0
       const maxAttempts = 60 // 2 minutes max
-      const pollInterval = setInterval(async () => {
+      const stopPolling = () => {
+        if (keeperPollRef.current) {
+          clearInterval(keeperPollRef.current)
+          keeperPollRef.current = null
+        }
+      }
+      keeperPollRef.current = setInterval(async () => {
         attempts++
         try {
           const newVersion = await healthApi.checkKeeperUpdate()
           if (newVersion) {
-            clearInterval(pollInterval)
+            stopPolling()
             setKeeperVersion(newVersion)
             setUpgradeState({ step: 'idle' })
             setIsUpgrading(false)
-            // Reload all data
             loadAllData()
           }
         } catch {
-          // Keeper still restarting
           if (attempts >= maxAttempts) {
-            clearInterval(pollInterval)
+            stopPolling()
             setError('Keeper restart timed out. Please refresh the page.')
             setUpgradeState({ step: 'idle' })
             setIsUpgrading(false)

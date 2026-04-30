@@ -111,6 +111,11 @@ export function createSignalkApi() {
         username?: string
       }> => {
         const response = await fetch('/signalk/v1/auth/login')
+        if (!response.ok) {
+          throw new Error(
+            `Login status check failed: ${response.status} ${response.statusText}`
+          )
+        }
         return response.json()
       },
 
@@ -123,11 +128,23 @@ export function createSignalkApi() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
         })
+        if (!response.ok) {
+          throw new Error(
+            `Login failed: ${response.status} ${response.statusText}`
+          )
+        }
         return response.json()
       },
 
       logout: async (): Promise<void> => {
-        await fetch('/signalk/v1/auth/logout', { method: 'PUT' })
+        const response = await fetch('/signalk/v1/auth/logout', {
+          method: 'PUT'
+        })
+        if (!response.ok) {
+          throw new Error(
+            `Logout failed: ${response.status} ${response.statusText}`
+          )
+        }
       }
     }
   }

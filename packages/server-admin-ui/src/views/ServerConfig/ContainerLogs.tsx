@@ -21,7 +21,7 @@ import { faServer } from '@fortawesome/free-solid-svg-icons/faServer'
 import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase'
 import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine'
 import { faCog } from '@fortawesome/free-solid-svg-icons/faCog'
-import { getKeeperApi } from '../../services/api'
+import { getKeeperApiOrNull } from '../../services/api'
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 
 interface LogLine {
@@ -97,7 +97,7 @@ export default function ContainerLogs() {
   const [historyStatus, setHistoryStatus] = useState<HistoryStatus | null>(null)
 
   const logContainerRef = useRef<HTMLDivElement>(null)
-  const keeperApi = getKeeperApi()
+  const keeperApi = getKeeperApiOrNull()
 
   useEffect(() => {
     const timer = setTimeout(() => {

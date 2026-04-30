@@ -31,7 +31,8 @@ export async function restartAction(): Promise<void> {
       // before the proxied response arrives, breaking the connection.
       const isExpectedRestartError =
         error instanceof TypeError ||
-        (error instanceof Error && /502|503|fetch/.test(error.message))
+        (error instanceof Error &&
+          /\b(502|503)\b|failed to fetch|networkerror/i.test(error.message))
       if (!isExpectedRestartError) {
         console.error('Failed to restart server:', error)
         useStore.getState().setRestarting(false)
