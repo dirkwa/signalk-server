@@ -365,4 +365,47 @@ describe('Deltacache', () => {
         }
       })
   })
+
+  it('getMultiSourcePaths surfaces fan-out paths even with one publisher', function () {
+    // When the user has tagged a path as fan-out (sentinel `*` entry
+    // in priorities.json) and only one source is currently emitting,
+    // the path would normally drop below the multi-source threshold
+    // and disappear from the priorities UI. The fan-out branch in
+    // getMultiSourcePaths must keep the path in the result so its
+    // group affiliation survives.
+    const fanOutPath = 'navigation.gnss.satellitesInView'
+    return doSendADelta({
+      context: 'vessels.self',
+      updates: [
+        {
+          $source: 'fanout.solo',
+          timestamp: '2024-01-15T10:30:02.000Z',
+          values: [{ path: fanOutPath, value: 7 }]
+        }
+      ]
+    }).then(() => {
+      // Stamp the fan-out marker into the running config (simulates
+      // a save from the admin UI).
+      const settings = theServer.app.config.settings
+      if (!settings.sourcePriorities) settings.sourcePriorities = {}
+      settings.sourcePriorities[fanOutPath] = [{ sourceRef: '*', timeout: 0 }]
+      // Prime a priority group that lists the live publisher so the
+      // fan-out branch can find the matching group and inject all
+      // its sources as publishers, anchoring the path back to the
+      // group.
+      settings.priorityGroups = [
+        {
+          id: 'fanout.test.group',
+          sources: ['fanout.solo', 'fanout.partner']
+        }
+      ]
+      const paths = theServer.app.deltaCache.getMultiSourcePaths()
+      paths.should.have.property(fanOutPath)
+      paths[fanOutPath].should.include('fanout.solo')
+      paths[fanOutPath].should.include('fanout.partner')
+      // Cleanup so subsequent tests start from a clean slate.
+      delete settings.sourcePriorities[fanOutPath]
+      delete settings.priorityGroups
+    })
+  })
 })

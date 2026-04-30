@@ -24,6 +24,7 @@ import { join } from 'path'
 import { toDelta, StreamBundle } from './streambundle'
 import { ContextMatcher, SignalKServer } from './types'
 import { Context, NormalizedDelta, SourceRef } from '@signalk/server-api'
+import { isFanOutPriorities } from './deltaPriority'
 
 const SOURCES_CACHE_FILE = 'sources-cache.json'
 
@@ -627,6 +628,12 @@ export default class DeltaCache {
     )
     const canonical = (ref: string): string => srcToCanonical.get(ref) ?? ref
 
+    // Per-path canonical publishers observed in the cache, regardless
+    // of publisher count. Multi-source paths drop in via the standard
+    // ≥2-source filter below; fan-out paths reuse this map when only
+    // one source is currently emitting so the path keeps its group
+    // affiliation in the priorities view.
+    const cachePublishers: Record<string, Set<string>> = {}
     const result: Record<string, Set<string>> = {}
     if (selfBranch) {
       const walk = (node: any, pathParts: string[]) => {
@@ -650,8 +657,9 @@ export default class DeltaCache {
             })
             if (sources.length > 0) {
               const canonicalSet = new Set(sources.map(canonical))
+              const path = pathParts.join('.')
+              cachePublishers[path] = canonicalSet
               if (canonicalSet.size > 1) {
-                const path = pathParts.join('.')
                 const set = result[path] ?? (result[path] = new Set<string>())
                 for (const s of canonicalSet) set.add(s)
               }
@@ -669,10 +677,42 @@ export default class DeltaCache {
       | undefined
     if (persisted) {
       for (const [path, entries] of Object.entries(persisted)) {
-        if (!Array.isArray(entries) || entries.length < 2) continue
+        if (!Array.isArray(entries)) continue
         if (path === 'notifications' || path.startsWith('notifications.')) {
           continue
         }
+        // Fan-out path (sentinel `*` entry): keep the path anchored to
+        // its group in the admin UI. Without this, when only one
+        // source is currently emitting, the path drops below the
+        // multi-source threshold and the group reconciliation pulls
+        // it out into "Ungrouped path overrides". Inject every source
+        // from whichever priority group already contains the live
+        // publisher(s) — that produces the connected-component edges
+        // computeGroups needs to keep the path in the group.
+        if (
+          isFanOutPriorities(
+            entries as unknown as Parameters<typeof isFanOutPriorities>[0]
+          )
+        ) {
+          const cached = cachePublishers[path]
+          if (!cached || cached.size === 0) continue
+          const set = result[path] ?? (result[path] = new Set<string>())
+          for (const s of cached) set.add(s)
+          const savedGroups = (this.app.config as any).settings
+            ?.priorityGroups as Array<{ sources?: string[] }> | undefined
+          if (Array.isArray(savedGroups)) {
+            for (const group of savedGroups) {
+              if (!Array.isArray(group?.sources)) continue
+              const groupSet = new Set(group.sources)
+              const overlap = [...cached].some((s) => groupSet.has(s))
+              if (overlap) {
+                for (const s of group.sources) set.add(canonical(s))
+              }
+            }
+          }
+          continue
+        }
+        if (entries.length < 2) continue
         const set = result[path] ?? (result[path] = new Set<string>())
         for (const entry of entries) {
           if (entry && typeof entry.sourceRef === 'string') {
