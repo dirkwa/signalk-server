@@ -387,10 +387,7 @@ const ServerUpdate: React.FC = () => {
               size="sm"
               variant="warning"
               onClick={() => handleSwitchVersion(version.tag)}
-              disabled={
-                updateStatus?.state !== 'idle' &&
-                updateStatus?.state !== undefined
-              }
+              disabled={!!updateStatus?.state && updateStatus.state !== 'idle'}
               title="Switch to this version"
             >
               <FontAwesomeIcon icon={faSync} /> Switch

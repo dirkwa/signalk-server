@@ -360,6 +360,8 @@ module.exports = function (
       createProxyMiddleware({
         target: keeperProxyUrl,
         changeOrigin: true,
+        timeout: 30000,
+        proxyTimeout: 30000,
         pathRewrite: {
           [`^${SERVERROUTESPREFIX}/keeper`]: ''
         },
@@ -380,12 +382,14 @@ module.exports = function (
               proxyReq.write(bodyData)
             }
           },
-          error: (err: Error, _req, res) => {
+          error: (err: NodeJS.ErrnoException, _req, res) => {
             console.error('Keeper proxy error:', err.message)
             if ('status' in res) {
-              ;(res as unknown as Response)
-                .status(502)
-                .json({ error: 'Keeper unreachable' })
+              const isTimeout =
+                err.code === 'ETIMEDOUT' || err.code === 'ECONNABORTED'
+              ;(res as unknown as Response).status(isTimeout ? 504 : 502).json({
+                error: isTimeout ? 'Keeper timed out' : 'Keeper unreachable'
+              })
             }
           }
         }

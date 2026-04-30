@@ -38,7 +38,9 @@ export function initializeApi(config: Partial<RuntimeConfig>): void {
   }
 
   runtimeConfig = next
-  signalkApi = createSignalkApi()
+  if (signalkApi === null) {
+    signalkApi = createSignalkApi()
+  }
 
   if (runtimeConfig.useKeeper) {
     // Proxy through SignalK server — works with HTTPS, remote access, any network topology

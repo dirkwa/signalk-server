@@ -8,7 +8,8 @@ export function createSignalkApi() {
   return {
     restart: async (): Promise<void> => {
       const response = await fetch(`${prefix}/restart`, {
-        method: 'PUT'
+        method: 'PUT',
+        credentials: 'include'
       })
       if (!response.ok) {
         throw new Error(`Failed to restart: ${response.statusText}`)
@@ -31,6 +32,7 @@ export function createSignalkApi() {
         formData.append('backupFile', file)
         const response = await fetch(`${prefix}/validateBackup`, {
           method: 'POST',
+          credentials: 'include',
           body: formData
         })
         if (!response.ok) {
@@ -42,6 +44,7 @@ export function createSignalkApi() {
       restore: async (files: string[]): Promise<void> => {
         const response = await fetch(`${prefix}/restore`, {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ files })
         })
@@ -55,7 +58,7 @@ export function createSignalkApi() {
       install: async (version: string): Promise<void> => {
         const response = await fetch(
           `${prefix}/appstore/install/signalk-server/${version}`,
-          { method: 'POST' }
+          { method: 'POST', credentials: 'include' }
         )
         if (!response.ok) {
           throw new Error(`Update failed: ${response.statusText}`)
@@ -87,7 +90,7 @@ export function createSignalkApi() {
       install: async (name: string, version: string): Promise<void> => {
         const response = await fetch(
           `${prefix}/appstore/install/${name}/${version}`,
-          { method: 'POST' }
+          { method: 'POST', credentials: 'include' }
         )
         if (!response.ok) {
           throw new Error(`Install failed: ${response.statusText}`)
@@ -96,7 +99,8 @@ export function createSignalkApi() {
 
       remove: async (name: string): Promise<void> => {
         const response = await fetch(`${prefix}/appstore/remove/${name}`, {
-          method: 'POST'
+          method: 'POST',
+          credentials: 'include'
         })
         if (!response.ok) {
           throw new Error(`Remove failed: ${response.statusText}`)
@@ -110,7 +114,9 @@ export function createSignalkApi() {
         authenticationRequired: boolean
         username?: string
       }> => {
-        const response = await fetch('/signalk/v1/auth/login')
+        const response = await fetch('/signalk/v1/auth/login', {
+          credentials: 'include'
+        })
         if (!response.ok) {
           throw new Error(
             `Login status check failed: ${response.status} ${response.statusText}`
@@ -125,6 +131,7 @@ export function createSignalkApi() {
       ): Promise<{ token?: string; status?: string }> => {
         const response = await fetch('/signalk/v1/auth/login', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
         })
@@ -138,7 +145,8 @@ export function createSignalkApi() {
 
       logout: async (): Promise<void> => {
         const response = await fetch('/signalk/v1/auth/logout', {
-          method: 'PUT'
+          method: 'PUT',
+          credentials: 'include'
         })
         if (!response.ok) {
           throw new Error(

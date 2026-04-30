@@ -22,6 +22,7 @@ import { faDatabase } from '@fortawesome/free-solid-svg-icons/faDatabase'
 import { faChartLine } from '@fortawesome/free-solid-svg-icons/faChartLine'
 import { faCog } from '@fortawesome/free-solid-svg-icons/faCog'
 import { getKeeperApiOrNull } from '../../services/api'
+import type { HistorySystemStatus } from '../../services/api/types'
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 
 interface LogLine {
@@ -56,6 +57,8 @@ const LINE_OPTIONS = [100, 250, 500, 1000, 2500, 5000]
 const ansiConverter = new AnsiToHtml({
   fg: '#d4d4d4',
   bg: '#1e1e1e',
+  // Escape HTML in log content before injecting via dangerouslySetInnerHTML
+  escapeXML: true,
   colors: {
     0: '#1e1e1e', // black
     1: '#f44747', // red
@@ -76,12 +79,6 @@ const ansiConverter = new AnsiToHtml({
   }
 })
 
-interface HistoryStatus {
-  status: string
-  influxdb: { status: string } | null
-  grafana: { status: string } | null
-}
-
 export default function ContainerLogs() {
   const [filter, setFilter] = useState('')
   const [debouncedFilter, setDebouncedFilter] = useState('')
@@ -94,7 +91,8 @@ export default function ContainerLogs() {
   const [logsData, setLogsData] = useState<LogsResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [historyStatus, setHistoryStatus] = useState<HistoryStatus | null>(null)
+  const [historyStatus, setHistoryStatus] =
+    useState<HistorySystemStatus | null>(null)
 
   const logContainerRef = useRef<HTMLDivElement>(null)
   const keeperApi = getKeeperApiOrNull()
