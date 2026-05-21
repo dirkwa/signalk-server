@@ -40,18 +40,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
 #
 # docker-ce-cli is fetched from Docker's official APT repo (Ubuntu's main
 # repo only ships docker.io, which pulls in the daemon — unwanted here).
-# It is only published for amd64/arm64, so on arm/v7 we install podman
-# alone, which can also talk to docker.sock via its docker-API compat mode.
-RUN ARCH=$(dpkg --print-architecture) \
-  && apt-get update \
+RUN apt-get update \
   && apt-get -y install --no-install-recommends podman \
-  && if [ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ]; then \
-       install -m 0755 -d /etc/apt/keyrings \
-       && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
-       && chmod a+r /etc/apt/keyrings/docker.asc \
-       && echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" \
-            > /etc/apt/sources.list.d/docker.list \
-       && apt-get update \
-       && apt-get -y install --no-install-recommends docker-ce-cli; \
-     fi \
+  && install -m 0755 -d /etc/apt/keyrings \
+  && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
+  && chmod a+r /etc/apt/keyrings/docker.asc \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" \
+       > /etc/apt/sources.list.d/docker.list \
+  && apt-get update \
+  && apt-get -y install --no-install-recommends docker-ce-cli \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
