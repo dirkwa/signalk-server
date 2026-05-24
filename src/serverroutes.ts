@@ -66,6 +66,7 @@ import redirects from './redirects.json'
 import rateLimit from 'express-rate-limit'
 import { execSync } from 'child_process'
 import { recommendedVersion as recommendedNodeVersion } from './version'
+import { getInstalledPackages } from './installed-packages'
 import { Type } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 
@@ -2032,6 +2033,13 @@ module.exports = function (
       recommendedNodeVersion
     })
   })
+
+  app.get(
+    `${SERVERROUTESPREFIX}/installedPackages`,
+    (_req: Request, res: Response) => {
+      res.json({ packages: getInstalledPackages(app.config) })
+    }
+  )
 
   app.securityStrategy.addAdminWriteMiddleware(
     `${SERVERROUTESPREFIX}/rememberDebug`
