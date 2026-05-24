@@ -41,7 +41,7 @@ describe('getInstalledPackages', () => {
     const config = {
       appPath: tmpDir,
       configPath: tmpDir
-    } as never
+    }
 
     const result = getInstalledPackages(config)
     chai.expect(result).to.deep.include.members([
@@ -57,7 +57,7 @@ describe('getInstalledPackages', () => {
     const config = {
       appPath: tmpDir,
       configPath: tmpDir
-    } as never
+    }
 
     const result = getInstalledPackages(config)
     chai.expect(result).to.have.lengthOf(1)
@@ -83,7 +83,7 @@ describe('getInstalledPackages', () => {
       const config = {
         appPath,
         configPath: tmpDir
-      } as never
+      }
 
       const result = getInstalledPackages(config)
       const entry = result.find((p) => p.name === 'bonjour-service')
@@ -105,7 +105,7 @@ describe('getInstalledPackages', () => {
     const config = {
       appPath: tmpDir,
       configPath: tmpDir
-    } as never
+    }
 
     const result = getInstalledPackages(config)
     chai.expect(result).to.deep.equal([])

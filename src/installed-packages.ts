@@ -34,6 +34,8 @@ export interface InstalledPackage {
   version: string
 }
 
+export type InstalledPackagesConfig = Pick<Config, 'appPath' | 'configPath'>
+
 interface PackageJson {
   version?: unknown
 }
@@ -60,7 +62,9 @@ function readPackageVersion(
   return undefined
 }
 
-export function getInstalledPackages(config: Config): InstalledPackage[] {
+export function getInstalledPackages(
+  config: InstalledPackagesConfig
+): InstalledPackage[] {
   const { appPath, configPath } = config
   const searchDirs = (
     appPath === configPath ? [appPath] : [configPath, appPath]
