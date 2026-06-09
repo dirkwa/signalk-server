@@ -23,7 +23,7 @@ export default class DeltaChain {
     // pass the unmodified delta to the next handler. `continued` guards
     // against advancing twice when a handler calls next() and then throws.
     let continued = false
-    const next = (nextMsg: any) => {
+    const next = (nextMsg: Delta) => {
       if (continued) {
         return
       }
