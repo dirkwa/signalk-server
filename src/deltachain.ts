@@ -19,7 +19,16 @@ export default class DeltaChain {
       this.dispatchMessage(msg)
       return
     }
-    this.chain[index](msg, this.next[index])
+    // Isolate handlers: a plugin's delta input handler that throws must not
+    // abort the chain, or the delta (and any later handler's work, including
+    // metadata registration) is silently dropped for every input. Log and
+    // pass the unmodified delta to the next handler.
+    try {
+      this.chain[index](msg, this.next[index])
+    } catch (err) {
+      console.error('Delta input handler threw, skipping it:', err)
+      this.doProcess(index + 1, msg)
+    }
   }
 
   register(handler: DeltaInputHandler) {
