@@ -4,10 +4,8 @@ import { Delta, DeltaInputHandler } from '@signalk/server-api'
 
 export default class DeltaChain {
   chain: any
-  next: any
   constructor(private dispatchMessage: any) {
     this.chain = []
-    this.next = []
   }
 
   process(msg: Delta) {
@@ -22,32 +20,31 @@ export default class DeltaChain {
     // Isolate handlers: a plugin's delta input handler that throws must not
     // abort the chain, or the delta (and any later handler's work, including
     // metadata registration) is silently dropped for every input. Log and
-    // pass the unmodified delta to the next handler.
+    // pass the unmodified delta to the next handler. `continued` guards
+    // against advancing twice when a handler calls next() and then throws.
+    let continued = false
+    const next = (nextMsg: any) => {
+      if (continued) {
+        return
+      }
+      continued = true
+      this.doProcess(index + 1, nextMsg)
+    }
     try {
-      this.chain[index](msg, this.next[index])
+      this.chain[index](msg, next)
     } catch (err) {
       console.error('Delta input handler threw, skipping it:', err)
-      this.doProcess(index + 1, msg)
+      next(msg)
     }
   }
 
   register(handler: DeltaInputHandler) {
     this.chain.push(handler)
-    this.updateNexts()
     return () => {
       const handlerIndex = this.chain.indexOf(handler)
       if (handlerIndex >= 0) {
         this.chain.splice(handlerIndex, 1)
-        this.updateNexts()
       }
     }
-  }
-
-  updateNexts() {
-    this.next = this.chain.map((chainElement: any, index: number) => {
-      return (msg: any) => {
-        this.doProcess(index + 1, msg)
-      }
-    })
   }
 }

@@ -1,9 +1,11 @@
 import { expect } from 'chai'
 import DeltaChain from '../src/deltachain'
-import { Delta } from '@signalk/server-api'
+import { Context, Delta, Path, Value } from '@signalk/server-api'
 
-const delta = (id: string): Delta =>
-  ({ context: 'vessels.self', updates: [{ id }] }) as unknown as Delta
+const delta = (id: string): Delta => ({
+  context: 'vessels.self' as Context,
+  updates: [{ values: [{ path: id as Path, value: 1 as Value }] }]
+})
 
 describe('DeltaChain', function () {
   it('dispatches a delta through to the end when there are no handlers', function () {
@@ -57,5 +59,22 @@ describe('DeltaChain', function () {
     chain.process(msg)
     expect(seen).to.deep.equal(['after'])
     expect(dispatched).to.deep.equal([msg])
+  })
+
+  it('does not continue twice when a handler calls next and then throws', function () {
+    const dispatched: Delta[] = []
+    const chain = new DeltaChain((msg: Delta) => dispatched.push(msg))
+    const seen: string[] = []
+    chain.register((msg, next) => {
+      next(msg)
+      throw new Error('boom after next')
+    })
+    chain.register((msg, next) => {
+      seen.push('after')
+      next(msg)
+    })
+    chain.process(delta('a'))
+    expect(seen).to.deep.equal(['after'])
+    expect(dispatched).to.have.lengthOf(1)
   })
 })
