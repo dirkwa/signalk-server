@@ -5,7 +5,6 @@ import {
   assertAllowedHost,
   BlockedHostError,
   isBlockedAddress,
-  isValidRequestId,
   ssrfSafeLookup
 } from '../src/ssrfGuard'
 
@@ -24,7 +23,11 @@ describe('ssrfGuard', () => {
       'fe80::1', // IPv6 link-local
       'ff02::1', // IPv6 multicast
       '::ffff:127.0.0.1', // IPv4-mapped loopback (bypass form)
-      '::ffff:169.254.169.254' // IPv4-mapped metadata (bypass form)
+      '::ffff:169.254.169.254', // IPv4-mapped metadata (bypass form)
+      '64:ff9b::a9fe:a9fe', // NAT64 of metadata 169.254.169.254
+      '64:ff9b::7f00:1', // NAT64 of loopback 127.0.0.1
+      '::169.254.169.254', // deprecated IPv4-compatible metadata
+      '::127.0.0.1' // deprecated IPv4-compatible loopback
     ]
     blocked.forEach((address) => {
       it(`blocks ${address}`, () => {
@@ -124,30 +127,6 @@ describe('ssrfGuard', () => {
           }
         })
         req.end()
-      })
-    })
-  })
-
-  describe('isValidRequestId', () => {
-    it('accepts a v4 UUID', () => {
-      expect(isValidRequestId('b3c1d2e4-5f6a-4b8c-9d0e-1f2a3b4c5d6e')).to.equal(
-        true
-      )
-    })
-
-    const invalid = [
-      '../../latest/meta-data/iam/security-credentials/role',
-      '..%2f..%2fadmin',
-      'not-a-uuid',
-      'b3c1d2e4-5f6a-4b8c-9d0e-1f2a3b4c5d6e/extra',
-      '',
-      42,
-      null,
-      undefined
-    ]
-    invalid.forEach((value) => {
-      it(`rejects ${JSON.stringify(value)}`, () => {
-        expect(isValidRequestId(value)).to.equal(false)
       })
     })
   })

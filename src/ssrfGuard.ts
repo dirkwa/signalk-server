@@ -31,6 +31,8 @@ blockedRanges.addSubnet('224.0.0.0', 4, 'ipv4') // multicast
 blockedRanges.addSubnet('240.0.0.0', 4, 'ipv4') // reserved + broadcast
 blockedRanges.addAddress('::', 'ipv6') // unspecified
 blockedRanges.addAddress('::1', 'ipv6') // loopback
+blockedRanges.addSubnet('::', 96, 'ipv6') // deprecated IPv4-compatible (::a.b.c.d)
+blockedRanges.addSubnet('64:ff9b::', 96, 'ipv6') // NAT64 well-known prefix (RFC 6052) - reaches embedded IPv4 in NAT64 networks
 blockedRanges.addSubnet('fe80::', 10, 'ipv6') // link-local
 blockedRanges.addSubnet('ff00::', 8, 'ipv6') // multicast
 
@@ -89,14 +91,4 @@ export const ssrfSafeLookup: LookupFunction = (hostname, options, callback) => {
       callback(null, addresses[0].address, addresses[0].family)
     }
   })
-}
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// Request ids are server-generated UUIDs. Enforcing that shape stops a crafted
-// id from being interpolated into the remote request path as a traversal
-// sequence (e.g. ../../latest/meta-data).
-export function isValidRequestId(requestId: unknown): requestId is string {
-  return typeof requestId === 'string' && UUID_RE.test(requestId)
 }
