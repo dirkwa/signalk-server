@@ -16,6 +16,11 @@
 
 import * as http from 'http'
 import * as https from 'https'
+import {
+  assertAllowedHost,
+  isValidRequestId,
+  ssrfSafeLookup
+} from './ssrfGuard'
 import bcrypt from 'bcryptjs'
 import busboy from 'busboy'
 import commandExists from 'command-exists'
@@ -2455,6 +2460,12 @@ module.exports = function (
     (req: Request, res: Response) => {
       const { host, port, useTLS, selfsignedcert, requestId } = req.body
 
+      if (!isValidRequestId(requestId)) {
+        return res
+          .status(400)
+          .json({ state: 'ERROR', error: 'Invalid requestId' })
+      }
+
       makeRemoteRequest(
         host,
         port,
@@ -2492,6 +2503,12 @@ function makeRemoteRequest(
 ): Promise<{ status: number | undefined; data: string }> {
   const protocol = useTLS ? https : http
   return new Promise((resolve, reject) => {
+    try {
+      assertAllowedHost(host)
+    } catch (err) {
+      reject(err)
+      return
+    }
     const options = {
       hostname: host,
       port,
@@ -2501,7 +2518,8 @@ function makeRemoteRequest(
         ...(headers || {}),
         ...(body ? { 'Content-Type': 'application/json' } : {})
       },
-      rejectUnauthorized: !selfsignedcert
+      rejectUnauthorized: !selfsignedcert,
+      lookup: ssrfSafeLookup
     }
     const req = protocol.request(options, (response) => {
       let data = ''
