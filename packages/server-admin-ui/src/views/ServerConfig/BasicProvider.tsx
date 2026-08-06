@@ -982,7 +982,10 @@ function BaudRateInputCanboat({
   onChange: OnChangeHandler
 }) {
   // Default baud rate based on device type - controlled with fallback
-  const defaultBaudrate = value.type === 'ikonvert-canboatjs' ? 230400 : 115200
+  const defaultBaudrate =
+    value.type === 'ikonvert-canboatjs' || value.type === 'ikonvert'
+      ? 230400
+      : 115200
   const displayBaudrate = value.baudrate ?? defaultBaudrate
 
   return (
@@ -1709,7 +1712,13 @@ function NMEA2000({
               Actisense NGT-1 (canboat wasm)
             </option>
             <option value="ikonvert-canboatjs">iKonvert (canboatjs)</option>
+            <option value="ikonvert" disabled={!hasAnalyzer}>
+              iKonvert (canboat)
+            </option>
             <option value="navlink2-tcp-canboatjs">NavLink2 (canboatjs)</option>
+            <option value="navlink2" disabled={!hasAnalyzer}>
+              NavLink2 (canboat)
+            </option>
             <option value="canboat-csv-canboatjs">
               canboat-pipeline CSV R/W (canboatjs)
             </option>
@@ -1718,6 +1727,12 @@ function NMEA2000({
             </option>
             <option value="ydwg02-wasm" disabled={!hasWasm}>
               Yacht Devices RAW TCP (canboat wasm)
+            </option>
+            <option value="ydwg02" disabled={!hasAnalyzer}>
+              Yacht Devices RAW TCP (canboat)
+            </option>
+            <option value="ydwg02-udp" disabled={!hasAnalyzer}>
+              Yacht Devices RAW UDP (canboat)
             </option>
             <option value="ydwg02-udp-canboatjs">
               Yacht Devices RAW UDP (canboatjs)
@@ -1744,6 +1759,9 @@ function NMEA2000({
             <option value="w2k-1-n2k-actisense-canboatjs">
               W2K-1 N2K ACTISENSE (canboatjs)
             </option>
+            <option value="w2k-1-ascii" disabled={!hasAnalyzer}>
+              W2K-1 N2K ASCII (canboat)
+            </option>
             <option value="maretron-ipg-canboatjs">
               Maretron IPG 100 (canboatjs)
             </option>
@@ -1752,6 +1770,9 @@ function NMEA2000({
             </option>
             <option value="w2k-1-n2k-actisense-wasm" disabled={!hasWasm}>
               W2K-1 N2K ACTISENSE (canboat wasm)
+            </option>
+            <option value="maretron-ipg" disabled={!hasAnalyzer}>
+              Maretron IPG 100 (canboat)
             </option>
             <option value="canbus" disabled={!hasAnalyzer}>
               Canbus (canboat)
@@ -1763,14 +1784,23 @@ function NMEA2000({
         value.options.type === 'ngt-1-canboatjs' ||
         value.options.type === 'ngt-1-wasm' ||
         value.options.type === 'ydwg02-usb-canboatjs' ||
-        value.options.type === 'ikonvert-canboatjs') && (
+        value.options.type === 'ikonvert-canboatjs' ||
+        value.options.type === 'ikonvert') && (
         <div>
           <DeviceInput value={value.options} onChange={onChange} />
-          <BaudRateInputCanboat value={value.options} onChange={onChange} />
+          {/* The canboatjs iKonvert and YDWG-02 USB elements pin their
+              protocol's baud rate, so offering the control there would
+              save a value the server ignores. */}
+          {value.options.type !== 'ikonvert-canboatjs' &&
+            value.options.type !== 'ydwg02-usb-canboatjs' && (
+              <BaudRateInputCanboat value={value.options} onChange={onChange} />
+            )}
         </div>
       )}
       {(value.options.type === 'ydwg02-canboatjs' ||
-        value.options.type === 'ydwg02-wasm') && (
+        value.options.type === 'ydwg02-wasm' ||
+        value.options.type === 'ydwg02' ||
+        value.options.type === 'navlink2') && (
         <div>
           <HostInput value={value.options} onChange={onChange} />
           <PortInput value={value.options} onChange={onChange} />
@@ -1780,9 +1810,14 @@ function NMEA2000({
           />
         </div>
       )}
-      {value.options.type === 'ydwg02-udp-canboatjs' && (
+      {(value.options.type === 'ydwg02-udp-canboatjs' ||
+        value.options.type === 'ydwg02-udp') && (
         <div>
-          <HostInput value={value.options} onChange={onChange} />
+          {/* The native bridge listens on a UDP port and never dials a
+              host, so a Host value there would be saved and ignored. */}
+          {value.options.type !== 'ydwg02-udp' && (
+            <HostInput value={value.options} onChange={onChange} />
+          )}
           <PortInput value={value.options} onChange={onChange} />
           <div className="text-muted small mt-1 mb-2">
             UDP is receive-only — N2K device discovery and PGN 126208 instance
@@ -1854,7 +1889,8 @@ function NMEA2000({
       {(value.options.type === 'w2k-1-n2k-ascii-canboatjs' ||
         value.options.type === 'w2k-1-n2k-actisense-canboatjs' ||
         value.options.type === 'w2k-1-n2k-ascii-wasm' ||
-        value.options.type === 'w2k-1-n2k-actisense-wasm') && (
+        value.options.type === 'w2k-1-n2k-actisense-wasm' ||
+        value.options.type === 'w2k-1-ascii') && (
         <div>
           <HostInput value={value.options} onChange={onChange} />
           <PortInput value={value.options} onChange={onChange} />
@@ -1900,7 +1936,8 @@ function NMEA2000({
         </div>
       )}
       {(value.options.type === 'maretron-ipg-canboatjs' ||
-        value.options.type === 'maretron-ipg-wasm') && (
+        value.options.type === 'maretron-ipg-wasm' ||
+        value.options.type === 'maretron-ipg') && (
         <div>
           <HostInput value={value.options} onChange={onChange} />
           <PortInput value={value.options} onChange={onChange} />
@@ -1924,7 +1961,9 @@ function NMEA2000({
           </Form.Group>
           <div className="text-muted small mt-1 mb-2">
             Maretron IPG 100 Ethernet gateway. Default TCP port 6543. Uses
-            Maretron&apos;s 0xA5-framed binary protocol (handled by canboatjs).
+            Maretron&apos;s 0xA5-framed binary protocol. The password is sent in
+            the clear during the gateway&apos;s own connection handshake — the
+            protocol offers no encrypted alternative.
           </div>
         </div>
       )}
