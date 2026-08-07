@@ -363,7 +363,13 @@ module.exports = (theApp: any) => {
         )
       ])
         .then(([schema, uiSchema]) => {
-          const status = providerStatus.find((p: any) => p.id === plugin.name)
+          // Match on plugin.id: setPluginStatus/setPluginError stamp the
+          // entry with the plugin id (see doSetProviderStatus in index.ts),
+          // while plugin.name is the human-readable display name. Any plugin
+          // whose package sets a name — most of them — therefore never
+          // matched, so the statusMessage declared for this endpoint in
+          // openApi.json was always the empty string.
+          const status = providerStatus.find((p: any) => p.id === plugin.id)
           const statusMessage = status ? status.message : ''
           if (schema === undefined) {
             console.error(
