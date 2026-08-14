@@ -31,6 +31,7 @@ interface WasmN2kBytesOptions {
   /** Serial transport instead of TCP (e.g. an NGT-1 dongle). */
   device?: string
   baudrate?: number
+  noDataReceivedTimeout?: string | number
   byteKind: 'ngt1' | 'maretron-ipg'
   password?: string
   providerId?: string
@@ -71,6 +72,7 @@ function requireWasm(): WasmByteApi {
 
 const RECONNECT_DELAY = 3000
 const KEEPALIVE_INTERVAL = 20000
+const DEFAULT_IDLE_TIMEOUT_SECONDS = 60
 
 interface ByteTransport {
   write(data: Buffer): void
@@ -95,8 +97,6 @@ export default class WasmN2kBytes extends Transform {
     const createDebug = options.createDebug ?? require('debug')
     this.debug = createDebug('signalk:streams:wasm-n2k-bytes')
 
-    this.connect()
-
     this.txHandler = (pgn: unknown) => {
       try {
         const bytes = this.decoder.encodeFrame(JSON.stringify(pgn), true)
@@ -109,6 +109,8 @@ export default class WasmN2kBytes extends Transform {
     }
     options.app.on('nmea2000JsonOut', this.txHandler)
     options.app.emit('nmea2000OutAvailable')
+
+    this.connect()
   }
 
   private status(msg: string): void {
@@ -168,6 +170,23 @@ export default class WasmN2kBytes extends Transform {
       }
       const tcp = new Socket()
       this.status(`Connecting to ${host}:${port}`)
+      // Same idle-timeout handling as the tcp element: a half-open
+      // connection raises neither 'error' nor 'close', so without this
+      // the retry path never runs and the connection stays dead.
+      const parsedTimeout = Number.parseInt(
+        (this.options.noDataReceivedTimeout + '').trim()
+      )
+      const idleTimeout =
+        (isNaN(parsedTimeout) ? DEFAULT_IDLE_TIMEOUT_SECONDS : parsedTimeout) *
+        1000
+      if (idleTimeout > 0) {
+        tcp.setTimeout(idleTimeout)
+        tcp.on('timeout', () => {
+          this.debug.enabled &&
+            this.debug(`Idle timeout, closing socket ${host}:${port}`)
+          tcp.end()
+        })
+      }
       tcp.connect(port, host, () => onOpen(tcp))
       socket = tcp
     }
