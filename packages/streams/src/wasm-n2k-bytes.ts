@@ -86,6 +86,8 @@ export default class WasmN2kBytes extends Transform {
   private socket: ByteTransport | null = null
   private keepaliveTimer: NodeJS.Timeout | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
+  private idleTimer: NodeJS.Timeout | null = null
+  private idleMs = 0
   private stopped = false
   private readonly txHandler: (pgn: unknown) => void
   private readonly debug: DebugLogger
@@ -118,6 +120,31 @@ export default class WasmN2kBytes extends Transform {
       this.options.app.setProviderStatus?.(this.options.providerId, msg)
     }
     this.debug(msg)
+  }
+
+  private clearIdleTimer(): void {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer)
+      this.idleTimer = null
+    }
+  }
+
+  private armIdleTimer(): void {
+    this.clearIdleTimer()
+    if (this.idleMs <= 0) {
+      return
+    }
+    const socket = this.socket
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null
+      if (!socket || this.socket !== socket) {
+        return
+      }
+      this.debug.enabled && this.debug('Idle timeout, closing socket')
+      // destroy(), not end(): the peer is presumed gone, and only
+      // destroy fires 'close' immediately for the retry path.
+      socket.destroy()
+    }, this.idleMs)
   }
 
   private connect(): void {
@@ -170,29 +197,26 @@ export default class WasmN2kBytes extends Transform {
       }
       const tcp = new Socket()
       this.status(`Connecting to ${host}:${port}`)
-      // Same idle-timeout handling as the tcp element: a half-open
-      // connection raises neither 'error' nor 'close', so without this
-      // the retry path never runs and the connection stays dead.
+      // Receive-only idle timer: a half-open connection raises neither
+      // 'error' nor 'close', so without it the retry path never runs.
+      // socket.setTimeout() cannot serve here — it counts the periodic
+      // keepalive writes as activity, so it would never fire while the
+      // gateway sends nothing. Re-armed only in the data handler,
+      // cleared in retry and end().
       const parsedTimeout = Number.parseInt(
         (this.options.noDataReceivedTimeout + '').trim()
       )
-      const idleTimeout =
+      this.idleMs =
         (isNaN(parsedTimeout) ? DEFAULT_IDLE_TIMEOUT_SECONDS : parsedTimeout) *
         1000
-      if (idleTimeout > 0) {
-        tcp.setTimeout(idleTimeout)
-        tcp.on('timeout', () => {
-          this.debug.enabled &&
-            this.debug(`Idle timeout, closing socket ${host}:${port}`)
-          tcp.end()
-        })
-      }
       tcp.connect(port, host, () => onOpen(tcp))
       socket = tcp
     }
     this.socket = socket
+    this.armIdleTimer()
 
     socket.on('data', (buf: Buffer) => {
+      this.armIdleTimer()
       // Everything here runs inside a socket event handler, where an
       // uncaught throw takes the process down. Malformed framing from
       // a gateway must degrade to a logged error, not a crash.
@@ -225,6 +249,7 @@ export default class WasmN2kBytes extends Transform {
     })
 
     const retry = (why: string) => {
+      this.clearIdleTimer()
       if (this.keepaliveTimer) {
         clearInterval(this.keepaliveTimer)
         this.keepaliveTimer = null
@@ -271,6 +296,7 @@ export default class WasmN2kBytes extends Transform {
       clearInterval(this.keepaliveTimer)
       this.keepaliveTimer = null
     }
+    this.clearIdleTimer()
     this.socket?.destroy()
     this.socket = null
     super.end()
