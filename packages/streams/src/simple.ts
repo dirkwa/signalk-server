@@ -72,6 +72,8 @@ interface SimpleApp {
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: string, cb: (...args: any[]) => void): void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  removeListener(event: string, cb: (...args: any[]) => void): void
   emit(event: string, ...args: unknown[]): void
   emitPropertyValue(name: string, value: unknown): void
   setProviderStatus(id: string, msg: string): void
@@ -134,6 +136,13 @@ interface PipeElement {
 }
 
 type PipelineFactory = (options: SimpleOptions) => PipeElement[]
+
+// The wasm-backed elements load lazily (the server runs without
+// @canboat/wasm), so their constructor types are pulled from the
+// modules statically to keep the dynamic requires strictly typed.
+type WasmN2kCtor = typeof import('./wasm-n2k').default
+type WasmN2kOptions = ConstructorParameters<WasmN2kCtor>[0]
+type J1939CanCtor = typeof import('./j1939-can').default
 type PipeStartFactory = (
   subOptions: SubOptions,
   logging?: boolean
@@ -193,18 +202,20 @@ const dataTypeMapping: Record<string, PipelineFactory> = {
   },
   NMEA2000WASM: (options) => {
     const N2kCtor = requireN2kToSignalK()
-    const WasmN2kMod = require('./wasm-n2k') as {
-      default: new (options: object) => PipeElement
-    }
-    const WasmN2kCtor = WasmN2kMod.default ?? WasmN2kMod
-    const txBySubtype: Record<string, { txFormat: string; txEvent: string }> = {
+    const WasmN2kMod = require('./wasm-n2k') as
+      { default: WasmN2kCtor } | WasmN2kCtor
+    const Ctor = 'default' in WasmN2kMod ? WasmN2kMod.default : WasmN2kMod
+    const txBySubtype: Record<
+      string,
+      { txFormat: WasmN2kOptions['txFormat']; txEvent: string }
+    > = {
       'ydwg02-wasm': { txFormat: 'ydwg-raw', txEvent: 'ydwg02-out' },
       'w2k-1-n2k-ascii-wasm': { txFormat: 'n2k-ascii', txEvent: 'w2k-1-out' }
       // canbus-wasm: TX and address claiming stay with the canbus
       // transport element (candevice), which owns the socket.
     }
     const result: PipeElement[] = [
-      new (WasmN2kCtor as new (options: object) => PipeElement)({
+      new Ctor({
         ...options.subOptions,
         ...(txBySubtype[options.subOptions.type ?? ''] ?? {}),
         ...(options.subOptions.type === 'j1939-wasm' ? { j1939: true } : {})
@@ -219,12 +230,11 @@ const dataTypeMapping: Record<string, PipelineFactory> = {
     // No canboatjs variant exists for J1939 — the wasm decoder is the
     // only element that carries the J1939 schema flavor.
     const N2kCtor = requireN2kToSignalK()
-    const WasmN2kMod = require('./wasm-n2k') as {
-      default: new (options: object) => PipeElement
-    }
-    const WasmN2kCtor = WasmN2kMod.default ?? WasmN2kMod
+    const WasmN2kMod = require('./wasm-n2k') as
+      { default: WasmN2kCtor } | WasmN2kCtor
+    const Ctor = 'default' in WasmN2kMod ? WasmN2kMod.default : WasmN2kMod
     const result: PipeElement[] = [
-      new (WasmN2kCtor as new (options: object) => PipeElement)({
+      new Ctor({
         ...options.subOptions,
         j1939: true
       })
@@ -326,11 +336,10 @@ function j1939Input(subOptions: SubOptions): PipeElement[] {
     // decode whatever bus lives there with the J1939 schema.
     throw new Error(`unknown J1939 type: ${subOptions.type}`)
   }
-  const J1939Can = require('./j1939-can') as {
-    default: new (options: object) => PipeElement
-  }
-  const Ctor = J1939Can.default ?? J1939Can
-  return [new (Ctor as new (options: object) => PipeElement)(subOptions)]
+  const J1939CanMod = require('./j1939-can') as
+    { default: J1939CanCtor } | J1939CanCtor
+  const Ctor = 'default' in J1939CanMod ? J1939CanMod.default : J1939CanMod
+  return [new Ctor(subOptions)]
 }
 
 function nmea2000input(
