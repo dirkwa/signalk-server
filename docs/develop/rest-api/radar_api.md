@@ -83,6 +83,12 @@ Different manufacturers have vastly different hardware capabilities, control set
 1. **Capabilities** — hardware capabilities (Doppler, dual-range, no-transmit zones, supported ranges)
 2. **Controls** — schema for each control (type, valid values, modes, read-only status)
 
+A provider also treats the spoke stream's subscribers as the measure of whether anyone is
+watching a radar, and may let an unwatched radar stand down. A plugin that relays spokes from
+another provider — a proxy in front of mayara-server, say — must therefore hold its own
+upstream subscription only while it has subscribers of its own; see
+[Subscribe only while displaying](#subscribe-only-while-displaying).
+
 ## Control Categories
 
 | Category       | Description                  | Examples                                           |
@@ -130,6 +136,60 @@ Some further considerations as how to show controls:
 ```
 
 ## REST API
+
+### Responses
+
+A request that reads something answers with the document described for that
+endpoint, on its own:
+
+```json
+{ "auto": false, "value": 50 }
+```
+
+A request that _changes_ something — setting a control, acquiring a target,
+cancelling one — answers with the Signal K request response:
+
+```json
+{ "state": "COMPLETED", "statusCode": 200, "message": "OK" }
+```
+
+| Field        | Description                                                      |
+| ------------ | ---------------------------------------------------------------- |
+| `state`      | `COMPLETED` when the request was carried out, `FAILED` otherwise |
+| `statusCode` | Repeats the HTTP status, which Signal K clients read from here   |
+| `message`    | Human-readable detail; `OK` on success, the reason on failure    |
+
+A failure answers with the same three fields and an HTTP status to match:
+
+```json
+{
+  "state": "FAILED",
+  "statusCode": 404,
+  "message": "Unknown radar 'nav9999' -- use [\"nav1034A\", \"nav1034B\"] instead"
+}
+```
+
+| Status | Meaning                                                                   |
+| ------ | ------------------------------------------------------------------------- |
+| 200    | The request was carried out                                               |
+| 201    | A target was acquired, and the response carries its `targetId`            |
+| 400    | The body could not be read, or a value was outside what the control takes |
+| 403    | The client may not change this                                            |
+| 404    | No such radar, control or target                                          |
+| 500    | The server failed to carry the request out                                |
+| 501    | An optional part of this API the server does not implement                |
+
+Acquiring a target answers 201 and carries the new target's id beside the
+three fields, since a client needs it to cancel the target later:
+
+```json
+{ "state": "COMPLETED", "statusCode": 201, "message": "OK", "targetId": 5 }
+```
+
+Note that a control being settable does not mean the radar has accepted the
+new value: a server answers once it has passed the request on, and the radar
+reports its own state back over the stream. A client that needs to know the
+radar agreed should watch for the control value it set coming back.
 
 ### Listing All Radars
 
@@ -940,7 +1000,9 @@ The URL is constructed by convention from the host serving the radar list:
 
 ### Connection Logic
 
-This a Javascript example how to set up the connection to receive spokes:
+This is a JavaScript example of how to set up the connection to receive spokes. It returns the
+socket so the caller can close it when the radar is no longer displayed (see
+[Subscribe only while displaying](#subscribe-only-while-displaying)):
 
 ```javascript
 async function connectToSpokes() {
@@ -965,8 +1027,34 @@ async function connectToSpokes() {
     const spokeData = new Uint8Array(event.data)
     // Process binary spoke data...
   }
+  return socket
 }
+
+// When the radar view is hidden or unmounted:
+//   socket.close()
 ```
+
+### Subscribe only while displaying
+
+An open spoke stream tells the provider that someone is watching the radar. A provider may
+use that to stop holding an unwatched radar up: mayara-server, for instance, lets a radar
+stand down once nobody has subscribed to its spokes for the period set by its `autoStandby`
+control (a minute by default), so that a headless installation does not keep the magnetron
+transmitting for nobody. Control PUTs and REST reads do not count as watching — only the
+spoke stream does.
+
+So a client must open the spoke stream only while it is actually displaying the radar, and
+close it as soon as it stops — when the radar view is hidden, not merely when the page is
+closed. A subscription held open "just in case" keeps the radar transmitting.
+
+The same rule applies one level up. A provider plugin that relays spokes from another
+source (the mayara-server plugin, or an app-specific bridge such as an ORCA emulator)
+must hold its upstream subscription only while it has subscribers itself, and close it
+when the last one leaves. On the server side `app.binaryStreamManager.getClientCount(streamId)`,
+with `streamId` being `` `radars/${radarId}` ``, gives the number of clients currently
+subscribed to that radar's spoke stream, so a relay can connect on the first subscriber and
+disconnect after the last. A relay that stays subscribed around the clock hides every
+downstream client from the provider, and the radar never stands down.
 
 ### Spoke content and the legend
 

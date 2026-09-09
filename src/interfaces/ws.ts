@@ -22,12 +22,11 @@ import { getMetadata } from '@signalk/path-metadata'
 import {
   requestAccess,
   InvalidTokenError,
+  SecurityStrategy,
+  SkPrincipal,
   WithSecurityStrategy
 } from '../security'
-import {
-  LoginRateLimiter,
-  LOGIN_RATE_LIMIT_MESSAGE
-} from '../login-rate-limiter'
+import { LOGIN_RATE_LIMIT_MESSAGE } from '../login-rate-limiter'
 import { getSourceId } from '@signalk/server-api'
 import { WithConfig } from '../app'
 import {
@@ -76,10 +75,6 @@ function decrementIpCount(
   }
 }
 
-interface SkPrincipal {
-  identifier: string
-}
-
 interface SignalKSparkRequest {
   skPrincipal?: SkPrincipal
   token?: string
@@ -106,9 +101,11 @@ interface Spark {
     events?: string
     sendCachedValues?: string
     sourcePolicy?: SourcePolicy
+    displayUnitsOverride?: string
   }
   request: SignalKSparkRequest
   sendMetaDeltas: boolean
+  sendDisplayUnitsOverride: boolean
   sourcePolicy: SourcePolicy
   sentMetaData: Record<string, boolean>
   backpressureManager?: BackpressureManager
@@ -186,28 +183,6 @@ interface PathSources {
   [path: string]: {
     [source: string]: Spark
   }
-}
-
-interface SecurityStrategy {
-  canAuthorizeWS: () => boolean
-  authorizeWS: (req: Spark['request']) => void
-  verifyWS: (req: Spark['request']) => void
-  filterReadDelta: (
-    principal: SkPrincipal | undefined,
-    delta: Delta
-  ) => Delta | null
-  shouldAllowWrite: (req: Spark['request'], msg: WsMessage) => boolean
-  supportsLogin: () => boolean
-  login: (
-    username: string,
-    password: string
-  ) => Promise<{
-    token?: string
-    statusCode: number
-    timeToLive?: number | null
-  }>
-  isDummy: () => boolean
-  loginRateLimiter?: LoginRateLimiter
 }
 
 interface SubscriptionManager {
@@ -534,6 +509,11 @@ function wsInterface(app: WsApp): WsApi {
           )
 
           spark.sendMetaDeltas = spark.query.sendMeta === 'all'
+          // An editor needs to tell a path-specific display unit override
+          // from the preset's setting; nothing else does, so it comes only
+          // when asked for.
+          spark.sendDisplayUnitsOverride =
+            spark.query.displayUnitsOverride === 'true'
           spark.sourcePolicy = spark.query.sourcePolicy || 'preferred'
           spark.sentMetaData = {}
 
@@ -835,6 +815,15 @@ function wsInterface(app: WsApp): WsApi {
   }
 
   function processLoginRequest(app: WsApp, spark: Spark, msg: WsMessage): void {
+    if (!app.securityStrategy.login) {
+      spark.write({
+        requestId: msg.requestId,
+        state: 'COMPLETED',
+        statusCode: 501,
+        message: 'Login is not supported'
+      })
+      return
+    }
     const rateLimiter = app.securityStrategy.loginRateLimiter
     if (rateLimiter) {
       const { allowed } = rateLimiter.check(spark.request._resolvedIp)
@@ -905,7 +894,11 @@ function createPrimusAuthorize(
       isWebSocketUpgrade &&
       (ipConnectionCounts.get(ip) ?? 0) >= maxConnectionsPerIp
     ) {
-      debug('IP %s exceeded max connections (%d)', ip, maxConnectionsPerIp)
+      debugConnection(
+        'IP %s exceeded max connections (%d)',
+        ip,
+        maxConnectionsPerIp
+      )
       const err = Object.assign(
         new Error(
           JSON.stringify({
@@ -946,6 +939,8 @@ function createPrimusAuthorize(
       ) {
         authorized(error as Error)
       } else {
+        // If the error is not related to token validation, we still want to allow
+        // the connection to proceed to support authentication over WebSocket
         authorized()
       }
     }
@@ -1074,7 +1069,8 @@ function handleValuesMeta(
                 displayFormat?: string
               },
               metaClone.units as string | undefined,
-              username
+              username,
+              this.spark.sendDisplayUnitsOverride
             )
             if (enhanced) {
               metaClone.displayUnits = enhanced
@@ -1131,6 +1127,16 @@ function processSubscribe(
     msg.subscribe.length > 0 &&
     msg.subscribe[0].path === 'log'
   ) {
+    if (
+      !app.securityStrategy.isDummy() &&
+      !app.securityStrategy.hasAdminAccess?.(spark.request)
+    ) {
+      debug('server log subscription denied: admin access required')
+      spark.write({
+        errorMessage: 'Server log access requires admin permissions'
+      })
+      return
+    }
     if (!spark.logUnsubscribe) {
       spark.logUnsubscribe = startServerLog(app, spark)
     }
@@ -1326,7 +1332,8 @@ function handleRealtimeConnection(
             const displayUnits = resolveDisplayUnits(
               { ...storedDU, category },
               pathMeta.units as string | undefined,
-              username
+              username,
+              spark.sendDisplayUnitsOverride
             )
             if (displayUnits) {
               acc.push({ path, value: { ...pathMeta, displayUnits } })
@@ -1359,16 +1366,23 @@ function handleRealtimeConnection(
     sendLatestDeltas(app, app.deltaCache, app.selfContext, spark)
   }
 
+  // Server events are not accumulated by the BackpressureManager (they
+  // are not deltas), but they share the socket with it. Without this
+  // check a client that cannot keep up with a burst of server events
+  // — or a plugin emitting them in a loop — grows the send buffer
+  // without bound and never hits the overflow limit deltas already
+  // enforce.
+  const writeEvent = (event: Delta) => {
+    spark.write(event)
+    spark.backpressureManager?.assertBufferSize()
+  }
+
   if (spark.query.serverevents === 'all') {
     spark.hasServerEvents = true
     startServerEvents(
       app,
       spark,
-      wrapWithVerifyWS(
-        app.securityStrategy,
-        spark,
-        spark.write.bind(spark) as (delta: Delta) => void
-      )
+      wrapWithVerifyWS(app.securityStrategy, spark, writeEvent)
     )
   }
 
@@ -1376,11 +1390,7 @@ function handleRealtimeConnection(
     startEvents(
       app,
       spark,
-      wrapWithVerifyWS(
-        app.securityStrategy,
-        spark,
-        spark.write.bind(spark) as (delta: Delta) => void
-      ),
+      wrapWithVerifyWS(app.securityStrategy, spark, writeEvent),
       spark.query.events
     )
   }

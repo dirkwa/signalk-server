@@ -19,6 +19,12 @@ name: SignalK Plugin CI
 on:
   workflow_call:
     inputs:
+      # ── Repository layout ───────────────────────────────────
+      working-directory:
+        description: "Path to the plugin within the repository, for plugins published from a monorepo subdirectory (matches npm's repository.directory). Defaults to the repository root."
+        type: string
+        default: '.'
+
       # ── Test configuration ──────────────────────────────────
       test-command:
         description: 'Command to run tests (default: npm test)'
@@ -65,6 +71,42 @@ permissions:
 
 jobs:
   # ════════════════════════════════════════════════════════════
+  #  Input validation — runs before anything touches the value
+  # ════════════════════════════════════════════════════════════
+  validate-inputs:
+    name: Validate inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # working-directory reaches a docker -w, an artifact glob and a
+      # sparse-checkout pattern, so constrain it to a plain relative path.
+      # Everything else that consumes it does so through env, never through
+      # interpolation into a script.
+      - name: Validate working-directory
+        env:
+          PLUGIN_DIR: ${{ inputs.working-directory }}
+        run: |
+          if [ "$PLUGIN_DIR" = "." ]; then
+            echo "working-directory: repository root"
+            exit 0
+          fi
+          case "$PLUGIN_DIR" in
+            /*|~*)
+              echo "::error::working-directory must be relative to the repository root, got '$PLUGIN_DIR'"; exit 1 ;;
+          esac
+          if [ "$(printf '%s' "$PLUGIN_DIR" | wc -l)" -ne 0 ]; then
+            echo "::error::working-directory must be a single line"; exit 1
+          fi
+          if ! printf '%s' "$PLUGIN_DIR" | grep -qE '^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$'; then
+            echo "::error::working-directory may only contain letters, digits, '.', '_', '-' and '/', got '$PLUGIN_DIR'"; exit 1
+          fi
+          case "/$PLUGIN_DIR/" in
+            */../*)
+              echo "::error::working-directory must not contain '..', got '$PLUGIN_DIR'"; exit 1 ;;
+          esac
+          echo "working-directory: $PLUGIN_DIR"
+
+  # ════════════════════════════════════════════════════════════
   #  Desktop platforms matrix: Linux x64, Linux arm64, macOS, Windows
   # ════════════════════════════════════════════════════════════
   desktop:
@@ -75,12 +117,16 @@ jobs:
           matrix.os == 'windows-latest' && 'Windows' ||
           matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
+    needs: validate-inputs
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-15, windows-latest]
         node: ${{ fromJson(inputs.node-versions) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v7
@@ -536,6 +582,73 @@ jobs:
           cat << 'LIFECYCLE' > /tmp/check-lifecycle.js
           const path = require('path');
           const pkg = require(process.cwd() + '/package.json');
+
+          // ── Async crash trap ─────────────────────────────────────
+          // A plugin can start cleanly and still take the server down a
+          // moment later: an 'error' event emitted on a socket/emitter with
+          // no listener, or a floating promise that rejects after start()
+          // has already resolved. Neither travels the promise path, so the
+          // try/catch around `await plugin.start({})` below cannot see them.
+          //
+          // In production the server has no such trap either — Node's
+          // default action for an unhandled 'error' event is to throw, and
+          // under systemd Restart=always the result is an endless
+          // crash-restart loop rather than one bad plugin.
+          //
+          // Recording them here (rather than dying immediately) lets the
+          // lifecycle run finish and report every problem it found, which
+          // is more useful than surfacing whichever one happened to fire
+          // first. Anything caught is fatal — see the report below.
+          const ASYNC_CRASH_DRAIN_MS = 1500;
+          const asyncCrashes = [];
+          process.on('uncaughtException', (e) => {
+            asyncCrashes.push('uncaught exception: ' + ((e && e.message) || String(e)));
+          });
+          process.on('unhandledRejection', (e) => {
+            asyncCrashes.push('unhandled rejection: ' + ((e && e.message) || String(e)));
+          });
+
+          // Every exit from the lifecycle check goes through here, including
+          // the early returns taken when start() or stop() throws. A plugin
+          // can schedule a failing timer and *then* throw synchronously from
+          // start(): the server catches that throw and keeps running (see
+          // doPluginStart in src/interfaces/plugins.ts), so the timer still
+          // fires and still kills the server. Exiting on the throw alone
+          // would report success for exactly that plugin.
+          const finish = async (code) => {
+            // Let queued failures surface before deciding the verdict. A
+            // microtask turn would cover an 'error' already on the queue, but
+            // the failures worth catching are slower: a socket connect, a
+            // D-Bus handshake or a DNS lookup started during start()
+            // typically fails a second or so in, which is exactly the
+            // "started fine, died shortly after" shape this check exists for.
+            //
+            // 1.5s covers those while staying far inside the step's 2-minute
+            // budget. It is a fixed cost on every run, so it is not raised
+            // further: this drains what start() already kicked off, and is
+            // not meant to wait out a slow remote endpoint.
+            await new Promise((resolve) => setTimeout(resolve, ASYNC_CRASH_DRAIN_MS));
+
+            if (asyncCrashes.length > 0) {
+              console.log('');
+              // start() may run twice (initial + restart), so one faulty code
+              // path reports the same message twice. Collapse duplicates —
+              // two identical lines read as two separate problems.
+              [...new Set(asyncCrashes)].forEach(c => console.log('::error::Lifecycle: ' + c));
+              console.log('');
+              console.log('The plugin crashed the process after start() had already');
+              console.log('returned. The server does not sandbox plugins: an unhandled');
+              console.log("'error' event or a rejected floating promise terminates the");
+              console.log('whole server, and under systemd it then restart-loops.');
+              console.log('');
+              console.log('Common cause: an emitter or socket used without an error');
+              console.log("listener. Attach one ('error' handlers are required, not");
+              console.log('optional), or await the operation so the failure reaches the');
+              console.log('try/catch in start().');
+              process.exit(1);
+            }
+            process.exit(code);
+          };
           // See validate-entry.js for the rationale — object/conditional
           // exports must be resolved, not flattened to 'index.js'.
           function resolveEntry(p, fallback) {
@@ -713,6 +826,8 @@ jobs:
             plugin = ctor(mockApp);
           } catch (e) {
             console.log('Plugin constructor requires server context — skipping lifecycle check');
+            // Pre-IIFE skip path: start() never ran, so there is nothing for
+            // finish() to drain (and top-level await is not available here).
             process.exit(0);
           }
 
@@ -754,7 +869,7 @@ jobs:
             } else {
               console.log('::warning::Plugins should handle empty/default configuration gracefully.');
             }
-            process.exit(0);
+            await finish(0);
           }
 
           try {
@@ -769,7 +884,10 @@ jobs:
             } else {
               console.log('::error::plugin.stop() threw: ' + msg);
               console.log('::error::This causes the server to leak resources when the plugin is disabled or restarted.');
-              process.exit(1);
+              // finish() rather than a bare exit: the job already fails here,
+              // but stop() may also have scheduled a delayed failure, and
+              // reporting it tells the author about both problems at once.
+              return await finish(1);
             }
           }
 
@@ -782,11 +900,11 @@ jobs:
             if (isMockGap(msg)) {
               console.log('::warning::plugin.start({}) threw on restart: ' + msg);
               console.log('::warning::This looks like a missing CI mock method, not a plugin bug. Please report at https://github.com/SignalK/signalk-server/issues');
-              process.exit(0);
+              await finish(0);
             }
             console.log('::error::plugin.start({}) threw on second call: ' + msg);
             console.log('::error::Plugins must support restart (stop then start). This fails when users toggle the plugin in the server UI.');
-            process.exit(1);
+            return await finish(1);
           }
 
           try { await Promise.resolve(plugin.stop()); } catch (e) { /* ignore */ }
@@ -802,11 +920,11 @@ jobs:
             console.log('');
             console.log('Malformed deltas are silently discarded by the server —');
             console.log('the plugin appears to work but data never reaches consumers.');
-            process.exit(1);
+            await finish(1);
           }
 
           console.log('Plugin lifecycle (start/stop/restart) is clean');
-          process.exit(0);
+          await finish(0);
           })().catch(e => {
             console.log('::error::Unexpected error during lifecycle check: ' + (e && e.message || String(e)));
             process.exit(1);
@@ -1508,9 +1626,9 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}-node${{ matrix.node }}
           path: |
-            test-results/
-            coverage/
-            junit*.xml
+            ${{ inputs.working-directory }}/test-results/
+            ${{ inputs.working-directory }}/coverage/
+            ${{ inputs.working-directory }}/junit*.xml
           if-no-files-found: ignore
           retention-days: 7
 
@@ -1520,6 +1638,7 @@ jobs:
   armv7:
     name: armv7 (Cerbo GX) / Node 20
     runs-on: ubuntu-latest
+    needs: validate-inputs
     timeout-minutes: 30
     if: ${{ inputs.enable-armv7 }}
     # Advisory: armv7 is non-blocking. continue-on-error at the job level lets
@@ -1528,6 +1647,9 @@ jobs:
     continue-on-error: true
     outputs:
       advisory-outcome: ${{ steps.armv7-test.outcome }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v7
@@ -1558,11 +1680,12 @@ jobs:
         env:
           BUILD_CMD: ${{ inputs.build-command }}
           TEST_CMD: ${{ inputs.test-command }}
+          PLUGIN_DIR: ${{ inputs.working-directory }}
         run: |
           docker run --rm --platform linux/arm/v7 \
             -v "${{ github.workspace }}:/plugin" \
             -v "/tmp/.npm-armv7-cache:/root/.npm" \
-            -w /plugin \
+            -w "/plugin/$PLUGIN_DIR" \
             -e BUILD_CMD \
             -e TEST_CMD \
             node:20-bookworm-slim \
@@ -1645,6 +1768,7 @@ jobs:
   signalk-integration:
     name: Integration / signalk-server ${{ matrix.signalk-server-version }} / Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    needs: validate-inputs
     timeout-minutes: 15
     if: ${{ inputs.enable-signalk-integration }}
     strategy:
@@ -1652,6 +1776,9 @@ jobs:
       matrix:
         node: ${{ fromJson(inputs.node-versions) }}
         signalk-server-version: ${{ fromJson(inputs.signalk-server-versions) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v7
@@ -1671,8 +1798,10 @@ jobs:
 
       - name: Install plugins declared in signalk.requires
         shell: bash
+        env:
+          PLUGIN_DIR: ${{ inputs.working-directory }}
         run: |
-          REQUIRES=$(jq -r '.signalk.requires // [] | .[]' "${{ github.workspace }}/package.json" 2>/dev/null || true)
+          REQUIRES=$(jq -r '.signalk.requires // [] | .[]' "$GITHUB_WORKSPACE/$PLUGIN_DIR/package.json" 2>/dev/null || true)
           if [ -z "$REQUIRES" ]; then
             exit 0
           fi
@@ -1707,9 +1836,11 @@ jobs:
           npm install "/tmp/$(basename "$PLUGIN_TGZ")"
 
       - name: Configure plugin to auto-start
+        env:
+          PLUGIN_DIR: ${{ inputs.working-directory }}
         run: |
           cd /tmp/sk-test
-          PLUGIN_PKG_NAME=$(node -e "console.log(require('${{ github.workspace }}/package.json').name)")
+          PLUGIN_PKG_NAME=$(node -e "console.log(require(process.argv[1]).name)" "$GITHUB_WORKSPACE/$PLUGIN_DIR/package.json")
 
           # Derive plugin ID the same way signalk-server does (src/pluginid.ts)
           PLUGIN_ID=$(node -e "
@@ -1726,6 +1857,7 @@ jobs:
       - name: Start SignalK server and verify plugin
         env:
           SIGNALK_URL: 'http://localhost:3000'
+          PLUGIN_DIR: ${{ inputs.working-directory }}
         run: |
           cd /tmp/sk-test
           export SIGNALK_NODE_CONFIG_DIR=/tmp/sk-test
@@ -1758,7 +1890,7 @@ jobs:
           echo "SignalK server is ready (PID $SK_PID)"
 
           # Verify plugin is loaded
-          PLUGIN_PKG_NAME=$(node -e "console.log(require('${{ github.workspace }}/package.json').name)")
+          PLUGIN_PKG_NAME=$(node -e "console.log(require(process.argv[1]).name)" "$GITHUB_WORKSPACE/$PLUGIN_DIR/package.json")
           PLUGINS_JSON=$(curl -sf http://localhost:3000/skServer/plugins)
 
           echo "Loaded plugins:"
@@ -1814,7 +1946,7 @@ jobs:
           fi
 
           # Run integration tests from the plugin repo if they exist
-          cd "${{ github.workspace }}"
+          cd "$GITHUB_WORKSPACE/$PLUGIN_DIR"
           HAS_INTEGRATION=$(node -e "
             const pkg = require('./package.json');
             if (pkg.scripts && pkg.scripts['test:integration']) process.exit(0);
@@ -1837,12 +1969,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [desktop, armv7, signalk-integration]
+    needs: [validate-inputs, desktop, armv7, signalk-integration]
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v7
         with:
-          sparse-checkout: package.json
+          # Non-cone mode so the pattern selects the single manifest rather
+          # than a whole directory. A leading "./" matches nothing in non-cone
+          # mode, so the root default is spelled without one.
+          sparse-checkout: ${{ inputs.working-directory == '.' && '/package.json' || format('/{0}/package.json', inputs.working-directory) }}
+          sparse-checkout-cone-mode: false
 
       - name: Write CI summary report
         env:
@@ -1853,6 +1992,7 @@ jobs:
           # step outcome exists.
           ARMV7_RESULT: ${{ needs.armv7.outputs.advisory-outcome || needs.armv7.result }}
           INTEGRATION_RESULT: ${{ needs.signalk-integration.result }}
+          VALIDATE_RESULT: ${{ needs.validate-inputs.result }}
         shell: bash
         run: |
           icon() {
@@ -1869,7 +2009,7 @@ jobs:
           PLUGIN_VER=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "?")
 
           OVERALL="pass"
-          if [[ "$DESKTOP_RESULT" == "failure" ]] || [[ "$INTEGRATION_RESULT" == "failure" ]]; then
+          if [[ "$VALIDATE_RESULT" != "success" ]] || [[ "$DESKTOP_RESULT" == "failure" ]] || [[ "$INTEGRATION_RESULT" == "failure" ]]; then
             OVERALL="FAIL"
           fi
 
@@ -1895,7 +2035,7 @@ jobs:
             echo "- **package.json** — \`signalk-node-server-plugin\` keyword, \`main\`/\`exports\` field, \`engines.node\`"
             echo "- **Entry point** — Plugin exports a constructor function"
             echo "- **plugin.schema()** — Returns valid JSON Schema without crashing"
-            echo "- **Lifecycle** — start()/stop()/restart cycle works without errors"
+            echo "- **Lifecycle** — start()/stop()/restart cycle works without errors, and the plugin does not crash the process asynchronously afterwards"
             echo "- **API usage** — No deprecated (\`setProviderStatus\`), internal (\`app.server\`), file storage, or security anti-patterns"
             echo "- **Node built-in modules** — \`node:sqlite\` requires \`engines.node >= 22.5.0\` declared in package.json"
             echo "- **npm pack** — All files referenced by \`main\`/\`exports\` are included in the package"
