@@ -690,6 +690,25 @@ describe('StalenessEnforcer', () => {
     expect(app.captured).to.be.empty
   })
 
+  it('never times out a path inheriting an event contract', () => {
+    // navigation.anchor is declared event-driven in the metadata registry and
+    // the position under it inherits that, so silence is not a failure.
+    const app = makeMockApp({ defaultTimeout: 60 })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.anchor.position',
+      'gps.1',
+      isoSecondsAgo(3600),
+      { latitude: 1, longitude: 2 }
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.be.empty
+  })
+
   it('still times out a path whose last segment is an identity name', () => {
     // The exclusion is on the whole path, not a trailing segment: a nested
     // `...url` is an ordinary leaf and must not inherit the exemption.
@@ -708,5 +727,23 @@ describe('StalenessEnforcer', () => {
 
     expect(app.captured).to.have.lengthOf(1)
     expect(app.captured[0].path).to.equal('network.services.signalk.url')
+  })
+
+  it('still times out a sibling path no subtree declares', () => {
+    const app = makeMockApp({ defaultTimeout: 60 })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.speedOverGround',
+      'gps.1',
+      isoSecondsAgo(3600),
+      4.2
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.have.lengthOf(1)
+    expect(app.captured[0].path).to.equal('navigation.speedOverGround')
   })
 })
