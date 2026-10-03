@@ -15,6 +15,7 @@ import { RadarProviderRegistry, WithRadarApi } from './radarapi'
 import { CourseApi } from './course'
 import { HistoryProviderRegistry, WithHistoryApi } from './history'
 import { TrackProviderRegistry, WithTrackApi } from './tracks'
+import { TargetsProviderRegistry, WithTargetsApi } from './targetsapi'
 import { StreamBundle } from './streambundle'
 import { SubscriptionManager } from './subscriptionmanager'
 import type { WebSocket } from 'ws'
@@ -88,6 +89,8 @@ export interface ServerAPI
     HistoryProviderRegistry,
     TrackProviderRegistry,
     WithTrackApi,
+    TargetsProviderRegistry,
+    WithTargetsApi,
     WithFeatures,
     CourseApi,
     WithNotificationsApi,
