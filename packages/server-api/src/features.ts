@@ -71,6 +71,7 @@ export type SignalKApiId =
   | 'resources'
   | 'history'
   | 'tracks'
+  | 'targets'
   | 'autopilot'
   | 'anchor'
   | 'logbook'
