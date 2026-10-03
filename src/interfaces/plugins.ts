@@ -35,6 +35,7 @@ import {
   PluginConstructor,
   Plugin,
   Path,
+  TargetContact,
   Delta,
   SubscribeCallback,
   SubscribeMessage,
@@ -90,6 +91,7 @@ import { HistoryProvider } from '@signalk/server-api/history'
 import { HistoryApiHttpRegistry } from '../api/history'
 import { TrackProvider } from '@signalk/server-api/tracks'
 import { TrackApiHttpRegistry } from '../api/tracks'
+import { TargetsApi } from '../api/targets'
 import { derivePluginId } from '../pluginid'
 import { atomicWriteFileSync } from '../atomicWrite'
 import { writeBaseDeltasFile, ConfigApp } from '../config/config'
@@ -987,6 +989,23 @@ module.exports = (theApp: any) => {
     }
     appCopy.unregisterTrackApiProvider = () => {
       trackApiRegistry.unregisterTrackApiProvider(plugin.id)
+    }
+
+    const targetsApi: TargetsApi = app.targetsApi
+    delete (appCopy as any).targetsApi // expose only the plugin-specific methods
+    let targetsStopHandlerAdded = false
+    appCopy.updateTargetContact = (contact: TargetContact) => {
+      targetsApi.updateContact(plugin.id, contact)
+      if (!targetsStopHandlerAdded) {
+        targetsStopHandlerAdded = true
+        onStopHandlers[plugin.id].push(() => {
+          targetsStopHandlerAdded = false
+          targetsApi.removeProvider(plugin.id)
+        })
+      }
+    }
+    appCopy.removeTargetContact = (id: string) => {
+      targetsApi.removeContact(plugin.id, id)
     }
 
     const resourcesApi: ResourcesApi = app.resourcesApi
