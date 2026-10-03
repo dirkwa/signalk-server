@@ -121,4 +121,46 @@ describe('Plugin provider registries', () => {
       await server.stop()
     }
   })
+
+  it('drops the target contacts a plugin reported when it stops', async function () {
+    this.timeout(TEST_TIMEOUT_MS)
+    const port = await freeport()
+    const server = new Server({ config: { settings: { port } } })
+    await server.start()
+    const contactIds = () =>
+      server.app.targetsApi
+        .getTargets()
+        .flatMap((t: { sources: Array<{ provider: string; id: string }> }) =>
+          t.sources.filter((s) => s.provider === 'testplugin').map((s) => s.id)
+        )
+    try {
+      const plugin = server.app.plugins.find(
+        (p: PluginInfo) => p.id === 'testplugin'
+      )
+      assert(plugin, 'testplugin should be loaded')
+
+      plugin.app.updateTargetContact({
+        id: 'cam:1',
+        type: 'camera',
+        position: { latitude: 52, longitude: 4 }
+      })
+      assert.deepStrictEqual(contactIds(), ['cam:1'])
+
+      // The config route answers before it stops the plugin.
+      await fetch(
+        `http://localhost:${port}/skServer/plugins/testplugin/config`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: false, configuration: {} })
+        }
+      )
+      for (let i = 0; i < 50 && plugin.started; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      assert.deepStrictEqual(contactIds(), [], 'stopping the plugin drops them')
+    } finally {
+      await server.stop()
+    }
+  })
 })
