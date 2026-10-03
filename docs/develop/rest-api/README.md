@@ -8,6 +8,7 @@ children:
   - notifications_api.md
   - radar_api.md
   - resources_api.md
+  - targets_api.md
   - weather_api.md
   - ble_api.md
   - plugin_api.md
@@ -31,6 +32,7 @@ APIs are available via `/signalk/v2/api/<endpoint>`
 | [History](./history_api.md)               | Query historical data.                                                                                                                               | `history`                            |
 | [Radar](./radar_api.md)                   | View and control marine radar equipment via a provider plugin. _(In development)_                                                                    | `vessels/self/radars`                |
 | [Resources](./resources_api.md)           | Create, view, update and delete waypoints, routes, etc.                                                                                              | `resources`                          |
+| [Targets](./targets_api.md)               | One merged list of the vessels and objects around the boat, from AIS and sensor provider plugins.                                                    | `targets`                            |
 | _[`Notifications`](notifications_api.md)_ | Provide the ability to raise, update and clear notifications from multiple sources. _[View PR](https://github.com/SignalK/signalk-server/pull/1560)_ | `notifications`                      |
 | [BLE](./ble_api.md)                       | Unified BLE device discovery and GATT connection management via provider plugins and remote gateways.                                                | `vessels/self/ble`; `ble` (gateways) |
 
