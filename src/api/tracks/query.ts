@@ -3,6 +3,7 @@ import { Context, Path } from '@signalk/server-api'
 import {
   TrackBoundingBox,
   TrackImport,
+  TrackSpan,
   TracksRequest
 } from '@signalk/server-api/tracks'
 
@@ -595,6 +596,44 @@ class ErrorReport {
     return this.suppressed === 0
       ? this.messages
       : [...this.messages, `and ${this.suppressed} further problems`]
+  }
+}
+
+/**
+ * The part of a track a `DELETE /{id}` names, or undefined for the whole
+ * track.
+ *
+ * Only `from` and `to`: a span to delete is two instants, and a `duration`
+ * relative to now would make the same request delete a different stretch
+ * each time it was retried.
+ */
+export function parseTrackSpan(query: Record<string, unknown>): {
+  span?: TrackSpan
+  errors: string[]
+} {
+  const errors = rejectUnknownParams(query, ['from', 'to'])
+  const span: TrackSpan = {}
+  for (const name of ['from', 'to'] as const) {
+    const value = first(query[name])
+    if (value === undefined) {
+      continue
+    }
+    if (blank(value)) {
+      errors.push(`${name} must not be empty`)
+    } else {
+      span[name] = parseInstant(value, name, errors)
+    }
+  }
+  if (
+    span.from &&
+    span.to &&
+    Temporal.Instant.compare(span.from, span.to) > 0
+  ) {
+    errors.push('from must not be later than to')
+  }
+  return {
+    ...(span.from || span.to ? { span } : {}),
+    errors
   }
 }
 
