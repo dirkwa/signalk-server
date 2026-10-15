@@ -31,6 +31,7 @@ export type WasmFormat = 'wasi-p1' | 'unknown'
  * WASM plugin instance representing a loaded plugin
  */
 export interface WasmPluginInstance {
+  /** npm package name; runtime instances and provider registrations are keyed by it */
   pluginId: string
   wasmPath: string
   vfsRoot: string
