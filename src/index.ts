@@ -643,7 +643,7 @@ class Server {
     })
 
     installProcessErrorHandlers(app)
-    installShutdownHandlers(this)
+    app.stopAndExit = installShutdownHandlers(this)
   }
 
   start() {
@@ -933,14 +933,9 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
 
   let shuttingDown = false
 
-  const shutdown = (signal: NodeJS.Signals) => {
-    // A repeated signal means the caller is no longer waiting for an orderly
-    // shutdown, so stop waiting for one.
-    if (shuttingDown) {
-      process.exit(128 + (signal === 'SIGINT' ? 2 : 15))
-    }
+  const stopAndExit = (reason: string) => {
     shuttingDown = true
-    console.log(`${signal} received, shutting down`)
+    console.log(`${reason}, shutting down`)
 
     // Bounded: a provider or interface whose stop() never settles must not
     // turn a graceful shutdown into an indefinite one. The deadline sits
@@ -969,11 +964,29 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
       })
   }
 
+  const shutdown = (signal: NodeJS.Signals) => {
+    // A repeated signal means the caller is no longer waiting for an orderly
+    // shutdown, so stop waiting for one.
+    if (shuttingDown) {
+      process.exit(128 + (signal === 'SIGINT' ? 2 : 15))
+    }
+    stopAndExit(`${signal} received`)
+  }
+
   const sigterm = () => shutdown('SIGTERM')
   const sigint = () => shutdown('SIGINT')
   currentShutdownHandlers = { sigterm, sigint }
   process.on('SIGTERM', sigterm)
   process.on('SIGINT', sigint)
+
+  // A restart from the admin UI relies on the process supervisor to bring
+  // the server back, and must stop it the same way a signal does so plugins
+  // and providers get to close.
+  return () => {
+    if (!shuttingDown) {
+      stopAndExit('Restart requested')
+    }
+  }
 }
 
 function installProcessErrorHandlers(app: any) {
