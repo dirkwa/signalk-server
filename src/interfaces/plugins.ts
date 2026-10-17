@@ -176,6 +176,8 @@ module.exports = (theApp: any) => {
   // so it cannot distinguish a plugin that started from one that only
   // registered. stop() needs that distinction.
   const startedPlugins = new Set<string>()
+  // stop() calls that have not settled yet, by plugin id
+  const stoppingPlugins = new Map<string, Promise<unknown>>()
   const appNodeModules = path.join(theApp.config.appPath, 'node_modules/')
 
   // Partitioned by plugin id so the dispatcher can tell a plugin that does
@@ -270,6 +272,30 @@ module.exports = (theApp: any) => {
 
       theApp.getPluginsList = async (enabled?: boolean) => {
         return await getPluginsList(enabled)
+      }
+
+      theApp.stopPlugin = async (id: string) => {
+        // A stop already under way (a configuration save) has taken the
+        // plugin out of startedPlugins but may not have finished.
+        const inFlight = stoppingPlugins.get(id)
+        if (inFlight) {
+          await inFlight
+          return
+        }
+        const plugin = theApp.plugins.find((p: PluginInfo) => p.id === id)
+        if (!plugin) {
+          return
+        }
+        if (plugin.type === 'wasm') {
+          const { getWasmPlugin, stopWasmPlugin } = require('../wasm')
+          if (getWasmPlugin(id)?.status === 'running') {
+            await stopWasmPlugin(id)
+          }
+          return
+        }
+        if (startedPlugins.has(id)) {
+          await stopPlugin(plugin)
+        }
       }
 
       theApp.use(
@@ -711,6 +737,13 @@ module.exports = (theApp: any) => {
       releaseGATTClaims()
       throw e
     }
+    stoppingPlugins.set(plugin.id, result)
+    const settled = () => {
+      if (stoppingPlugins.get(plugin.id) === result) {
+        stoppingPlugins.delete(plugin.id)
+      }
+    }
+    result.then(settled, settled)
     result.then(() => {
       theApp.setPluginStatus(plugin.id, 'Stopped')
       debug('Stopped plugin ' + plugin.name)
