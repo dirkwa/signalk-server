@@ -12,7 +12,6 @@ describe('admin restart', function () {
   it('stops the server before the process exits', async function () {
     const port = await freeport()
     const server = await startServerP(port, true)
-    const token = await getAdminToken(server)
 
     const originalExit = process.exit
     const exited = new Promise<{ code: unknown; started: boolean }>(
@@ -23,6 +22,7 @@ describe('admin restart', function () {
       }
     )
     try {
+      const token = await getAdminToken(server)
       const res = await fetch(`http://0.0.0.0:${port}/skServer/restart`, {
         method: 'PUT',
         headers: { Cookie: `JAUTHENTICATION=${token}` }
