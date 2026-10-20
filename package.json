@@ -1,6 +1,6 @@
 {
   "name": "signalk-server",
-  "version": "2.33.0",
+  "version": "2.34.0",
   "description": "An implementation of a [Signal K](http://signalk.org) server for boats.",
   "main": "index.js",
   "scripts": {
@@ -77,13 +77,15 @@
   "dependencies": {
     "@assemblyscript/loader": "^0.28.19",
     "@astronautlabs/mdns": "^1.0.10",
+    "@canboat/canboatjs": "^4.0.0-beta.3",
+    "@canboat/ts-pgns": "^3.0.0",
     "@signalk/course-provider": "^1.4.0",
-    "@signalk/n2k-signalk": ">=4.1.0-beta",
+    "@signalk/n2k-signalk": "^5.0.0-beta.1",
     "@signalk/nmea0183-signalk": "^3.20.0",
-    "@signalk/resources-provider": "^1.5.2",
-    "@signalk/server-api": "^2.33.0",
+    "@signalk/resources-provider": "^1.5.3",
+    "@signalk/server-api": "^2.34.0",
     "@signalk/signalk-schema": "1.0.x",
-    "@signalk/streams": "^6.9.1",
+    "@signalk/streams": "^6.10.0",
     "api-schema-builder": "^2.0.11",
     "archiver": "^7.0.1",
     "as-fetch": "^2.1.4",
@@ -144,15 +146,15 @@
     "@mxtommy/kip": "^4.8.0",
     "@naugehyde/node-ble": "^1.13.5",
     "@signalk/app-dock": "^1.1.0",
-    "@signalk/freeboard-sk": "^3.2.0",
+    "@signalk/freeboard-sk": "^3.2.1",
     "@signalk/instrumentpanel": "0.x",
-    "@signalk/server-admin-ui": "^2.33.0",
+    "@signalk/server-admin-ui": "^2.34.0",
     "@signalk/set-system-time": "^1.5.0",
     "@signalk/signalk-to-nmea0183": "^1.18.0",
     "@signalk/udp-nmea-plugin": "^2.0.0",
     "serialport": "^11.0.1",
     "signalk-n2kais-to-nmea0183": "^2.0.3",
-    "signalk-to-nmea2000": "^2.24.0"
+    "signalk-to-nmea2000": "^3.0.0-beta.1"
   },
   "allowScripts": {
     "@canboat/canboatjs": true

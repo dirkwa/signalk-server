@@ -47,7 +47,8 @@ import {
   PluginRouter,
   RouteAccessLevel,
   RoutePermission,
-  PluginWebSocketServer
+  PluginWebSocketServer,
+  EnhancedDisplayUnits
 } from '@signalk/server-api'
 import { getLogger } from '@signalk/streams/logging'
 import express, { IRouter, Request, RequestHandler, Response } from 'express'
@@ -94,7 +95,12 @@ import { derivePluginId } from '../pluginid'
 import { atomicWriteFileSync } from '../atomicWrite'
 import { writeBaseDeltasFile, ConfigApp } from '../config/config'
 import DeltaEditor from '../deltaeditor'
-import { validateCategoryAssignment } from '../unitpreferences'
+import {
+  convertWithDisplayUnits,
+  PathUnitsMetadata,
+  resolvePathDisplayUnits,
+  validateCategoryAssignment
+} from '../unitpreferences'
 
 // #521 Returns path to load plugin-config assets.
 const getPluginConfigPublic = getModulePublic('@signalk/plugin-config')
@@ -149,8 +155,27 @@ function mergeExcludeSelf(
   return merged.size > 0 ? (Array.from(merged) as SourceRef[]) : undefined
 }
 
+function selfDisplayUnits(
+  skPath: string,
+  username?: string
+): EnhancedDisplayUnits | undefined {
+  const metadata = getMetadata('vessels.self.' + skPath) as
+    PathUnitsMetadata | undefined
+  const resolved = resolvePathDisplayUnits(skPath, metadata ?? {}, username)
+  if (!resolved) {
+    return undefined
+  }
+  // Only an editor asks for the override, so plugins get the public shape.
+  const { override: _override, ...displayUnits } = resolved
+  return displayUnits
+}
+
 module.exports = (theApp: any) => {
   const onStopHandlers: any = {}
+  // onStopHandlers gets an entry at registration, before the enabled check,
+  // so it cannot distinguish a plugin that started from one that only
+  // registered. stop() needs that distinction.
+  const startedPlugins = new Set<string>()
   const appNodeModules = path.join(theApp.config.appPath, 'node_modules/')
 
   // Partitioned by plugin id so the dispatcher can tell a plugin that does
@@ -263,6 +288,29 @@ module.exports = (theApp: any) => {
       })
 
       await startPlugins(theApp)
+    },
+
+    // Server.stop() calls stop() on each interface, so this is where a
+    // server-wide stop reaches the plugins and lets them release the
+    // subscriptions, timers and connections they opened in start().
+    //
+    // Errors are contained per plugin: a stop() that throws must not prevent
+    // the remaining plugins from stopping.
+    async stop() {
+      if (!theApp.plugins) {
+        return
+      }
+      await Promise.all(
+        theApp.plugins
+          .filter((plugin: PluginInfo) => startedPlugins.has(plugin.id))
+          .map((plugin: PluginInfo) =>
+            Promise.resolve()
+              .then(() => stopPlugin(plugin))
+              .catch((err) => {
+                console.error(`Error stopping plugin ${plugin.id}:`, err)
+              })
+          )
+      )
     }
   }
 
@@ -651,7 +699,18 @@ module.exports = (theApp: any) => {
       }
     })
     onStopHandlers[plugin.id] = []
-    const result = Promise.resolve(plugin.stop())
+    startedPlugins.delete(plugin.id)
+    // Not before stop(), which may still be talking to its devices, and
+    // after a failed stop() too, which is the likeliest to leave them open
+    const releaseGATTClaims = () =>
+      theApp.bleApi.releaseGATTClaimsForPlugin(plugin.id)
+    let result: Promise<any>
+    try {
+      result = Promise.resolve(plugin.stop())
+    } catch (e) {
+      releaseGATTClaims()
+      throw e
+    }
     result.then(() => {
       theApp.setPluginStatus(plugin.id, 'Stopped')
       debug('Stopped plugin ' + plugin.name)
@@ -659,6 +718,7 @@ module.exports = (theApp: any) => {
         theApp.deltaCache.removeSource(plugin.id)
       }
     })
+    result.then(releaseGATTClaims, releaseGATTClaims)
     return result
   }
 
@@ -722,6 +782,7 @@ module.exports = (theApp: any) => {
         throw e
       }
       debug('Started plugin ' + plugin.name)
+      startedPlugins.add(plugin.id)
       setPluginStartedMessage(plugin)
     } catch (e: any) {
       console.error('error starting plugin: ' + e)
@@ -890,6 +951,17 @@ module.exports = (theApp: any) => {
         })
 
         return true
+      },
+      getDisplayUnits: selfDisplayUnits,
+      convertToDisplayUnits: (
+        skPath: string,
+        value: number,
+        username?: string
+      ) => {
+        const displayUnits = selfDisplayUnits(skPath, username)
+        return displayUnits
+          ? convertWithDisplayUnits(displayUnits, value)
+          : undefined
       },
       reportOutputMessages: (count?: number) => {
         app.emit(CONNECTION_WRITE_EVENT_NAME, {

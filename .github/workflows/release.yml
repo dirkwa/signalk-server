@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
@@ -56,6 +56,16 @@ jobs:
           LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/server-admin-ui-dependencies/package.json)
           if ! npm view @signalk/server-admin-ui-dependencies@$LOCAL_VERSION version &>/dev/null; then
             cd packages/server-admin-ui-dependencies
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish path-metadata
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/path-metadata/package.json)
+          if ! npm view @signalk/path-metadata@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/path-metadata
             npm publish --access public
           fi
         env:
@@ -96,16 +106,6 @@ jobs:
           LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/resources-provider-plugin/package.json)
           if ! npm view @signalk/resources-provider@$LOCAL_VERSION version &>/dev/null; then
             cd packages/resources-provider-plugin
-            npm publish --access public
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish path-metadata
-        run: |
-          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/path-metadata/package.json)
-          if ! npm view @signalk/path-metadata@$LOCAL_VERSION version &>/dev/null; then
-            cd packages/path-metadata
             npm publish --access public
           fi
         env:

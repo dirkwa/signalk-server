@@ -61,6 +61,7 @@ import { queryRequest } from './requestResponse'
 import {
   getRateLimitValidationOptions,
   pathForSecurityConfig,
+  SECRET_KEY_FILENAME,
   SecurityConfig,
   SecurityConfigGetter,
   SecurityConfigSaver,
@@ -318,6 +319,7 @@ interface App
     WithWrappedEmitter {
   webapps: Package[]
   logging: {
+    clearLog: () => void
     rememberDebug: (r: boolean) => void
     enableDebug: (r: string) => boolean
     addDebug: (name: string) => void
@@ -2156,6 +2158,13 @@ module.exports = function (
     }
   })
 
+  app.securityStrategy.addAdminWriteMiddleware(`${SERVERROUTESPREFIX}/log`)
+
+  app.delete(`${SERVERROUTESPREFIX}/log`, (_req: Request, res: Response) => {
+    app.logging.clearLog()
+    res.status(204).send()
+  })
+
   app.get(`${SERVERROUTESPREFIX}/debugKeys`, (req: Request, res: Response) => {
     res.json(listKnownDebugs())
   })
@@ -2207,6 +2216,7 @@ module.exports = function (
     'settings.json',
     'defaults.json',
     'security.json',
+    SECRET_KEY_FILENAME,
     'package.json',
     'baseDeltas.json'
   ]
@@ -2293,6 +2303,8 @@ module.exports = function (
               if (err) {
                 sendRestoreStatus('error', err.message, null)
                 hasError = true
+              } else if (name === SECRET_KEY_FILENAME) {
+                fs.chmodSync(path.join(app.config.configPath, name), '600')
               }
             }
           )
@@ -2342,9 +2354,12 @@ module.exports = function (
           { filename }
         ) => {
           try {
+            // busboy passes an application/octet-stream part without a
+            // filename as a file too.
             if (
-              !filename.endsWith('.backup') &&
-              !filename.endsWith('.backup.zip')
+              !filename ||
+              (!filename.endsWith('.backup') &&
+                !filename.endsWith('.backup.zip'))
             ) {
               res
                 .status(400)
