@@ -8,6 +8,7 @@
 
 import Debug from 'debug'
 import { callBufferAbi, RESPONSE_BUFFER_BYTES } from '../utils/buffer-abi'
+import { addStopHandler } from './stop-handlers'
 import { WasmRadarProvider, WasmPluginInstance } from '../types'
 
 const debug = Debug('signalk:wasm:radar-provider')
@@ -830,6 +831,7 @@ export function createRadarProviderBinding(
 
       // Register with Signal K RadarApi
       app.radarApi.register(pluginId, radarProvider)
+      addStopHandler(pluginId, () => cleanupRadarProviders(pluginId, app))
 
       debug(
         `[${pluginId}] Successfully registered as radar provider: ${providerName}`

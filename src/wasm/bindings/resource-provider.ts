@@ -7,6 +7,7 @@
 
 import Debug from 'debug'
 import { callBufferAbi, RESPONSE_BUFFER_BYTES } from '../utils/buffer-abi'
+import { addStopHandler } from './stop-handlers'
 import { WasmResourceProvider, WasmPluginInstance } from '../types'
 
 const debug = Debug('signalk:wasm:resource-provider')
@@ -224,6 +225,7 @@ export function createResourceProviderBinding(
         type: resourceType,
         methods: providerMethods
       })
+      addStopHandler(pluginId, () => cleanupResourceProviders(pluginId, app))
 
       debug(
         `[${pluginId}] Successfully registered as ${resourceType} resource provider`

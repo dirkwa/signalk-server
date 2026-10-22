@@ -21,27 +21,13 @@ import {
   createBinaryDataReader
 } from './binary-stream'
 import { socketManager, tcpSocketManager } from './socket-manager'
+import { addStopHandler } from './stop-handlers'
 import * as fs from 'fs'
 import * as path from 'path'
 import { atomicWriteFileSync } from '../../atomicWrite'
 import { callBufferAbi, METADATA_BUFFER_BYTES } from '../utils/buffer-abi'
 
 const debug = Debug('signalk:wasm:bindings')
-
-// Deregistration functions of the PUT handlers each plugin registered,
-// keyed by package name (the PUT source)
-const putHandlerDeregistrations = new Map<string, Set<() => void>>()
-
-/**
- * Remove the PUT handlers a plugin registered, so a stopped or replaced
- * instance no longer receives PUT requests
- */
-export function cleanupWasmPutHandlers(packageName: string): void {
-  putHandlerDeregistrations
-    .get(packageName)
-    ?.forEach((deregister) => deregister())
-  putHandlerDeregistrations.delete(packageName)
-}
 
 /**
  * Options for creating environment imports
@@ -565,12 +551,7 @@ export function createEnvImports(
             callback
           )
           if (typeof deregister === 'function') {
-            let deregistrations = putHandlerDeregistrations.get(packageName)
-            if (!deregistrations) {
-              deregistrations = new Set()
-              putHandlerDeregistrations.set(packageName, deregistrations)
-            }
-            deregistrations.add(() => {
+            addStopHandler(packageName, () => {
               deregister()
               // Clients offer PUT controls from this meta, so withdraw it too
               app.handleMessage?.(packageName, {

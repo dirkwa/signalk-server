@@ -8,6 +8,7 @@
 
 import Debug from 'debug'
 import { callBufferAbi, RESPONSE_BUFFER_BYTES } from '../utils/buffer-abi'
+import { addStopHandler } from './stop-handlers'
 import { WasmWeatherProvider, WasmPluginInstance } from '../types'
 
 const debug = Debug('signalk:wasm:weather-provider')
@@ -303,6 +304,7 @@ export function createWeatherProviderBinding(
 
       // Register with Signal K WeatherApi
       app.weatherApi.register(pluginId, weatherProvider)
+      addStopHandler(pluginId, () => cleanupWeatherProviders(pluginId, app))
 
       debug(
         `[${pluginId}] Successfully registered as weather provider: ${providerName}`
