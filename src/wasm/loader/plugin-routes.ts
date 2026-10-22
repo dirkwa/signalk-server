@@ -32,6 +32,7 @@ import {
   METADATA_BUFFER_BYTES,
   RESPONSE_BUFFER_BYTES
 } from '../utils/buffer-abi'
+import { openSseStream } from '../bindings/sse'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -51,6 +52,7 @@ export interface WasmHttpResponse {
   headers?: Record<string, string>
   body?: unknown
   bodyEncoding?: string
+  sseChannel?: string
 }
 
 const BASE64_BODY_ENCODING = 'base64'
@@ -524,6 +526,21 @@ export function setupPluginSpecificRoutes(
           }
 
           const response: WasmHttpResponse = JSON.parse(responseJson)
+
+          if (typeof response.sseChannel === 'string') {
+            if (timeout) clearTimeout(timeout)
+            // A stopped plugin never sends, and its streams were already closed
+            if (plugin.status !== 'running') {
+              return res.status(503).json({ error: 'Plugin is not running' })
+            }
+            openSseStream(
+              plugin.id,
+              response.sseChannel,
+              res,
+              typeof response.body === 'string' ? response.body : undefined
+            )
+            return
+          }
 
           if (timeout) clearTimeout(timeout)
           debug(`Handler completed successfully, sending response`)

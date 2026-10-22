@@ -19,6 +19,7 @@ import { updateWeatherProviderInstance } from '../bindings/weather-provider'
 import { updateRadarProviderInstance } from '../bindings/radar-provider'
 import { socketManager, tcpSocketManager } from '../bindings/socket-manager'
 import { runStopHandlers } from '../bindings/stop-handlers'
+import { closeSseStreamsForPlugin } from '../bindings/sse'
 
 const debug = Debug('signalk:wasm:loader')
 
@@ -271,6 +272,9 @@ export async function stopWasmPlugin(pluginId: string): Promise<void> {
     setPluginStatus(plugin, 'error')
     plugin.errorMessage = errorMsg
     throw error
+  } finally {
+    // A trap in the plugin's stop() must not leave clients on a dead channel
+    closeSseStreamsForPlugin(pluginId)
   }
 }
 
