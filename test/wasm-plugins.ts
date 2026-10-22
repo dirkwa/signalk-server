@@ -36,6 +36,7 @@ import {
 import { setupPluginSpecificRoutes } from '../src/wasm/loader/plugin-routes'
 import { WasmPlugin } from '../src/wasm/loader/types'
 import { WithSecurityStrategy } from '../src/security'
+import { createEnvImports } from '../src/wasm/bindings/env-imports'
 
 interface PluginInfo {
   id: string
@@ -52,6 +53,7 @@ interface PluginInfo {
 interface ServerInstance {
   stop: () => Promise<void>
   app: {
+    handleMessage: (providerId: string, delta: object) => void
     config: {
       settings: {
         port: number
@@ -700,6 +702,86 @@ export function plugin_stop(): i32 {
     it('admin can access an endpoint without an access level', async function () {
       const response = await getEndpoint('/api/status', adminToken)
       expect(response.status).to.equal(200)
+    })
+  })
+
+  describe('sk_get_self_path binding', () => {
+    const PATH_PTR = 0
+    const BUF_PTR = 1024
+    const BUF_MAX_LEN = 4096
+    const SPEED = 3.5
+
+    let server: ServerInstance | null = null
+
+    /** Calls the binding the way a WASM guest would, via linear memory. */
+    function selfPathReader(dataRead: boolean): (skPath: string) => unknown {
+      const memory = new WebAssembly.Memory({ initial: 1 })
+      const imports = createEnvImports({
+        pluginId: 'self-path-test',
+        packageName: 'self-path-test',
+        capabilities: {
+          network: false,
+          storage: 'none',
+          dataRead,
+          dataWrite: false,
+          serialPorts: false,
+          putHandlers: false
+        },
+        app: server!.app,
+        memoryRef: { current: memory },
+        rawExports: { current: null },
+        asLoaderInstance: { current: null }
+      })
+      return (skPath: string) => {
+        const pathBytes = Buffer.from(skPath, 'utf8')
+        new Uint8Array(memory.buffer).set(pathBytes, PATH_PTR)
+        const len: number = imports.sk_get_self_path(
+          PATH_PTR,
+          pathBytes.length,
+          BUF_PTR,
+          BUF_MAX_LEN
+        )
+        if (len === 0) return undefined
+        return JSON.parse(
+          Buffer.from(memory.buffer, BUF_PTR, len).toString('utf8')
+        )
+      }
+    }
+
+    before(async function () {
+      const port = await freeport()
+      const started: ServerInstance = await startServerP(port, false)
+      server = started
+      started.app.handleMessage('test', {
+        updates: [
+          { values: [{ path: 'navigation.speedOverGround', value: SPEED }] }
+        ]
+      })
+    })
+
+    after(async function () {
+      if (server) {
+        await server.stop()
+      }
+    })
+
+    it('returns the self vessel value for a path', function () {
+      const result = selfPathReader(true)('navigation.speedOverGround') as {
+        value: number
+      }
+      expect(result.value).to.equal(SPEED)
+    })
+
+    it('returns nothing for a path without data', function () {
+      expect(selfPathReader(true)('navigation.courseOverGroundTrue')).to.equal(
+        undefined
+      )
+    })
+
+    it('returns nothing without the dataRead capability', function () {
+      expect(selfPathReader(false)('navigation.speedOverGround')).to.equal(
+        undefined
+      )
     })
   })
 })
