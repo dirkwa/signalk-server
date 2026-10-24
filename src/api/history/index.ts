@@ -9,6 +9,7 @@ import {
   PathSpec,
   PathsRequest,
   PathsResponse,
+  HistorySourcePolicy,
   TimeRangeParams,
   ValuesRequest,
   ValuesResponse,
@@ -84,7 +85,9 @@ export class HistoryApiHttpRegistry {
     private app: HistoryApplication,
     private unavailableGraceMs: number = UNAVAILABLE_GRACE_MS
   ) {
-    this.configuredProviderId = app.config.settings.historyApi?.defaultProvider
+    // treat empty string (and all falsy values) as undefined
+    this.configuredProviderId =
+      app.config.settings.historyApi?.defaultProvider || undefined
     this.proxy = {
       getValues: (query: ValuesRequest): Promise<ValuesResponse> => {
         return this.defaultProvider().getValues(query)
@@ -122,7 +125,20 @@ export class HistoryApiHttpRegistry {
     if (!this.historyProviders.has(pluginId)) {
       this.historyProviders.set(pluginId, provider)
     }
-    if (pluginId === this.configuredProviderId) {
+    // Persist the first registered provider as the configured default
+    if (
+      this.configuredProviderId === undefined &&
+      this.app.config.safeToPersistSettings
+    ) {
+      this.saveConfiguredProvider(pluginId, (err) => {
+        if (err) {
+          debug(
+            `Failed to persist default history provider ${pluginId}:`,
+            err.message
+          )
+        }
+      })
+    } else if (pluginId === this.configuredProviderId) {
       this.clearUnavailableGrace()
       this.unavailableGraceExpired = false
       this.notifyConfiguredAvailable()
@@ -286,7 +302,15 @@ export class HistoryApiHttpRegistry {
             throw new Error(`Validation errors: ${errors.join(', ')}`)
           }
           debug.enabled && debug(JSON.stringify(timeRangeParams, null, 2))
-          return provider.getPaths(timeRangeParams)
+          const context = req.query.context
+          if (context !== undefined && typeof context !== 'string') {
+            throw new Error('context parameter must be a single string')
+          }
+          return provider.getPaths(
+            context
+              ? { ...timeRangeParams, context: context as Context }
+              : timeRangeParams
+          )
         },
         res
       )
@@ -491,6 +515,13 @@ const parseValuesQuery = (query: Record<string, unknown>): ValuesRequest => {
     errors.push('paths parameter is required and must be a string')
   }
 
+  let sourcePolicy: HistorySourcePolicy | undefined
+  try {
+    sourcePolicy = parseSourcePolicy(query.sourcePolicy)
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : 'Invalid sourcePolicy')
+  }
+
   if (errors.length > 0) {
     throw new Error(`Validation errors: ${errors.join(', ')}`)
   }
@@ -504,10 +535,17 @@ const parseValuesQuery = (query: Record<string, unknown>): ValuesRequest => {
     ...timeRangeParams,
     context,
     resolution,
+    sourcePolicy,
     pathSpecs
   }
   debug.enabled && debug(JSON.stringify(parsed, null, 2))
   return parsed
+}
+
+const parseSourcePolicy = (value: unknown): HistorySourcePolicy | undefined => {
+  if (value === undefined || value === null || value === '') return undefined
+  if (value === 'all') return value
+  throw new Error("sourcePolicy parameter must be 'all'")
 }
 
 // Maps the single-letter unit suffix in a resolution time expression to seconds.

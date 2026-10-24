@@ -4,7 +4,12 @@ import { Temporal } from '@js-temporal/polyfill'
 /**
  * Method for aggregating historical data points within a time bucket.
  *
- * - `average`: Mean of all values in the bucket
+ * - `average`: Mean of all values in the bucket. For a path whose units are
+ *   `rad` (headings, courses, wind angles) this is the circular mean — the
+ *   angle of the mean sine and cosine — so 359° and 1° average to 0°, not
+ *   180°; the result keeps the path's convention ([0, 2π) or (−π, π]).
+ *   Samples that cancel — 0° and 180° in equal measure — have no mean
+ *   direction, and the bucket is null.
  * - `min`: Minimum value
  * - `max`: Maximum value
  * - `first`: First value chronologically
@@ -13,6 +18,8 @@ import { Temporal } from '@js-temporal/polyfill'
  * - `middle_index`: Value at the middle index position
  * - `sma`: Simple Moving Average with number of samples specified in the parameter array (e.g., sma:5 for 5-sample SMA)
  * - `ema`: Exponential Moving Average with alpha specified in the parameter array (e.g., ema:0.2 for alpha=0.2 EMA)
+ *
+ * `sma` and `ema` smooth a path in radians the same way `average` averages it.
  */
 export type AggregateMethod =
   | 'average'
@@ -28,12 +35,24 @@ export type AggregateMethod =
 export type ValueList = {
   path: Path
   method: AggregateMethod
-  sourceRef?: SourceRef
+  $source?: SourceRef
 }[]
 
 /**
+ * Controls how history providers should handle multiple sources for the
+ * requested paths.
+ *
+ * - `all`: return values split by source, with `$source` set in `values`
+ *
+ * A `sourceRef` specified on an individual path remains an explicit filter;
+ * `all` only expands paths that do not already specify a source.
+ */
+export type HistorySourcePolicy = 'all'
+
+/**
  * A row of historical data: first element is timestamp, followed by aggregated values.
- * Values can be primitives, objects (like navigation.position), or null depending on the path.
+ * Values can be primitives, `[longitude, latitude]` pairs (navigation.position, in GeoJSON
+ * order), or null depending on the path.
  */
 export type DataRow = [Timestamp, ...unknown[]]
 
@@ -104,9 +123,12 @@ export type TimeRangeQueryParams =
 export type ValuesRequestQueryParams = TimeRangeQueryParams & {
   context?: string
   resolution?: number
+  sourcePolicy?: HistorySourcePolicy
 }
 
-export type PathsRequestQueryParams = TimeRangeQueryParams
+export type PathsRequestQueryParams = TimeRangeQueryParams & {
+  context?: string
+}
 export type PathsResponse = Path[]
 
 export type ContextsRequestQueryParams = TimeRangeQueryParams
@@ -258,8 +280,11 @@ export interface PathSpec {
 export type ValuesRequest = TimeRangeParams & {
   context?: Context
   resolution?: number
+  sourcePolicy?: HistorySourcePolicy
   pathSpecs: PathSpec[]
 }
 
-export type PathsRequest = TimeRangeParams
+export type PathsRequest = TimeRangeParams & {
+  context?: Context
+}
 export type ContextsRequest = TimeRangeParams

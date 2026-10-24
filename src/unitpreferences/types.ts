@@ -66,6 +66,21 @@ export interface DisplayUnitsMetadata {
   inverseFormula?: string // Only if custom category
   symbol?: string // Only if custom category
   displayFormat?: string // Only if path override
+  override?: DisplayUnitsOverride // Only on the way out, never stored
+}
+
+// The path metadata fields display unit resolution reads
+export interface PathUnitsMetadata {
+  units?: string
+  displayUnits?: DisplayUnitsMetadata
+}
+
+// The path-specific unit override in a resolved response, as opposed to the
+// part the applied preset supplied. Empty when the path follows the preset.
+// Only present when the request asked for it.
+export interface DisplayUnitsOverride {
+  targetUnit?: string
+  displayFormat?: string
 }
 
 // What server returns in GET /meta response
@@ -76,4 +91,5 @@ export interface EnhancedDisplayUnits {
   inverseFormula: string
   symbol: string
   displayFormat?: string
+  override?: DisplayUnitsOverride
 }

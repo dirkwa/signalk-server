@@ -22,12 +22,11 @@ import { getMetadata } from '@signalk/path-metadata'
 import {
   requestAccess,
   InvalidTokenError,
+  SecurityStrategy,
+  SkPrincipal,
   WithSecurityStrategy
 } from '../security'
-import {
-  LoginRateLimiter,
-  LOGIN_RATE_LIMIT_MESSAGE
-} from '../login-rate-limiter'
+import { LOGIN_RATE_LIMIT_MESSAGE } from '../login-rate-limiter'
 import { getSourceId } from '@signalk/server-api'
 import { WithConfig } from '../app'
 import {
@@ -47,11 +46,7 @@ import {
   parseBackpressureThresholds
 } from '../BackpressureManager'
 import { getExternalPort } from '../ports'
-import {
-  resolveDisplayUnits,
-  getDefaultCategory,
-  DisplayUnitsMetadata
-} from '../unitpreferences'
+import { resolvePathDisplayUnits, PathUnitsMetadata } from '../unitpreferences'
 import { Delta, hasValues } from '@signalk/server-api'
 
 const debug = createDebug('signalk-server:interfaces:ws')
@@ -74,10 +69,6 @@ function decrementIpCount(
   } else {
     ipConnectionCounts.delete(ip)
   }
-}
-
-interface SkPrincipal {
-  identifier: string
 }
 
 interface SignalKSparkRequest {
@@ -106,9 +97,11 @@ interface Spark {
     events?: string
     sendCachedValues?: string
     sourcePolicy?: SourcePolicy
+    displayUnitsOverride?: string
   }
   request: SignalKSparkRequest
   sendMetaDeltas: boolean
+  sendDisplayUnitsOverride: boolean
   sourcePolicy: SourcePolicy
   sentMetaData: Record<string, boolean>
   backpressureManager?: BackpressureManager
@@ -186,29 +179,6 @@ interface PathSources {
   [path: string]: {
     [source: string]: Spark
   }
-}
-
-interface SecurityStrategy {
-  canAuthorizeWS: () => boolean
-  authorizeWS: (req: Spark['request']) => void
-  verifyWS: (req: Spark['request']) => void
-  filterReadDelta: (
-    principal: SkPrincipal | undefined,
-    delta: Delta
-  ) => Delta | null
-  shouldAllowWrite: (req: Spark['request'], msg: WsMessage) => boolean
-  hasAdminAccess?: (req: Spark['request']) => boolean
-  supportsLogin: () => boolean
-  login: (
-    username: string,
-    password: string
-  ) => Promise<{
-    token?: string
-    statusCode: number
-    timeToLive?: number | null
-  }>
-  isDummy: () => boolean
-  loginRateLimiter?: LoginRateLimiter
 }
 
 interface SubscriptionManager {
@@ -535,6 +505,11 @@ function wsInterface(app: WsApp): WsApi {
           )
 
           spark.sendMetaDeltas = spark.query.sendMeta === 'all'
+          // An editor needs to tell a path-specific display unit override
+          // from the preset's setting; nothing else does, so it comes only
+          // when asked for.
+          spark.sendDisplayUnitsOverride =
+            spark.query.displayUnitsOverride === 'true'
           spark.sourcePolicy = spark.query.sourcePolicy || 'preferred'
           spark.sentMetaData = {}
 
@@ -836,6 +811,15 @@ function wsInterface(app: WsApp): WsApi {
   }
 
   function processLoginRequest(app: WsApp, spark: Spark, msg: WsMessage): void {
+    if (!app.securityStrategy.login) {
+      spark.write({
+        requestId: msg.requestId,
+        state: 'COMPLETED',
+        statusCode: 501,
+        message: 'Login is not supported'
+      })
+      return
+    }
     const rateLimiter = app.securityStrategy.loginRateLimiter
     if (rateLimiter) {
       const { allowed } = rateLimiter.check(spark.request._resolvedIp)
@@ -906,7 +890,11 @@ function createPrimusAuthorize(
       isWebSocketUpgrade &&
       (ipConnectionCounts.get(ip) ?? 0) >= maxConnectionsPerIp
     ) {
-      debug('IP %s exceeded max connections (%d)', ip, maxConnectionsPerIp)
+      debugConnection(
+        'IP %s exceeded max connections (%d)',
+        ip,
+        maxConnectionsPerIp
+      )
       const err = Object.assign(
         new Error(
           JSON.stringify({
@@ -1053,35 +1041,14 @@ function handleValuesMeta(
         if (meta) {
           // Clone and enhance metadata with displayUnits formulas
           const metaClone = structuredClone(meta) as Record<string, unknown>
-          let storedDisplayUnits = metaClone.displayUnits as
-            Record<string, unknown> | undefined
-          const username = this.spark.request.skPrincipal?.identifier
-          if (!storedDisplayUnits?.category && path) {
-            const defaultCategory = getDefaultCategory(
-              path,
-              metaClone.units as string | undefined,
-              username
-            )
-            if (defaultCategory) {
-              storedDisplayUnits = { category: defaultCategory }
-            }
-          }
-          if (storedDisplayUnits?.category) {
-            const enhanced = resolveDisplayUnits(
-              storedDisplayUnits as {
-                category: string
-                targetUnit?: string
-                formula?: string
-                inverseFormula?: string
-                symbol?: string
-                displayFormat?: string
-              },
-              metaClone.units as string | undefined,
-              username
-            )
-            if (enhanced) {
-              metaClone.displayUnits = enhanced
-            }
+          const enhanced = resolvePathDisplayUnits(
+            path,
+            metaClone as PathUnitsMetadata,
+            this.spark.request.skPrincipal?.identifier,
+            this.spark.sendDisplayUnitsOverride
+          )
+          if (enhanced) {
+            metaClone.displayUnits = enhanced
           }
           this.spark.write({
             context: this.context,
@@ -1326,24 +1293,14 @@ function handleRealtimeConnection(
           const fullPath = 'vessels.self.' + path
           const pathMeta =
             (getMetadata(fullPath) as Record<string, unknown>) || {}
-          const storedDU = pathMeta.displayUnits as
-            DisplayUnitsMetadata | undefined
-          const category =
-            storedDU?.category ||
-            getDefaultCategory(
-              path,
-              pathMeta.units as string | undefined,
-              username
-            )
-          if (category) {
-            const displayUnits = resolveDisplayUnits(
-              { ...storedDU, category },
-              pathMeta.units as string | undefined,
-              username
-            )
-            if (displayUnits) {
-              acc.push({ path, value: { ...pathMeta, displayUnits } })
-            }
+          const displayUnits = resolvePathDisplayUnits(
+            path,
+            pathMeta as PathUnitsMetadata,
+            username,
+            spark.sendDisplayUnitsOverride
+          )
+          if (displayUnits) {
+            acc.push({ path, value: { ...pathMeta, displayUnits } })
           }
           return acc
         },
@@ -1372,16 +1329,23 @@ function handleRealtimeConnection(
     sendLatestDeltas(app, app.deltaCache, app.selfContext, spark)
   }
 
+  // Server events are not accumulated by the BackpressureManager (they
+  // are not deltas), but they share the socket with it. Without this
+  // check a client that cannot keep up with a burst of server events
+  // — or a plugin emitting them in a loop — grows the send buffer
+  // without bound and never hits the overflow limit deltas already
+  // enforce.
+  const writeEvent = (event: Delta) => {
+    spark.write(event)
+    spark.backpressureManager?.assertBufferSize()
+  }
+
   if (spark.query.serverevents === 'all') {
     spark.hasServerEvents = true
     startServerEvents(
       app,
       spark,
-      wrapWithVerifyWS(
-        app.securityStrategy,
-        spark,
-        spark.write.bind(spark) as (delta: Delta) => void
-      )
+      wrapWithVerifyWS(app.securityStrategy, spark, writeEvent)
     )
   }
 
@@ -1389,11 +1353,7 @@ function handleRealtimeConnection(
     startEvents(
       app,
       spark,
-      wrapWithVerifyWS(
-        app.securityStrategy,
-        spark,
-        spark.write.bind(spark) as (delta: Delta) => void
-      ),
+      wrapWithVerifyWS(app.securityStrategy, spark, writeEvent),
       spark.query.events
     )
   }

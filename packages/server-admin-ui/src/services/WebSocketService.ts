@@ -51,11 +51,14 @@ export class WebSocketService {
     }
 
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    // The metadata editor needs to tell a path-specific unit override from a
+    // unit that comes from the applied preset, and the server reports the
+    // override only when asked.
     const url =
       proto +
       '://' +
       window.location.host +
-      `/signalk/v1/stream?serverevents=all&subscribe=none&sendMeta=all`
+      `/signalk/v1/stream?serverevents=all&subscribe=none&sendMeta=all&displayUnitsOverride=true`
 
     this.updateState({ status: 'connecting' })
 
@@ -259,6 +262,9 @@ export class WebSocketService {
         useStore.getState().addLogEntry(logData)
         break
       }
+      case 'LOG_CLEARED':
+        useStore.getState().clearLogEntries()
+        break
       case 'ACCESS_REQUEST':
         this.zustandSetState({ accessRequests: data } as Partial<SignalKStore>)
         break
@@ -347,7 +353,7 @@ export class WebSocketService {
             defaultId: undefined,
             configuredId: undefined,
             configuredAvailable: false
-          }) as Parameters<SignalKStore['setHistoryProviders']>[0]
+          }) as unknown as Parameters<SignalKStore['setHistoryProviders']>[0]
         )
         break
       case 'N2KDEVICESTATUS':
@@ -397,12 +403,16 @@ export class WebSocketService {
       case 'APP_STORE_CHANGED':
         useStore
           .getState()
-          .setAppStore(data as Parameters<SignalKStore['setAppStore']>[0])
+          .setAppStore(
+            data as unknown as Parameters<SignalKStore['setAppStore']>[0]
+          )
         break
       case 'PLUGINS_CHANGED':
         useStore
           .getState()
-          .setPlugins(data as Parameters<SignalKStore['setPlugins']>[0])
+          .setPlugins(
+            data as unknown as Parameters<SignalKStore['setPlugins']>[0]
+          )
         break
       default:
         console.debug('Unhandled server event:', eventType)

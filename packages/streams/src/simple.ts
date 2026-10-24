@@ -102,6 +102,7 @@ interface SubOptions {
   validateChecksum?: boolean
   useCanboatjs?: boolean
   suppress0183event?: boolean
+  nmea0183eventSentences?: string[]
   sentenceEvent?: string | string[]
   appendChecksum?: boolean
   filters?: Array<{ source?: string; pgn?: string }>
@@ -331,9 +332,8 @@ function nmea2000input(
       new Liner(subOptions)
     ]
   } else if (subOptions.type === 'canboat-csv-canboatjs') {
-    // canboat-pipeline's CSV R/W port (default 2603). Bidirectional:
-    // we read PLAIN/FAST lines and forward outbound PGNs over the
-    // same socket.
+    // canboat-pipeline's raw CSV port (default 2603) for reading, and
+    // its write-only input port (default 2600) for outbound PGNs.
 
     const CanboatCsv = require('./canboat-csv') as {
       default: new (options: object) => PipeElement

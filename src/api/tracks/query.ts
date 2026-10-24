@@ -1,0 +1,927 @@
+import { Temporal } from '@js-temporal/polyfill'
+import { Context, Path } from '@signalk/server-api'
+import {
+  TrackBoundingBox,
+  TrackImport,
+  TrackSpan,
+  TracksRequest
+} from '@signalk/server-api/tracks'
+
+/**
+ * Query parsing for the Track API.
+ *
+ * Kept separate from the HTTP registry so the rules are testable without
+ * standing up express or a provider.
+ */
+
+export interface ParsedTracksQuery {
+  request: TracksRequest
+  errors: string[]
+}
+
+/**
+ * Extract a scalar query value; express repeats a key into an array.
+ *
+ * Returns undefined only when the parameter is genuinely absent. A present but
+ * empty value is returned as the empty string so callers can reject it —
+ * treating `?duration=` as omitted would quietly skip the window check rather
+ * than telling the client its query was malformed. `readFlag` is the one place
+ * an empty value legitimately means something.
+ */
+const first = (value: unknown): string | undefined => {
+  const scalar = Array.isArray(value) ? (value as unknown[])[0] : value
+  return typeof scalar === 'string' ? scalar : undefined
+}
+
+/** A present-but-blank value, which every parameter except a flag rejects. */
+const blank = (value: string): boolean => value.trim() === ''
+
+/**
+ * ISO 8601 duration, or a bare integer read as seconds.
+ *
+ * The integer form is not in the spec but the History API accepts it, and a
+ * client that has learned History's behaviour will reasonably expect the same
+ * here.
+ */
+const parseDuration = (
+  value: string,
+  name: string,
+  errors: string[]
+): Temporal.Duration | undefined => {
+  let parsed: Temporal.Duration
+  try {
+    parsed = Temporal.Duration.from(value)
+  } catch {
+    // The seconds fallback has to be guarded too: Temporal refuses a total
+    // above its safe range, so an absurd integer would throw out of the parser
+    // and surface as a 500 for what is really a bad query string.
+    if (/^\d+$/.test(value)) {
+      try {
+        parsed = Temporal.Duration.from({ seconds: Number(value) })
+      } catch {
+        errors.push(`${name} is out of range`)
+        return undefined
+      }
+    } else {
+      errors.push(
+        `${name} must be an ISO 8601 duration string (e.g. 'PT15M') or an integer number of seconds`
+      )
+      return undefined
+    }
+  }
+  // Temporal accepts a leading minus, and zero parses fine, but neither
+  // describes a window or a spacing: a negative duration would ask for a range
+  // ending before it starts, and a zero resolution would thin nothing.
+  if (parsed.sign <= 0) {
+    errors.push(`${name} must be a positive duration`)
+    return undefined
+  }
+  return parsed
+}
+
+/**
+ * Re-express a duration in hours and below, so a provider can call
+ * `total({ unit: 'milliseconds' })` on it without a reference date.
+ *
+ * Anchored to an arbitrary UTC instant: a spacing is a length, not a position,
+ * so the same query must resolve to the same number of milliseconds whenever it
+ * is asked. That fixes a day at 24h, which is what an absolute window means.
+ */
+const normalizeDuration = (
+  duration: Temporal.Duration,
+  name: string,
+  errors: string[]
+): Temporal.Duration | undefined => {
+  // Years and months have no fixed length — `P1M` is 744h measured from
+  // January and 672h from February — so they are rejected rather than silently
+  // resolved against an arbitrary anchor. A spacing is a length, not a
+  // position: the same query has to mean the same thing whenever it is asked.
+  if (duration.years !== 0 || duration.months !== 0) {
+    errors.push(
+      `${name} must not use years or months, which have no fixed length; use days or smaller`
+    )
+    return undefined
+  }
+  const anchor =
+    Temporal.Instant.fromEpochMilliseconds(0).toZonedDateTimeISO('UTC')
+  try {
+    const normalized = anchor.until(anchor.add(duration), {
+      largestUnit: 'hour'
+    })
+    // A millisecond floor: timestamps carry no finer granularity, so a spacing
+    // below one cannot thin anything, and `PT0.0005S` is a request no store can
+    // act on. Rejected rather than rounded, because silently widening a
+    // client's spacing is worse than telling it the value was unusable.
+    if (normalized.total({ unit: 'milliseconds' }) < 1) {
+      errors.push(`${name} must be at least one millisecond`)
+      return undefined
+    }
+    return normalized
+  } catch {
+    // Temporal refuses a date beyond its supported range, so a duration large
+    // enough to overshoot it throws here rather than parsing. That is a bad
+    // query string, not a server fault: guarded the same way parseDuration
+    // guards its own seconds fallback, so it surfaces as a 400.
+    errors.push(`${name} is out of range`)
+    return undefined
+  }
+}
+
+const parseInstant = (
+  value: string,
+  name: string,
+  errors: string[]
+): Temporal.Instant | undefined => {
+  try {
+    return Temporal.Instant.from(value)
+  } catch {
+    errors.push(`${name} must be a valid ISO 8601 timestamp`)
+    return undefined
+  }
+}
+
+/**
+ * A Signal K path: dot-separated segments of letters, digits, dash and
+ * underscore. Validated rather than cast — these arrive from a client, and
+ * `Path` is a branded type whose guarantee would otherwise be hollow.
+ */
+const PATH_PATTERN = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$/
+
+/**
+ * How many problems one malformed import reports.
+ *
+ * Every bad position would otherwise add a message, and the route joins them
+ * into the response body — so an import at the point cap could answer a 400
+ * with megabytes of text. A client needs enough to find the mistake, not a
+ * census of it.
+ */
+const MAX_REPORTED_ERRORS = 20
+
+/**
+ * Caps on an imported track.
+ *
+ * An authorised POST otherwise hands a provider an arbitrarily large geometry,
+ * and validation holds a second copy of it while checking. Express's JSON body
+ * limit is the only other bound and says nothing a client can read.
+ */
+export const MAX_IMPORT_SEGMENTS = 10_000
+export const MAX_IMPORT_POINTS = 1_000_000
+
+const MAX_LONGITUDE = 180
+const MAX_LATITUDE = 90
+
+/**
+ * `west,south,east,north` — GeoJSON coordinate order, as the Resources API
+ * uses. A west edge numerically greater than the east edge is a box crossing
+ * the antimeridian, which is legal and left to the provider to interpret.
+ */
+const parseBbox = (
+  value: string,
+  errors: string[]
+): TrackBoundingBox | undefined => {
+  const raw = value.split(',')
+  // Number('') is 0, not NaN, so a blank component would pass the finite check
+  // and place an edge on the equator or the prime meridian rather than failing.
+  if (raw.length !== 4 || raw.some((p) => p.trim() === '')) {
+    errors.push(
+      'bbox must be four comma-separated numbers: west,south,east,north'
+    )
+    return undefined
+  }
+  const parts = raw.map((p) => Number(p.trim()))
+  if (parts.some((n) => !Number.isFinite(n))) {
+    errors.push(
+      'bbox must be four comma-separated numbers: west,south,east,north'
+    )
+    return undefined
+  }
+  const [west, south, east, north] = parts as [number, number, number, number]
+  if (south > north) {
+    errors.push(
+      `bbox south (${south}) must not be greater than north (${north})`
+    )
+    return undefined
+  }
+  if ([west, east].some((n) => n < -MAX_LONGITUDE || n > MAX_LONGITUDE)) {
+    errors.push('bbox longitudes must be between -180 and 180')
+    return undefined
+  }
+  if ([south, north].some((n) => n < -MAX_LATITUDE || n > MAX_LATITUDE)) {
+    errors.push('bbox latitudes must be between -90 and 90')
+    return undefined
+  }
+  return [west, south, east, north]
+}
+
+/** A bare id is qualified with `vessels.`; other prefixes pass through. */
+const qualifyContext = (value: string): Context =>
+  (value.includes('.') ? value : `vessels.${value}`) as Context
+
+/** A valueless parameter — `?times` — reads as true, as query strings spell flags. */
+const TRUE_FLAGS = new Set(['true', '1', 'yes', ''])
+const FALSE_FLAGS = new Set(['false', '0', 'no'])
+
+const parseFlag = (
+  value: string,
+  name: string,
+  errors: string[]
+): boolean | undefined => {
+  const flag = value.trim().toLowerCase()
+  if (TRUE_FLAGS.has(flag)) {
+    return true
+  }
+  if (FALSE_FLAGS.has(flag)) {
+    return false
+  }
+  errors.push(`${name} must be true or false`)
+  return undefined
+}
+
+/**
+ * Read a boolean parameter, honouring the valueless form.
+ *
+ * `first()` returns undefined for an empty string, so presence has to be
+ * tested on the raw query rather than on the extracted value; otherwise
+ * `?simplify` would be silently ignored while `?simplify=true` worked.
+ */
+const readFlag = (
+  query: Record<string, unknown>,
+  name: string,
+  errors: string[]
+): boolean | undefined => {
+  if (!Object.prototype.hasOwnProperty.call(query, name)) {
+    return undefined
+  }
+  return parseFlag(first(query[name]) ?? '', name, errors)
+}
+
+/**
+ * Reject any query parameter a route does not understand.
+ *
+ * The single-track routes cannot use the query parser's list — `?bbox=` on a
+ * POST is meaningless, not merely unused. `POST` takes only `provider`, which
+ * chooses where to store; `GET` and `DELETE /{id}` take nothing, since the id
+ * names the provider. The check still matters: `?provdier=parquet` on a POST
+ * would otherwise be dropped and the track stored in the default provider.
+ */
+export function rejectUnknownParams(
+  query: Record<string, unknown>,
+  allowed: string[]
+): string[] {
+  const permitted = new Set(allowed)
+  return Object.keys(query)
+    .filter((name) => !permitted.has(name))
+    .map((name) => `unknown query parameter: ${name}`)
+}
+
+/**
+ * Every parameter the query route understands.
+ *
+ * An unknown one is rejected rather than ignored: a client that sends a filter
+ * this server does not implement would otherwise receive an unfiltered 200 and
+ * have no way to tell.
+ */
+const KNOWN_PARAMS = new Set([
+  'contexts',
+  // Singular as well as plural: the parser accepts both, and an unbounded
+  // query is permitted only for a single `context`.
+  'context',
+  'from',
+  'to',
+  'duration',
+  'bbox',
+  'clip',
+  'resolution',
+  'maxPoints',
+  'simplify',
+  'epsilon',
+  'times',
+  'properties',
+  'geometry',
+  'provider'
+])
+
+export function parseTracksQuery(
+  query: Record<string, unknown>,
+  now: Temporal.Instant = Temporal.Now.instant()
+): ParsedTracksQuery {
+  const errors: string[] = []
+  const request: TracksRequest = {}
+
+  // Before any value is parsed: a query naming a parameter this server does
+  // not implement is wrong whatever its other values say.
+  for (const [name, value] of Object.entries(query)) {
+    if (!KNOWN_PARAMS.has(name)) {
+      errors.push(`unknown query parameter: ${name}`)
+      continue
+    }
+    // A known name is not enough: express parses `?maxPoints[x]=1` into an
+    // object and a repeated key into an array, and `first()` would drop the
+    // one and keep only the first element of the other -- answering a query
+    // the client did not send. Flags are worse, since readFlag substitutes ''
+    // for a missing scalar and '' reads as true, so `?geometry[x]=1` would
+    // mean geometry=true. A valueless parameter still arrives as the string
+    // '', so the flag form keeps working.
+    if (typeof value !== 'string') {
+      errors.push(`${name} must be a single value`)
+    }
+  }
+
+  const contexts = first(query.contexts) ?? first(query.context)
+  if (contexts !== undefined && blank(contexts)) {
+    errors.push('context must not be empty')
+  } else if (contexts !== undefined) {
+    // Deduplicated: `contexts=self,self` would otherwise put the same vessel in
+    // the FeatureCollection twice, and after qualification `self` and the
+    // resolved id can arrive as the same context by two names.
+    request.contexts = [
+      ...new Set(
+        contexts
+          .split(',')
+          .map((c) => c.trim())
+          .filter((c) => c !== '')
+          .map(qualifyContext)
+      )
+    ]
+    if (request.contexts.length === 0) {
+      errors.push('context must not be empty')
+    }
+  }
+
+  const from = first(query.from)
+  if (from !== undefined) {
+    if (blank(from)) {
+      errors.push('from must not be empty')
+    } else {
+      request.from = parseInstant(from, 'from', errors)
+    }
+  }
+
+  const to = first(query.to)
+  if (to !== undefined) {
+    if (blank(to)) {
+      errors.push('to must not be empty')
+    } else {
+      request.to = parseInstant(to, 'to', errors)
+    }
+  }
+
+  const duration = first(query.duration)
+  if (duration !== undefined) {
+    if (blank(duration)) {
+      errors.push('duration must not be empty')
+    } else {
+      request.duration = parseDuration(duration, 'duration', errors)
+    }
+  }
+
+  const bbox = first(query.bbox)
+  if (bbox !== undefined) {
+    if (blank(bbox)) {
+      errors.push('bbox must not be empty')
+    } else {
+      request.bbox = parseBbox(bbox, errors)
+    }
+  }
+
+  // Resolved here so every provider gets an explicit answer and none has to
+  // know the default. Without a bbox there is nothing to clip to, so the flag
+  // is dropped rather than passed on.
+  const clip = readFlag(query, 'clip', errors)
+  if (request.bbox !== undefined) {
+    request.clip = clip ?? true
+  }
+
+  const resolution = first(query.resolution)
+  if (resolution !== undefined) {
+    if (blank(resolution)) {
+      errors.push('resolution must not be empty')
+    } else {
+      const parsed = parseDuration(resolution, 'resolution', errors)
+      // Normalised to hours and below before a provider sees it: a provider
+      // needs this as a number of milliseconds, and Temporal.Duration.total()
+      // refuses day-and-larger units without a reference date because their
+      // length is timezone-dependent. Windows here are absolute, so P1D means
+      // 24h, exactly as it does for duration above.
+      request.resolution =
+        parsed && normalizeDuration(parsed, 'resolution', errors)
+    }
+  }
+
+  const maxPoints = first(query.maxPoints)
+  if (maxPoints !== undefined) {
+    // Decimal digits only. Number() would otherwise read hex (0x10 -> 16) and
+    // exponential (1e3 -> 1000) forms, so a typo becomes a silently different
+    // budget. The History API's duration parsing guards the same way.
+    const n = /^\d+$/.test(maxPoints.trim()) ? Number(maxPoints.trim()) : NaN
+    // isSafeInteger, not isInteger: above 2^53 Number() rounds, so
+    // 9007199254740993 would be accepted as a different value than was asked
+    // for. A point budget that large is meaningless anyway.
+    if (!Number.isSafeInteger(n) || n <= 0) {
+      errors.push('maxPoints must be a positive integer')
+    } else {
+      request.maxPoints = n
+    }
+  }
+
+  const epsilon = first(query.epsilon)
+  if (epsilon !== undefined) {
+    const n = blank(epsilon) ? NaN : Number(epsilon)
+    if (!Number.isFinite(n) || n <= 0) {
+      errors.push('epsilon must be a positive number of metres')
+    } else {
+      request.epsilon = n
+      // epsilon is meaningless without simplification, so asking for one is
+      // asking for the other.
+      request.simplify = true
+    }
+  }
+
+  const simplify = readFlag(query, 'simplify', errors)
+  if (simplify !== undefined) {
+    // epsilon sets simplify above, so an explicit simplify=false alongside it
+    // is a contradiction. Rejecting beats silently honouring one of the two.
+    if (simplify === false && request.epsilon !== undefined) {
+      errors.push('simplify=false cannot be combined with epsilon')
+    } else {
+      request.simplify = simplify
+    }
+  }
+
+  const times = readFlag(query, 'times', errors)
+  if (times !== undefined) {
+    request.times = times
+  }
+
+  const properties = first(query.properties)
+  if (properties !== undefined) {
+    if (blank(properties)) {
+      errors.push('properties must not be empty')
+    } else {
+      const paths = [
+        ...new Set(
+          properties
+            .split(',')
+            .map((p) => p.trim())
+            .filter((p) => p !== '')
+        )
+      ]
+      const invalid = paths.filter((path) => !PATH_PATTERN.test(path))
+      if (paths.length === 0) {
+        errors.push('properties must not be empty')
+      } else if (invalid.length > 0) {
+        errors.push(
+          `properties contains invalid Signal K path(s): ${invalid.join(', ')}`
+        )
+      } else {
+        request.properties = paths as Path[]
+      }
+    }
+  }
+
+  const geometry = readFlag(query, 'geometry', errors)
+  if (geometry !== undefined) {
+    request.geometry = geometry
+  }
+
+  // Resolved to a single `from`/`to` here rather than left to each provider.
+  // Three fields describing one window is how two providers come to answer the
+  // same query differently: given from+duration, one reads from..to and
+  // another duration-before-to. `duration` measures back from the end of the
+  // window, which is what History's description says and what a client asking
+  // for "the last 7 days" means.
+  if (request.from !== undefined || request.duration !== undefined) {
+    if (request.to === undefined) {
+      request.to = now
+    }
+    if (request.duration !== undefined) {
+      // Via UTC rather than Instant.subtract, which refuses day-and-larger
+      // units because their length depends on a timezone. Windows here are
+      // absolute, so UTC is the right frame and `P7D` means 7 × 24h.
+      const start = request.to
+        .toZonedDateTimeISO('UTC')
+        .subtract(request.duration)
+        .toInstant()
+      // With both given, the later start wins: `from` is a floor the caller
+      // set deliberately, so `duration` must not reach back past it.
+      request.from =
+        request.from === undefined ||
+        Temporal.Instant.compare(start, request.from) > 0
+          ? start
+          : request.from
+      delete request.duration
+    }
+  }
+
+  // Checked after the window is resolved, not before: `to` defaults to now, so
+  // a `from` in the future produces a backwards window that an earlier check
+  // would not have seen. Explicit bounds in the wrong order are caught here
+  // too, so one check covers both.
+  if (
+    request.from &&
+    request.to &&
+    Temporal.Instant.compare(request.from, request.to) >= 0
+  ) {
+    errors.push('from must be before to')
+  }
+
+  // An unbounded query is allowed for a single context — "my whole track since
+  // I started recording" is the point of keeping own-vessel data forever — but
+  // not across every context the server has ever seen, which on a busy coast
+  // is years of data for hundreds of vessels.
+  const bounded = request.from !== undefined || request.duration !== undefined
+  const singleContext = request.contexts?.length === 1
+  if (!bounded && !singleContext) {
+    errors.push(
+      'a time window (from or duration) is required unless a single context is given'
+    )
+  }
+
+  return { request, errors }
+}
+
+/**
+ * GeoJSON's own optional members, which a track fetched from this API carries.
+ * Ignored on import: the provider assigns the id and derives the bounding box.
+ */
+const IGNORED_FEATURE_MEMBERS = new Set(['id', 'bbox'])
+
+/** The properties an import says something with, validated before storing. */
+const IMPORT_PROPERTIES = new Set(['coordTimes', 'name', 'context'])
+
+/**
+ * Properties a provider derives for itself, or the server adds on the way out.
+ * Dropped from an import rather than refused, so a track fetched from this API
+ * can be posted back exactly as it came.
+ */
+const DERIVED_PROPERTIES = new Set([
+  'id',
+  'providerId',
+  'isSelf',
+  'imported',
+  'contextName',
+  'from',
+  'to',
+  'bbox',
+  'pointCount',
+  'resolution',
+  'epsilon',
+  'appliedProperties',
+  'values'
+])
+
+/**
+ * Collects problems, stopping at the cap.
+ *
+ * Counting rather than trimming at the end: an import at the point cap could
+ * otherwise build a million interpolated strings before all but twenty were
+ * discarded, which is the allocation the cap exists to prevent. The messages
+ * are also not built once the limit is reached, so a caller passes a thunk.
+ */
+class ErrorReport {
+  private readonly messages: string[] = []
+  private suppressed = 0
+
+  add(message: () => string): void {
+    if (this.messages.length < MAX_REPORTED_ERRORS) {
+      this.messages.push(message())
+    } else {
+      this.suppressed += 1
+    }
+  }
+
+  get length(): number {
+    return this.messages.length + this.suppressed
+  }
+
+  list(): string[] {
+    return this.suppressed === 0
+      ? this.messages
+      : [...this.messages, `and ${this.suppressed} further problems`]
+  }
+}
+
+/**
+ * Read an optional query parameter as an instant. A parameter that is present
+ * but unreadable, `from[x]=1` say, is an error rather than absent, so a caller
+ * never mistakes a malformed value for an omitted one.
+ */
+const parseQueryInstant = (
+  query: Record<string, unknown>,
+  name: string,
+  errors: string[]
+): Temporal.Instant | undefined => {
+  if (query[name] === undefined) {
+    return undefined
+  }
+  const value = first(query[name])
+  if (value === undefined) {
+    errors.push(`${name} must be a single time`)
+    return undefined
+  }
+  if (blank(value)) {
+    errors.push(`${name} must not be empty`)
+    return undefined
+  }
+  return parseInstant(value, name, errors)
+}
+
+/**
+ * The part of a track a `DELETE /{id}` names, or undefined for the whole
+ * track.
+ *
+ * Only `from` and `to`: a span to delete is two instants, and a `duration`
+ * relative to now would make the same request delete a different stretch
+ * each time it was retried.
+ */
+export function parseTrackSpan(query: Record<string, unknown>): {
+  span?: TrackSpan
+  errors: string[]
+} {
+  const errors = rejectUnknownParams(query, ['from', 'to'])
+  const from = parseQueryInstant(query, 'from', errors)
+  const to = parseQueryInstant(query, 'to', errors)
+  if (from && to && Temporal.Instant.compare(from, to) > 0) {
+    errors.push('from must not be later than to')
+  }
+  if (from || to) {
+    return {
+      span: from ? { from, ...(to ? { to } : {}) } : { to: to! },
+      errors
+    }
+  }
+  return { errors }
+}
+
+/**
+ * Validate a track a client is asking the server to store.
+ *
+ * The body is a GeoJSON Feature, the shape a query returns, so a track fetched
+ * from one provider can be posted to another unchanged. A `LineString`, which
+ * converters produce for a track of one segment, is accepted as a single
+ * segment, with `coordTimes` as a flat array to match it.
+ *
+ * Geometry is checked rather than trusted: coordinates in range, `coordTimes`
+ * nested exactly like the coordinates it dates, and every time parseable. A
+ * provider receiving this should not have to re-derive whether the client sent
+ * something coherent, and a malformed upload is a client error, not a 500 from
+ * inside a store.
+ */
+export function parseTrackImport(body: unknown): {
+  track?: TrackImport
+  errors: string[]
+} {
+  const errors = new ErrorReport()
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return { errors: ['body must be a GeoJSON Feature'] }
+  }
+  const input = body as Record<string, unknown>
+
+  // Checked first: a FeatureCollection, which is what a GPX converter returns
+  // for a whole file, would otherwise be reported as an unknown `features`
+  // member and send the client looking in the wrong place.
+  if (input.type !== 'Feature') {
+    return {
+      errors: [
+        input.type === 'FeatureCollection'
+          ? 'type must be "Feature": post the tracks of a FeatureCollection one at a time'
+          : 'type must be "Feature"'
+      ]
+    }
+  }
+
+  // Refused rather than stored: the Feature's own members are fixed, and
+  // anything else at this level is a misplaced property or a misspelling,
+  // which kept silently would look like the import had been understood.
+  const unknownMembers = Object.keys(input).filter(
+    (member) =>
+      !['type', 'geometry', 'properties'].includes(member) &&
+      !IGNORED_FEATURE_MEMBERS.has(member)
+  )
+  if (unknownMembers.length > 0) {
+    return {
+      errors: [
+        `unknown member${unknownMembers.length > 1 ? 's' : ''} ${unknownMembers.join(', ')}: a track's own data belongs in properties`
+      ]
+    }
+  }
+
+  const geometry = input.geometry as Record<string, unknown> | null | undefined
+  const kind =
+    typeof geometry === 'object' && geometry !== null
+      ? geometry.type
+      : undefined
+  if (kind !== 'MultiLineString' && kind !== 'LineString') {
+    return { errors: ['geometry must be a MultiLineString or a LineString'] }
+  }
+  const single = kind === 'LineString'
+  const coordinates = single ? [geometry!.coordinates] : geometry!.coordinates
+  // Paths in messages name what the client sent, not the normalised segments.
+  const position = (i: number, j: number) =>
+    single ? `[${j}]` : `[${i}][${j}]`
+
+  const rawProperties = input.properties
+  if (
+    rawProperties !== undefined &&
+    rawProperties !== null &&
+    (typeof rawProperties !== 'object' || Array.isArray(rawProperties))
+  ) {
+    return { errors: ['properties must be an object'] }
+  }
+  const properties = (rawProperties ?? {}) as Record<string, unknown>
+
+  if (
+    !Array.isArray(coordinates) ||
+    coordinates.length === 0 ||
+    (single && !Array.isArray(coordinates[0]))
+  ) {
+    return {
+      errors: [
+        single
+          ? 'geometry.coordinates must be a non-empty array of positions'
+          : 'geometry.coordinates must be a non-empty array of segments'
+      ]
+    }
+  }
+  if (coordinates.length > MAX_IMPORT_SEGMENTS) {
+    return {
+      errors: [
+        `geometry.coordinates must have at most ${MAX_IMPORT_SEGMENTS} segments`
+      ]
+    }
+  }
+  const totalPoints = coordinates.reduce(
+    (n: number, segment) => n + (Array.isArray(segment) ? segment.length : 0),
+    0
+  )
+  if (totalPoints > MAX_IMPORT_POINTS) {
+    return {
+      errors: [
+        `geometry.coordinates must have at most ${MAX_IMPORT_POINTS} points`
+      ]
+    }
+  }
+  const segments: [number, number][][] = []
+  coordinates.forEach((segment, i) => {
+    if (!Array.isArray(segment) || segment.length === 0) {
+      errors.add(() =>
+        single
+          ? 'geometry.coordinates must be a non-empty array of positions'
+          : `geometry.coordinates[${i}] must be a non-empty array of positions`
+      )
+      return
+    }
+    const points: [number, number][] = []
+    segment.forEach((point, j) => {
+      if (!Array.isArray(point) || point.length !== 2) {
+        errors.add(
+          () =>
+            `geometry.coordinates${position(i, j)} must be [longitude, latitude]`
+        )
+        return
+      }
+      const [lon, lat] = point as unknown[]
+      if (
+        typeof lon !== 'number' ||
+        typeof lat !== 'number' ||
+        !Number.isFinite(lon) ||
+        !Number.isFinite(lat)
+      ) {
+        errors.add(
+          () =>
+            `geometry.coordinates${position(i, j)} must be two finite numbers`
+        )
+        return
+      }
+      if (
+        lon < -MAX_LONGITUDE ||
+        lon > MAX_LONGITUDE ||
+        lat < -MAX_LATITUDE ||
+        lat > MAX_LATITUDE
+      ) {
+        errors.add(
+          () => `geometry.coordinates${position(i, j)} is out of range`
+        )
+        return
+      }
+      points.push([lon, lat])
+    })
+    segments.push(points)
+  })
+
+  // Where GPX converters put the times. Refused rather than kept as metadata:
+  // stored that way the track has no times, answers no time window, and the
+  // client is never told its times were not understood.
+  const converted = properties.coordinateProperties as
+    Record<string, unknown> | undefined
+  if (
+    properties.coordTimes === undefined &&
+    typeof converted === 'object' &&
+    converted !== null &&
+    converted.times !== undefined
+  ) {
+    return {
+      errors: [
+        'times found in properties.coordinateProperties.times: send them as properties.coordTimes'
+      ]
+    }
+  }
+
+  let coordTimes: string[][] | undefined
+  if (properties.coordTimes !== undefined) {
+    const times = single ? [properties.coordTimes] : properties.coordTimes
+    if (
+      !Array.isArray(times) ||
+      times.length !== coordinates.length ||
+      (single && !Array.isArray(times[0]))
+    ) {
+      errors.add(() =>
+        single
+          ? 'properties.coordTimes must be an array of times, one per position'
+          : 'properties.coordTimes must have one array per coordinates segment'
+      )
+    } else {
+      coordTimes = []
+      times.forEach((segment, i) => {
+        const expected = Array.isArray(coordinates[i])
+          ? (coordinates[i] as unknown[]).length
+          : 0
+        if (!Array.isArray(segment) || segment.length !== expected) {
+          errors.add(() =>
+            single
+              ? 'properties.coordTimes must have one time per position'
+              : `properties.coordTimes[${i}] must have one time per position`
+          )
+          return
+        }
+        // Stored as the instant each time parses to, in UTC: a provider that
+        // sorts or compares times as text would otherwise misorder a track
+        // whose times carry different offsets.
+        const normalised: string[] = []
+        segment.forEach((time, j) => {
+          if (typeof time !== 'string') {
+            errors.add(
+              () =>
+                `properties.coordTimes${position(i, j)} must be an ISO 8601 time`
+            )
+            return
+          }
+          try {
+            // Not Date.parse: it accepts a date-only `2024-01-01` as midnight
+            // UTC, so a client sending dates instead of timestamps would have
+            // them silently become instants. The rest of this parser already
+            // holds instants to the same contract.
+            normalised.push(Temporal.Instant.from(time).toString())
+          } catch {
+            errors.add(
+              () =>
+                `properties.coordTimes${position(i, j)} must be an ISO 8601 time`
+            )
+          }
+        })
+        coordTimes!.push(normalised)
+      })
+    }
+  }
+
+  if (properties.name !== undefined && typeof properties.name !== 'string') {
+    errors.add(() => 'properties.name must be a string')
+  }
+  if (
+    properties.context !== undefined &&
+    (typeof properties.context !== 'string' || blank(properties.context))
+  ) {
+    // Blank is not an association: cast as-is it would reach a provider as a
+    // context that matches no vessel and cannot be queried back.
+    errors.add(() => 'properties.context must be a non-empty string')
+  }
+  if (errors.length > 0) {
+    return { errors: errors.list() }
+  }
+  // The client's own metadata, carried through to be returned as posted.
+  const metadata = Object.fromEntries(
+    Object.entries(properties).filter(
+      ([key]) => !IMPORT_PROPERTIES.has(key) && !DERIVED_PROPERTIES.has(key)
+    )
+  )
+  return {
+    track: {
+      type: 'Feature',
+      geometry: { type: 'MultiLineString', coordinates: segments },
+      properties: {
+        ...metadata,
+        ...(coordTimes ? { coordTimes } : {}),
+        ...(typeof properties.name === 'string'
+          ? { name: properties.name }
+          : {}),
+        // Qualified the way a query would qualify it: a bare `123456789`
+        // stored raw is unreachable, because a later `?context=123456789`
+        // asks for `vessels.123456789` and never matches what was written.
+        ...(typeof properties.context === 'string'
+          ? { context: qualifyContext(properties.context.trim()) }
+          : {})
+      }
+    },
+    errors: errors.list()
+  }
+}

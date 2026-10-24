@@ -19,5 +19,11 @@ export {
   saveUserPreferences,
   DEFAULT_PRESET
 } from './loader'
-export { resolveDisplayUnits, validateCategoryAssignment } from './resolver'
+export {
+  resolveDisplayUnits,
+  resolvePathDisplayUnits,
+  stripResolvedDisplayUnits,
+  validateCategoryAssignment
+} from './resolver'
+export { convertWithDisplayUnits } from './conversion'
 export * from './types'

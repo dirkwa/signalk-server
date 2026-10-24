@@ -176,12 +176,62 @@ describe('History API v2', () => {
       body.data.length.should.be.greaterThan(0)
     })
 
+    it('passes sourcePolicy=all to the provider', async function () {
+      const res = await fetch(
+        `${api}/history/values?paths=navigation.speedOverGround&from=${FROM}&to=${TO}&resolution=60&sourcePolicy=all`
+      )
+      res.status.should.equal(200)
+      const body = await res.json()
+      assertSchema(ValuesResponseSchema, body, 'ValuesResponse')
+      body.values.should.deep.equal([
+        {
+          path: 'navigation.speedOverGround',
+          method: 'average',
+          $source: 'source.a'
+        },
+        {
+          path: 'navigation.speedOverGround',
+          method: 'average',
+          $source: 'source.b'
+        }
+      ])
+      body.data.should.deep.equal([['2025-01-01T12:00:00Z', 1.2, 2.4]])
+    })
+
+    it('returns 400 for invalid sourcePolicy', async function () {
+      const res = await fetch(
+        `${api}/history/values?paths=navigation.position&from=${FROM}&to=${TO}&sourcePolicy=unknown`
+      )
+      res.status.should.equal(400)
+      const body = await res.json()
+      body.error.should.contain('sourcePolicy')
+    })
+
     it('returns paths from the provider', async function () {
       const res = await fetch(`${api}/history/paths?from=${FROM}&to=${TO}`)
       res.status.should.equal(200)
       const body = await res.json()
       body.should.be.an('array')
       body.should.include('navigation.position')
+      body.should.include('navigation.speedOverGround')
+    })
+
+    it('passes context to the paths provider', async function () {
+      const res = await fetch(
+        `${api}/history/paths?from=${FROM}&to=${TO}&context=vessels.other`
+      )
+      res.status.should.equal(200)
+      const body = await res.json()
+      body.should.deep.equal(['navigation.position'])
+    })
+
+    it('rejects repeated context parameters on paths', async function () {
+      const res = await fetch(
+        `${api}/history/paths?from=${FROM}&to=${TO}&context=vessels.self&context=vessels.other`
+      )
+      res.status.should.equal(400)
+      const body = await res.json()
+      body.error.should.contain('context parameter must be a single string')
     })
 
     it('returns contexts from the provider', async function () {
@@ -266,7 +316,14 @@ describe('History API v2', () => {
     }
 
     interface TestApp extends WithHistoryApi {
-      config: { settings: { historyApi?: { defaultProvider?: string } } }
+      config: {
+        safeToPersistSettings: boolean
+        settings: {
+          historyApi?: { defaultProvider?: string }
+          pipedProviders?: unknown[]
+          interfaces?: Record<string, boolean>
+        }
+      }
       handleMessage: (id: string, delta: unknown) => void
       /** Notification values captured from handleMessage */
       notifications: NotificationValue[]
@@ -280,7 +337,12 @@ describe('History API v2', () => {
       const serverEvents: HistoryProvidersEventData[] = []
       return {
         config: {
+          safeToPersistSettings: true,
           settings: {
+            // Unrelated keys so the assertions can show the recorded
+            // write carries the rest of the user's settings with it.
+            pipedProviders: [{ id: 'gps' }],
+            interfaces: { nmea0183: true },
             historyApi: configuredDefault
               ? { defaultProvider: configuredDefault }
               : undefined
@@ -323,9 +385,46 @@ describe('History API v2', () => {
       return registry
     }
 
+    // Recording the first provider writes settings, so every test in
+    // this block goes through a stubbed writeSettingsFile: it captures
+    // what would be persisted, and its callback runs inline so the
+    // assertions need no timing guess. Stubbing also keeps the block
+    // independent of whether an earlier suite built a Server, which
+    // disables settings writes for the whole process.
+    let settingsWrites: Array<{
+      historyApi?: { defaultProvider?: string }
+      pipedProviders?: unknown[]
+      interfaces?: Record<string, boolean>
+    }>
+    let writeOutcome: (cb: (err?: Error) => void) => void
+    let restoreWriteSettings: () => void
+
+    beforeEach(() => {
+      settingsWrites = []
+      writeOutcome = (cb) => cb()
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const config = require('../dist/config/config')
+      const original = config.writeSettingsFile
+      config.writeSettingsFile = (
+        _app: unknown,
+        settings: (typeof settingsWrites)[number],
+        cb: (err?: Error) => void
+      ) => {
+        settingsWrites.push(settings)
+        writeOutcome(cb)
+      }
+      restoreWriteSettings = () => {
+        config.writeSettingsFile = original
+      }
+    })
+
     afterEach(() => {
+      restoreWriteSettings()
       registries.splice(0).forEach((r) => r.stop())
     })
+
+    const recordedDefault = (app: TestApp) =>
+      app.config.settings.historyApi?.defaultProvider
 
     const VALUES_QUERY: ValuesRequest = {
       duration: Temporal.Duration.from({ minutes: 15 }),
@@ -372,12 +471,91 @@ describe('History API v2', () => {
       ;(await defaultOf(app)).should.equal(providerContext('kip'))
     })
 
-    it('defaults to the first registered provider without configuration', async function () {
+    it('serves the first registered provider when settings name none', async function () {
       const app = makeApp()
       const registry = makeRegistry(app)
       registry.registerHistoryApiProvider('kip', provider('kip'))
       registry.registerHistoryApiProvider('questdb', provider('questdb'))
       ;(await defaultOf(app)).should.equal(providerContext('kip'))
+    })
+
+    it('records the first registered provider as the configured default', function () {
+      const app = makeApp()
+      const registry = makeRegistry(app)
+      registry.registerHistoryApiProvider('questdb', provider('questdb'))
+      settingsWrites.length.should.equal(1)
+      settingsWrites[0].historyApi!.defaultProvider!.should.equal('questdb')
+      recordedDefault(app)!.should.equal('questdb')
+    })
+
+    it('records without dropping the rest of the settings', function () {
+      const app = makeApp()
+      const registry = makeRegistry(app)
+      registry.registerHistoryApiProvider('questdb', provider('questdb'))
+      settingsWrites[0].should.deep.equal({
+        pipedProviders: [{ id: 'gps' }],
+        interfaces: { nmea0183: true },
+        historyApi: { defaultProvider: 'questdb' }
+      })
+    })
+
+    it('keeps the recorded default when a second provider registers', async function () {
+      const app = makeApp()
+      const registry = makeRegistry(app)
+      registry.registerHistoryApiProvider('questdb', provider('questdb'))
+      registry.registerHistoryApiProvider('kip', provider('kip'))
+      settingsWrites.length.should.equal(1)
+      recordedDefault(app)!.should.equal('questdb')
+      ;(await defaultOf(app)).should.equal(providerContext('questdb'))
+    })
+
+    it('honours the recorded default on the next start', async function () {
+      const app = makeApp()
+      const first = makeRegistry(app)
+      first.registerHistoryApiProvider('questdb', provider('questdb'))
+
+      // A fresh registry over the settings the first one wrote, with the
+      // providers registering in the order that used to decide it.
+      const restarted = makeRegistry(app)
+      restarted.registerHistoryApiProvider('kip', provider('kip'))
+      restarted.registerHistoryApiProvider('questdb', provider('questdb'))
+      ;(await defaultOf(app)).should.equal(providerContext('questdb'))
+    })
+
+    it('leaves a configured default alone', function () {
+      const app = makeApp('kip')
+      const registry = makeRegistry(app)
+      registry.registerHistoryApiProvider('questdb', provider('questdb'))
+      settingsWrites.length.should.equal(0)
+      recordedDefault(app)!.should.equal('kip')
+    })
+
+    it('treats an empty configured default as none', function () {
+      const app = makeApp()
+      app.config.settings.historyApi = { defaultProvider: '' }
+      const registry = makeRegistry(app)
+      registry.registerHistoryApiProvider('questdb', provider('questdb'))
+      recordedDefault(app)!.should.equal('questdb')
+    })
+
+    it('records nothing while settings hold runtime overrides', async function () {
+      const app = makeApp()
+      app.config.safeToPersistSettings = false
+      const registry = makeRegistry(app)
+      registry.registerHistoryApiProvider('questdb', provider('questdb'))
+      settingsWrites.length.should.equal(0)
+      chai.expect(recordedDefault(app)).to.equal(undefined)
+      ;(await defaultOf(app)).should.equal(providerContext('questdb'))
+    })
+
+    it('serves the provider even when recording it fails', async function () {
+      const app = makeApp()
+      writeOutcome = (cb) => cb(new Error('disk full'))
+      const registry = makeRegistry(app)
+      registry.registerHistoryApiProvider('questdb', provider('questdb'))
+      settingsWrites.length.should.equal(1)
+      chai.expect(recordedDefault(app)).to.equal(undefined)
+      ;(await defaultOf(app)).should.equal(providerContext('questdb'))
     })
 
     it('rejects when no provider is registered', async function () {
@@ -420,6 +598,17 @@ describe('History API v2', () => {
       app.notifications.length.should.equal(0)
     })
 
+    it('records over an empty configured id', function () {
+      const app = makeApp()
+      // makeApp takes a truthy id, so the empty value goes in directly.
+      app.config.settings.historyApi = { defaultProvider: '' }
+      const registry = makeRegistry(app)
+      registry.registerHistoryApiProvider('questdb', provider('questdb'))
+      const event = app.serverEvents[app.serverEvents.length - 1]
+      event.configuredId!.should.equal('questdb')
+      event.defaultId!.should.equal('questdb')
+    })
+
     describe('HISTORYPROVIDERS serverevent', () => {
       // Wide margin between the grace window and the wait so a stalled
       // event loop on loaded CI cannot invert the expected ordering.
@@ -429,6 +618,19 @@ describe('History API v2', () => {
         new Promise((resolve) => setTimeout(resolve, ms))
       const lastEvent = (app: TestApp) =>
         app.serverEvents[app.serverEvents.length - 1]
+
+      it('reports the recorded provider as configured on an unconfigured server', function () {
+        const app = makeApp()
+        const registry = makeRegistry(app)
+
+        registry.registerHistoryApiProvider('questdb', provider('questdb'))
+        lastEvent(app).should.deep.equal({
+          ids: ['questdb'],
+          defaultId: 'questdb',
+          configuredId: 'questdb',
+          configuredAvailable: true
+        })
+      })
 
       it('emits full state on register and unregister', function () {
         const app = makeApp('questdb')

@@ -98,13 +98,22 @@ function makeApp(opts: AppEnvOptions = {}) {
     registeredHandler = handler
   }
   const emitted: Array<{ id: string; delta: Partial<Delta> }> = []
+  // The legacy sensors.gps offsets are kept apart so tests of positions and
+  // notifications need not account for them.
+  const offsetsEmitted: Array<{ id: string; delta: Partial<Delta> }> = []
   app.handleMessage = (id: string, delta: Partial<Delta>) => {
-    emitted.push({ id, delta })
+    const isOffsets = (delta.updates ?? []).some((u) =>
+      ((u as { values?: Array<{ path: string }> }).values ?? []).some((v) =>
+        v.path.startsWith('sensors.gps.')
+      )
+    )
+    ;(isOffsets ? offsetsEmitted : emitted).push({ id, delta })
   }
   return {
     app,
     bus,
     emitted,
+    offsetsEmitted,
     process(delta: Delta): Delta {
       // Mirror the chain's invocation pattern: handler calls next(delta).
       // next() in the real chain forwards to the next handler; here we
@@ -152,14 +161,14 @@ describe('leverArm.correctPosition', function () {
   })
 
   it('port-side antenna at midships, vessel pointing north: CCRP is to the east', function () {
-    // antenna at midships (fromBow = length/2 = 10) with fromCenter=2
+    // antenna at midships (fromBow = length/2 = 10) with fromCenter=-2
     // (2m to port of centerline). Physically: heading north -> port
     // is west, so the antenna sits 2m west of the centerline; the
     // CCRP is on the centerline (2m east of antenna). Longitude
     // increases by 2/(R cos lat).
     const out = correctPosition(
       { latitude: 60, longitude: 24 },
-      { fromBow: 10, fromCenter: 2 },
+      { fromBow: 10, fromCenter: -2 },
       20,
       0
     )
@@ -170,16 +179,38 @@ describe('leverArm.correctPosition', function () {
   })
 
   it('starboard-side antenna at midships, vessel pointing north: CCRP is to the west', function () {
-    // Mirror of the previous case: fromCenter=-2 (starboard) ->
+    // Mirror of the previous case: fromCenter=2 (starboard) ->
     // antenna 2m east of centerline at heading north -> CCRP 2m west.
     const out = correctPosition(
       { latitude: 60, longitude: 24 },
-      { fromBow: 10, fromCenter: -2 },
+      { fromBow: 10, fromCenter: 2 },
       20,
       0
     )
     const latRad = (60 * Math.PI) / 180
     const expectedDLon = ((-2 / (R * Math.cos(latRad))) * 180) / Math.PI
+    expect(out.longitude).to.be.closeTo(24 + expectedDLon, 1e-9)
+  })
+
+  it('starboard antenna forward of midships, vessel pointing east', function () {
+    // Both body components non-zero and the heading off-axis, so a sign
+    // error in either term of the rotation shows up. fromBow=5 on a 20m
+    // vessel -> body_x = 5-10 = -5 (CCRP is 5m aft); fromCenter=3
+    // (starboard) -> body_y = -3 (CCRP is 3m to port of the antenna).
+    // Heading 090 (east): the bow points east, so "aft" is west and
+    // "port" is north.
+    //   north = body_x*cos(90) - body_y*sin(90) = 0 - (-3) = +3
+    //   east  = body_x*sin(90) + body_y*cos(90) = -5 + 0    = -5
+    const out = correctPosition(
+      { latitude: 60, longitude: 24 },
+      { fromBow: 5, fromCenter: 3 },
+      20,
+      Math.PI / 2
+    )
+    const latRad = (60 * Math.PI) / 180
+    const expectedDLat = ((3 / R) * 180) / Math.PI
+    const expectedDLon = ((-5 / (R * Math.cos(latRad))) * 180) / Math.PI
+    expect(out.latitude).to.be.closeTo(60 + expectedDLat, 1e-9)
     expect(out.longitude).to.be.closeTo(24 + expectedDLon, 1e-9)
   })
 
@@ -991,5 +1022,243 @@ describe('GnssOffsetCorrector heading-unavailable notification', function () {
 
     process(positionDelta({ $source: 'n2k.0.5', latitude: 60, longitude: 24 }))
     expect(notifs(emitted)).to.have.length(0)
+  })
+})
+
+describe('GnssOffsetCorrector legacy GPS offsets', function () {
+  // The offsets are published from a setImmediate callback.
+  const flush = () => new Promise((resolve) => setImmediate(resolve))
+
+  const GNSS1 = {
+    sensorId: 'gnss1',
+    $source: 'n2k.0.5',
+    fromBow: 18,
+    fromCenter: -4
+  }
+  const GNSS2 = {
+    sensorId: 'gnss2',
+    $source: 'n2k.0.6',
+    fromBow: 15,
+    fromCenter: 3
+  }
+  const LENGTH = { 'design.length.value': { overall: 20 } }
+
+  const offsets = (emitted: Array<{ id: string; delta: Partial<Delta> }>) =>
+    emitted
+      // handleMessage gives an update without $source the provider id.
+      .flatMap((e) =>
+        (e.delta.updates ?? []).map((u) => ({
+          ...u,
+          $source: (u as { $source?: string }).$source ?? e.id
+        }))
+      )
+      .filter((u) =>
+        ((u as { values?: Array<{ path: string }> }).values ?? []).some(
+          (v) => v.path === 'sensors.gps.fromBow'
+        )
+      )
+      .map((u) => {
+        const values = (
+          u as { values: Array<{ path: string; value: number | null }> }
+        ).values
+        const get = (path: string) => values.find((v) => v.path === path)?.value
+        return {
+          $source: (u as { $source?: string }).$source,
+          fromBow: get('sensors.gps.fromBow'),
+          fromCenter: get('sensors.gps.fromCenter')
+        }
+      })
+
+  async function startWith(opts: AppEnvOptions) {
+    const env = makeApp(opts)
+    const corrector = new GnssOffsetCorrector(env.app)
+    await corrector.start()
+    await flush()
+    return env
+  }
+
+  it("points at the CCRP in 'replace' mode", async function () {
+    const { offsetsEmitted: emitted } = await startWith({
+      gnssSensors: [GNSS1, GNSS2],
+      gnssCorrection: 'replace',
+      selfPaths: LENGTH
+    })
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 10, fromCenter: 0 }
+    ])
+  })
+
+  it("uses the single antenna's offsets when correction is off", async function () {
+    const { offsetsEmitted: emitted } = await startWith({
+      gnssSensors: [GNSS1],
+      selfPaths: LENGTH
+    })
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 18, fromCenter: -4 }
+    ])
+  })
+
+  it("uses the single antenna's offsets in 'both' mode", async function () {
+    const { offsetsEmitted: emitted } = await startWith({
+      gnssSensors: [GNSS1],
+      gnssCorrection: 'both',
+      selfPaths: LENGTH
+    })
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 18, fromCenter: -4 }
+    ])
+  })
+
+  it('withdraws stale offsets when several antennas may publish', async function () {
+    const { offsetsEmitted: emitted } = await startWith({
+      gnssSensors: [GNSS1, GNSS2],
+      gnssCorrection: 'both',
+      selfPaths: {
+        ...LENGTH,
+        'sensors.gps.fromBow.value': 19,
+        'sensors.gps.fromCenter.value': -4
+      }
+    })
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: null, fromCenter: null }
+    ])
+  })
+
+  it('publishes nothing when several antennas may publish and no offsets are set', async function () {
+    const { offsetsEmitted: emitted } = await startWith({
+      gnssSensors: [GNSS1, GNSS2],
+      selfPaths: LENGTH
+    })
+    expect(offsets(emitted)).to.have.length(0)
+  })
+
+  it("treats 'replace' without vessel length like 'off'", async function () {
+    const { offsetsEmitted: emitted } = await startWith({
+      gnssSensors: [GNSS1],
+      gnssCorrection: 'replace'
+    })
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 18, fromCenter: -4 }
+    ])
+  })
+
+  it('leaves the base data alone without gnssSensors rows', async function () {
+    const { offsetsEmitted: emitted } = await startWith({
+      gnssCorrection: 'replace',
+      selfPaths: {
+        ...LENGTH,
+        'sensors.gps.fromBow.value': 19,
+        'sensors.gps.fromCenter.value': -4
+      }
+    })
+    expect(offsets(emitted)).to.have.length(0)
+  })
+
+  it('publishes nothing when the data model already holds the reference point', async function () {
+    const { offsetsEmitted: emitted } = await startWith({
+      gnssSensors: [GNSS1, GNSS2],
+      gnssCorrection: 'replace',
+      selfPaths: {
+        ...LENGTH,
+        'sensors.gps.fromBow.value': 10,
+        'sensors.gps.fromCenter.value': 0
+      }
+    })
+    expect(offsets(emitted)).to.have.length(0)
+  })
+
+  it('follows heading loss and return in replace mode', async function () {
+    const {
+      app,
+      process,
+      offsetsEmitted: emitted
+    } = await startWith({
+      gnssSensors: [GNSS1, GNSS2],
+      gnssCorrection: 'replace',
+      selfPaths: LENGTH
+    })
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 10, fromCenter: 0 }
+    ])
+    // The mock model does not apply what is published; mirror it.
+    app.signalk.self.sensors = {
+      gps: { fromBow: { value: 10 }, fromCenter: { value: 0 } }
+    }
+
+    process(positionDelta({ $source: 'n2k.0.5', latitude: 60, longitude: 24 }))
+    await flush()
+    expect(offsets(emitted).slice(1)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: null, fromCenter: null }
+    ])
+    app.signalk.self.sensors.gps = {
+      fromBow: { value: null },
+      fromCenter: { value: null }
+    }
+
+    app.signalk.self.navigation = { headingTrue: { value: 0 } }
+    process(positionDelta({ $source: 'n2k.0.5', latitude: 60, longitude: 24 }))
+    await flush()
+    expect(offsets(emitted).slice(2)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 10, fromCenter: 0 }
+    ])
+  })
+
+  it("falls back to the single antenna's offsets when heading is lost", async function () {
+    const { process, offsetsEmitted: emitted } = await startWith({
+      gnssSensors: [GNSS1],
+      gnssCorrection: 'replace',
+      selfPaths: LENGTH
+    })
+    process(positionDelta({ $source: 'n2k.0.5', latitude: 60, longitude: 24 }))
+    await flush()
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 10, fromCenter: 0 },
+      { $source: 'gnssOffsetCorrector', fromBow: 18, fromCenter: -4 }
+    ])
+  })
+
+  it('restores the offsets after the base data is re-sent', async function () {
+    const {
+      app,
+      bus,
+      offsetsEmitted: emitted
+    } = await startWith({
+      gnssSensors: [GNSS1, GNSS2],
+      gnssCorrection: 'replace',
+      selfPaths: {
+        ...LENGTH,
+        'sensors.gps.fromBow.value': 10,
+        'sensors.gps.fromCenter.value': 0
+      }
+    })
+    bus.emit('serverevent', { type: 'VESSEL_INFO' })
+    // sendBaseDeltas runs right after the event and brings back the
+    // values saved before multi-GNSS was configured.
+    app.signalk.self.sensors.gps = {
+      fromBow: { value: 19 },
+      fromCenter: { value: -4 }
+    }
+    await flush()
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 10, fromCenter: 0 }
+    ])
+  })
+
+  it('follows a GNSS configuration change', async function () {
+    const {
+      app,
+      bus,
+      offsetsEmitted: emitted
+    } = await startWith({
+      gnssSensors: [GNSS1],
+      selfPaths: LENGTH
+    })
+    app.config.settings.gnssCorrection = 'replace'
+    bus.emit('serverevent', { type: 'GNSS_SENSORS' })
+    await flush()
+    expect(offsets(emitted)).to.deep.equal([
+      { $source: 'gnssOffsetCorrector', fromBow: 18, fromCenter: -4 },
+      { $source: 'gnssOffsetCorrector', fromBow: 10, fromCenter: 0 }
+    ])
   })
 })

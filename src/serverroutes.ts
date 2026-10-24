@@ -61,6 +61,7 @@ import { queryRequest } from './requestResponse'
 import {
   getRateLimitValidationOptions,
   pathForSecurityConfig,
+  SECRET_KEY_FILENAME,
   SecurityConfig,
   SecurityConfigGetter,
   SecurityConfigSaver,
@@ -317,7 +318,9 @@ interface App
     PluginManager,
     WithWrappedEmitter {
   webapps: Package[]
+  stopAndExit: () => void
   logging: {
+    clearLog: () => void
     rememberDebug: (r: boolean) => void
     enableDebug: (r: string) => boolean
     addDebug: (name: string) => void
@@ -511,7 +514,7 @@ module.exports = function (
     if (app.securityStrategy.allowRestart(req)) {
       res.json('Restarting...')
       setTimeout(function () {
-        process.exit(0)
+        app.stopAndExit()
       }, 2000)
     } else {
       res.status(401).json('Restart not allowed')
@@ -701,7 +704,11 @@ module.exports = function (
         user.userId = req.params.id
         app.securityStrategy.addUser(config, user, (err, savedConfig) => {
           if (err) {
-            const status = err.message === 'User already exists' ? 400 : 500
+            const status =
+              err.message === 'User already exists' ||
+              (err as Error & { statusCode?: number }).statusCode === 400
+                ? 400
+                : 500
             res.status(status).type('text/plain').send(err.message)
           } else if (savedConfig) {
             saveSecurityConfig(app, savedConfig, (saveErr) => {
@@ -1360,16 +1367,20 @@ module.exports = function (
     setNumber('design.length.value.overall', 'design.length', newVessel.length)
     setNumber('design.beam.value', 'design.beam', newVessel.beam)
     setNumber('design.airHeight.value', 'design.airHeight', newVessel.height)
-    setNumber(
-      'sensors.gps.fromBow.value',
-      'sensors.gps.fromBow',
-      newVessel.gpsFromBow
-    )
-    setNumber(
-      'sensors.gps.fromCenter.value',
-      'sensors.gps.fromCenter',
-      newVessel.gpsFromCenter
-    )
+    // A sensor row owns these offsets when one exists; this legacy defaults
+    // file is where they live only in its absence.
+    if (!app.config.settings.gnssSensors?.[0]) {
+      setNumber(
+        'sensors.gps.fromBow.value',
+        'sensors.gps.fromBow',
+        newVessel.gpsFromBow
+      )
+      setNumber(
+        'sensors.gps.fromCenter.value',
+        'sensors.gps.fromCenter',
+        newVessel.gpsFromCenter
+      )
+    }
 
     if (newVessel.aisShipType) {
       set(data.vessels.self, 'design.aisShipType.value', {
@@ -1414,8 +1425,8 @@ module.exports = function (
       delete app.config.vesselUUID
     }
 
-    function makeNumber(num: string) {
-      return !isUndefined(num) && (isNumber(num) || num.length)
+    function makeNumber(num: string | number | null | undefined) {
+      return !isUndefined(num) && num !== null && (isNumber(num) || num.length)
         ? Number(num)
         : undefined
     }
@@ -1432,8 +1443,18 @@ module.exports = function (
     )
     de.setSelfValue('design.beam', makeNumber(vessel.beam))
     de.setSelfValue('design.airHeight', makeNumber(vessel.height))
-    de.setSelfValue('sensors.gps.fromBow', makeNumber(vessel.gpsFromBow))
-    de.setSelfValue('sensors.gps.fromCenter', makeNumber(vessel.gpsFromCenter))
+    // `settings.gnssSensors` owns these offsets whenever it holds a row, so
+    // the legacy singleton is written only in its absence -- two stores for
+    // one value would otherwise disagree. Without a row it is the only place
+    // they can live, and a zero is a real offset, meaning "at the reference
+    // point" rather than "unset".
+    if (!app.config.settings.gnssSensors?.[0]) {
+      de.setSelfValue('sensors.gps.fromBow', makeNumber(vessel.gpsFromBow))
+      de.setSelfValue(
+        'sensors.gps.fromCenter',
+        makeNumber(vessel.gpsFromCenter)
+      )
+    }
     de.setSelfValue(
       'design.aisShipType',
       !isUndefined(vessel.aisShipType)
@@ -2142,6 +2163,13 @@ module.exports = function (
     }
   })
 
+  app.securityStrategy.addAdminWriteMiddleware(`${SERVERROUTESPREFIX}/log`)
+
+  app.delete(`${SERVERROUTESPREFIX}/log`, (_req: Request, res: Response) => {
+    app.logging.clearLog()
+    res.status(204).send()
+  })
+
   app.get(`${SERVERROUTESPREFIX}/debugKeys`, (req: Request, res: Response) => {
     res.json(listKnownDebugs())
   })
@@ -2193,6 +2221,7 @@ module.exports = function (
     'settings.json',
     'defaults.json',
     'security.json',
+    SECRET_KEY_FILENAME,
     'package.json',
     'baseDeltas.json'
   ]
@@ -2279,6 +2308,8 @@ module.exports = function (
               if (err) {
                 sendRestoreStatus('error', err.message, null)
                 hasError = true
+              } else if (name === SECRET_KEY_FILENAME) {
+                fs.chmodSync(path.join(app.config.configPath, name), '600')
               }
             }
           )
@@ -2328,9 +2359,12 @@ module.exports = function (
           { filename }
         ) => {
           try {
+            // busboy passes an application/octet-stream part without a
+            // filename as a file too.
             if (
-              !filename.endsWith('.backup') &&
-              !filename.endsWith('.backup.zip')
+              !filename ||
+              (!filename.endsWith('.backup') &&
+                !filename.endsWith('.backup.zip'))
             ) {
               res
                 .status(400)

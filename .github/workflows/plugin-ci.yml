@@ -8,8 +8,6 @@
 #   - Linux arm64  (Node 22, 24) — Raspberry Pi 4/5
 #   - macOS        (Node 22, 24)
 #   - Windows      (Node 22, 24)
-#   - armv7/armhf  (Node 20 — matches Venus OS 3.70 on Cerbo GX)
-#                    Runs under QEMU emulation with python3, make, g++
 #
 # Usage in your plugin repo:
 #   See docs/develop/plugins/examples/plugin-caller-example.yml
@@ -19,6 +17,12 @@ name: SignalK Plugin CI
 on:
   workflow_call:
     inputs:
+      # ── Repository layout ───────────────────────────────────
+      working-directory:
+        description: "Path to the plugin within the repository, for plugins published from a monorepo subdirectory (matches npm's repository.directory). Defaults to the repository root."
+        type: string
+        default: '.'
+
       # ── Test configuration ──────────────────────────────────
       test-command:
         description: 'Command to run tests (default: npm test)'
@@ -41,11 +45,11 @@ on:
         type: string
         default: '["22", "24"]'
 
-      # ── armv7 / Cerbo GX options ────────────────────────────
+      # Accepted so callers that still pass it stay valid; it has no effect.
       enable-armv7:
-        description: 'Run armv7 (Cerbo GX) tests via QEMU emulation'
+        description: 'Deprecated and ignored: there is no armv7 (Cerbo GX) job'
         type: boolean
-        default: true
+        default: false
 
       # ── SignalK integration test ────────────────────────────
       enable-signalk-integration:
@@ -65,6 +69,42 @@ permissions:
 
 jobs:
   # ════════════════════════════════════════════════════════════
+  #  Input validation — runs before anything touches the value
+  # ════════════════════════════════════════════════════════════
+  validate-inputs:
+    name: Validate inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # working-directory reaches a docker -w, an artifact glob and a
+      # sparse-checkout pattern, so constrain it to a plain relative path.
+      # Everything else that consumes it does so through env, never through
+      # interpolation into a script.
+      - name: Validate working-directory
+        env:
+          PLUGIN_DIR: ${{ inputs.working-directory }}
+        run: |
+          if [ "$PLUGIN_DIR" = "." ]; then
+            echo "working-directory: repository root"
+            exit 0
+          fi
+          case "$PLUGIN_DIR" in
+            /*|~*)
+              echo "::error::working-directory must be relative to the repository root, got '$PLUGIN_DIR'"; exit 1 ;;
+          esac
+          if [ "$(printf '%s' "$PLUGIN_DIR" | wc -l)" -ne 0 ]; then
+            echo "::error::working-directory must be a single line"; exit 1
+          fi
+          if ! printf '%s' "$PLUGIN_DIR" | grep -qE '^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$'; then
+            echo "::error::working-directory may only contain letters, digits, '.', '_', '-' and '/', got '$PLUGIN_DIR'"; exit 1
+          fi
+          case "/$PLUGIN_DIR/" in
+            */../*)
+              echo "::error::working-directory must not contain '..', got '$PLUGIN_DIR'"; exit 1 ;;
+          esac
+          echo "working-directory: $PLUGIN_DIR"
+
+  # ════════════════════════════════════════════════════════════
   #  Desktop platforms matrix: Linux x64, Linux arm64, macOS, Windows
   # ════════════════════════════════════════════════════════════
   desktop:
@@ -75,21 +115,62 @@ jobs:
           matrix.os == 'windows-latest' && 'Windows' ||
           matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
+    needs: validate-inputs
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-15, windows-latest]
         node: ${{ fromJson(inputs.node-versions) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v7
 
+      # setup-node looks for a lock file only at the repository root unless
+      # cache-dependency-path names one, so point it at the plugin's own lock
+      # file and at a root one, which is where npm workspaces keep theirs.
+      # Caching is on when one of those two exists, not when any lock file
+      # anywhere in the tree does.
       - name: Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
-          cache: ${{ hashFiles('**/package-lock.json') != '' && 'npm' || '' }}
+          cache: ${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory), 'package-lock.json') != '' && 'npm' || '' }}
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/package-lock.json
+            package-lock.json
+
+      # npm 10.9.x crashes with "Cannot read properties of null (reading
+      # 'edgesOut')" while resolving an optional peer that is not being
+      # installed (npm/cli#9960, #9787 — both open). Any plugin depending on
+      # vitest reaches it through @vitest/browser-playwright, and the crash
+      # is deterministic, so the install retry below cannot clear it. Node 22
+      # ships 10.9.x and is the version this hits; Node 20 ships 10.8.2,
+      # which resolves the same tree cleanly, and Node 24 ships npm 11 or
+      # newer. Only the broken minor is replaced, so a caller pinning an
+      # older Node keeps its bundled npm rather than being handed one its
+      # engine range refuses.
+      #
+      # The range stops at 11 rather than tracking npm@latest: npm 12
+      # requires Node ^22.22.2, and `npm install -g` enforces that with a
+      # hard `notsup` failure, so @latest would fail this step outright on a
+      # caller pinning an earlier 22.x. npm 11 needs only >=22.9.0 and fixes
+      # the crash. Within 11 the range floats, so patch releases arrive
+      # without a change here.
+      #
+      # Replacing npm rather than dropping Node 22 from the matrix keeps the
+      # job testing a runtime plugins are still installed on: the crash is
+      # npm's, not Node's.
+      - name: Replace npm 10.9.x (arborist peer-resolution crash)
+        shell: bash
+        run: |
+          case "$(npm --version)" in
+            10.9.*) npm install -g 'npm@^11' ;;
+          esac
+          npm --version
 
       - name: Validate plugin package.json
         id: validate-pkg
@@ -536,6 +617,73 @@ jobs:
           cat << 'LIFECYCLE' > /tmp/check-lifecycle.js
           const path = require('path');
           const pkg = require(process.cwd() + '/package.json');
+
+          // ── Async crash trap ─────────────────────────────────────
+          // A plugin can start cleanly and still take the server down a
+          // moment later: an 'error' event emitted on a socket/emitter with
+          // no listener, or a floating promise that rejects after start()
+          // has already resolved. Neither travels the promise path, so the
+          // try/catch around `await plugin.start({})` below cannot see them.
+          //
+          // In production the server has no such trap either — Node's
+          // default action for an unhandled 'error' event is to throw, and
+          // under systemd Restart=always the result is an endless
+          // crash-restart loop rather than one bad plugin.
+          //
+          // Recording them here (rather than dying immediately) lets the
+          // lifecycle run finish and report every problem it found, which
+          // is more useful than surfacing whichever one happened to fire
+          // first. Anything caught is fatal — see the report below.
+          const ASYNC_CRASH_DRAIN_MS = 1500;
+          const asyncCrashes = [];
+          process.on('uncaughtException', (e) => {
+            asyncCrashes.push('uncaught exception: ' + ((e && e.message) || String(e)));
+          });
+          process.on('unhandledRejection', (e) => {
+            asyncCrashes.push('unhandled rejection: ' + ((e && e.message) || String(e)));
+          });
+
+          // Every exit from the lifecycle check goes through here, including
+          // the early returns taken when start() or stop() throws. A plugin
+          // can schedule a failing timer and *then* throw synchronously from
+          // start(): the server catches that throw and keeps running (see
+          // doPluginStart in src/interfaces/plugins.ts), so the timer still
+          // fires and still kills the server. Exiting on the throw alone
+          // would report success for exactly that plugin.
+          const finish = async (code) => {
+            // Let queued failures surface before deciding the verdict. A
+            // microtask turn would cover an 'error' already on the queue, but
+            // the failures worth catching are slower: a socket connect, a
+            // D-Bus handshake or a DNS lookup started during start()
+            // typically fails a second or so in, which is exactly the
+            // "started fine, died shortly after" shape this check exists for.
+            //
+            // 1.5s covers those while staying far inside the step's 2-minute
+            // budget. It is a fixed cost on every run, so it is not raised
+            // further: this drains what start() already kicked off, and is
+            // not meant to wait out a slow remote endpoint.
+            await new Promise((resolve) => setTimeout(resolve, ASYNC_CRASH_DRAIN_MS));
+
+            if (asyncCrashes.length > 0) {
+              console.log('');
+              // start() may run twice (initial + restart), so one faulty code
+              // path reports the same message twice. Collapse duplicates —
+              // two identical lines read as two separate problems.
+              [...new Set(asyncCrashes)].forEach(c => console.log('::error::Lifecycle: ' + c));
+              console.log('');
+              console.log('The plugin crashed the process after start() had already');
+              console.log('returned. The server does not sandbox plugins: an unhandled');
+              console.log("'error' event or a rejected floating promise terminates the");
+              console.log('whole server, and under systemd it then restart-loops.');
+              console.log('');
+              console.log('Common cause: an emitter or socket used without an error');
+              console.log("listener. Attach one ('error' handlers are required, not");
+              console.log('optional), or await the operation so the failure reaches the');
+              console.log('try/catch in start().');
+              process.exit(1);
+            }
+            process.exit(code);
+          };
           // See validate-entry.js for the rationale — object/conditional
           // exports must be resolved, not flattened to 'index.js'.
           function resolveEntry(p, fallback) {
@@ -713,6 +861,8 @@ jobs:
             plugin = ctor(mockApp);
           } catch (e) {
             console.log('Plugin constructor requires server context — skipping lifecycle check');
+            // Pre-IIFE skip path: start() never ran, so there is nothing for
+            // finish() to drain (and top-level await is not available here).
             process.exit(0);
           }
 
@@ -754,7 +904,7 @@ jobs:
             } else {
               console.log('::warning::Plugins should handle empty/default configuration gracefully.');
             }
-            process.exit(0);
+            await finish(0);
           }
 
           try {
@@ -769,7 +919,10 @@ jobs:
             } else {
               console.log('::error::plugin.stop() threw: ' + msg);
               console.log('::error::This causes the server to leak resources when the plugin is disabled or restarted.');
-              process.exit(1);
+              // finish() rather than a bare exit: the job already fails here,
+              // but stop() may also have scheduled a delayed failure, and
+              // reporting it tells the author about both problems at once.
+              return await finish(1);
             }
           }
 
@@ -782,11 +935,11 @@ jobs:
             if (isMockGap(msg)) {
               console.log('::warning::plugin.start({}) threw on restart: ' + msg);
               console.log('::warning::This looks like a missing CI mock method, not a plugin bug. Please report at https://github.com/SignalK/signalk-server/issues');
-              process.exit(0);
+              await finish(0);
             }
             console.log('::error::plugin.start({}) threw on second call: ' + msg);
             console.log('::error::Plugins must support restart (stop then start). This fails when users toggle the plugin in the server UI.');
-            process.exit(1);
+            return await finish(1);
           }
 
           try { await Promise.resolve(plugin.stop()); } catch (e) { /* ignore */ }
@@ -802,11 +955,11 @@ jobs:
             console.log('');
             console.log('Malformed deltas are silently discarded by the server —');
             console.log('the plugin appears to work but data never reaches consumers.');
-            process.exit(1);
+            await finish(1);
           }
 
           console.log('Plugin lifecycle (start/stop/restart) is clean');
-          process.exit(0);
+          await finish(0);
           })().catch(e => {
             console.log('::error::Unexpected error during lifecycle check: ' + (e && e.message || String(e)));
             process.exit(1);
@@ -1508,136 +1661,11 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}-node${{ matrix.node }}
           path: |
-            test-results/
-            coverage/
-            junit*.xml
+            ${{ inputs.working-directory }}/test-results/
+            ${{ inputs.working-directory }}/coverage/
+            ${{ inputs.working-directory }}/junit*.xml
           if-no-files-found: ignore
           retention-days: 7
-
-  # ════════════════════════════════════════════════════════════
-  #  armv7 — Cerbo GX / Raspberry Pi (32-bit ARM via QEMU)
-  # ════════════════════════════════════════════════════════════
-  armv7:
-    name: armv7 (Cerbo GX) / Node 20
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: ${{ inputs.enable-armv7 }}
-    # Advisory: armv7 is non-blocking. continue-on-error at the job level lets
-    # the job show its true red/green status in the GitHub UI while keeping the
-    # overall workflow check green so it never blocks a PR merge.
-    continue-on-error: true
-    outputs:
-      advisory-outcome: ${{ steps.armv7-test.outcome }}
-    steps:
-      - name: Checkout plugin
-        uses: actions/checkout@v7
-
-      - name: Set up QEMU for ARM emulation
-        # Advisory: a QEMU setup failure must not block the workflow — the
-        # job-level continue-on-error handles this; if QEMU truly didn't
-        # initialize, docker run will fail there instead.
-        continue-on-error: true
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: linux/arm/v7
-
-      - name: Cache npm for armv7
-        uses: actions/cache@v6
-        with:
-          path: /tmp/.npm-armv7-cache
-          key: armv7-npm-${{ hashFiles('**/package-lock.json', '**/package.json') }}
-          restore-keys: |
-            armv7-npm-
-
-      - name: Test on armv7 via QEMU
-        id: armv7-test
-        # The job-level continue-on-error keeps the workflow green; this step
-        # intentionally has no continue-on-error so that a failure shows the
-        # job as truly red rather than emitting a confusing red annotation
-        # under a green check.
-        env:
-          BUILD_CMD: ${{ inputs.build-command }}
-          TEST_CMD: ${{ inputs.test-command }}
-        run: |
-          docker run --rm --platform linux/arm/v7 \
-            -v "${{ github.workspace }}:/plugin" \
-            -v "/tmp/.npm-armv7-cache:/root/.npm" \
-            -w /plugin \
-            -e BUILD_CMD \
-            -e TEST_CMD \
-            node:20-bookworm-slim \
-            bash -c '
-              set -e
-              echo "── System info ──"
-              echo "arch: $(uname -m)  node: $(node -v)  npm: $(npm -v)"
-              echo "── Installing build tools (python3, make, g++) ──"
-              apt-get update -qq && apt-get install -y -qq python3 make g++ > /dev/null 2>&1
-              echo "── Installing dependencies ──"
-              if [ -f package-lock.json ]; then
-                npm ci --ignore-scripts
-              else
-                npm install --ignore-scripts
-              fi
-              npm rebuild
-              echo "── Building ──"
-              eval "$BUILD_CMD"
-
-              echo "── Checking for native addons ──"
-              node -e "
-                const fs = require(\"fs\"), path = require(\"path\");
-                const nm = [];
-                function scan(dir) {
-                  if (!fs.existsSync(dir)) return;
-                  for (const e of fs.readdirSync(dir)) {
-                    if (e === \".package-lock.json\") continue;
-                    const f = path.join(dir, e);
-                    if (e.startsWith(\"@\")) { scan(f); continue; }
-                    if (fs.existsSync(path.join(f, \"binding.gyp\"))) nm.push(e);
-                    const n = path.join(f, \"node_modules\");
-                    if (fs.existsSync(n)) scan(n);
-                  }
-                }
-                scan(\"./node_modules\");
-                if (nm.length === 0) { console.log(\"No native addons\"); process.exit(0); }
-                console.log(\"Native addons compiled for armv7: \" + nm.join(\", \"));
-              "
-
-              echo "── Running tests ──"
-              HAS_TESTS=$(node -e "
-                const pkg = require(\"./package.json\");
-                const test = pkg.scripts && pkg.scripts.test;
-                if (!test || test.includes(\"no test specified\")) process.exit(1);
-              " && echo "yes" || echo "no")
-              if [ "$HAS_TESTS" = "yes" ]; then
-                eval "$TEST_CMD"
-              else
-                echo "::notice::No test script defined — skipping tests"
-              fi
-            '
-
-      - name: Write job summary
-        if: always()
-        shell: bash
-        run: |
-          PLUGIN_NAME=$(node -e "console.log(require('./package.json').name)" 2>/dev/null || echo "unknown")
-          PLUGIN_VER=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "?")
-          # Use the test-step outcome — the job-level continue-on-error means
-          # job.status is always success; the step outcome carries the true result.
-          RESULT="${{ steps.armv7-test.outcome }}"
-
-          {
-            echo "### armv7 (Cerbo GX) / Node 20 — ${PLUGIN_NAME}@${PLUGIN_VER}"
-            echo ""
-            echo "**Environment**: Venus OS 3.70 emulation (QEMU armv7, Debian Bookworm, python3, make, g++)"
-            echo ""
-            if [[ "$RESULT" == "success" ]]; then
-              echo "Install, build, and tests completed successfully under armv7 emulation."
-            else
-              echo "The armv7 job **failed**. Your plugin may not work on 32-bit ARM devices (Cerbo GX, Raspberry Pi OS 32-bit)."
-            fi
-            echo ""
-            echo "> This test is **advisory and non-blocking** — armv7 failures do not fail the overall CI."
-          } >> "$GITHUB_STEP_SUMMARY"
 
   # ════════════════════════════════════════════════════════════
   #  Optional: SignalK server integration test
@@ -1645,6 +1673,7 @@ jobs:
   signalk-integration:
     name: Integration / signalk-server ${{ matrix.signalk-server-version }} / Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    needs: validate-inputs
     timeout-minutes: 15
     if: ${{ inputs.enable-signalk-integration }}
     strategy:
@@ -1652,15 +1681,51 @@ jobs:
       matrix:
         node: ${{ fromJson(inputs.node-versions) }}
         signalk-server-version: ${{ fromJson(inputs.signalk-server-versions) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v7
 
+      # Same lock file lookup as the desktop job.
       - name: Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
-          cache: ${{ hashFiles('**/package-lock.json') != '' && 'npm' || '' }}
+          cache: ${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory), 'package-lock.json') != '' && 'npm' || '' }}
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/package-lock.json
+            package-lock.json
+
+      # npm 10.9.x crashes with "Cannot read properties of null (reading
+      # 'edgesOut')" while resolving an optional peer that is not being
+      # installed (npm/cli#9960, #9787 — both open). Any plugin depending on
+      # vitest reaches it through @vitest/browser-playwright, and the crash
+      # is deterministic, so the install retry below cannot clear it. Node 22
+      # ships 10.9.x and is the version this hits; Node 20 ships 10.8.2,
+      # which resolves the same tree cleanly, and Node 24 ships npm 11 or
+      # newer. Only the broken minor is replaced, so a caller pinning an
+      # older Node keeps its bundled npm rather than being handed one its
+      # engine range refuses.
+      #
+      # The range stops at 11 rather than tracking npm@latest: npm 12
+      # requires Node ^22.22.2, and `npm install -g` enforces that with a
+      # hard `notsup` failure, so @latest would fail this step outright on a
+      # caller pinning an earlier 22.x. npm 11 needs only >=22.9.0 and fixes
+      # the crash. Within 11 the range floats, so patch releases arrive
+      # without a change here.
+      #
+      # Replacing npm rather than dropping Node 22 from the matrix keeps the
+      # job testing a runtime plugins are still installed on: the crash is
+      # npm's, not Node's.
+      - name: Replace npm 10.9.x (arborist peer-resolution crash)
+        shell: bash
+        run: |
+          case "$(npm --version)" in
+            10.9.*) npm install -g 'npm@^11' ;;
+          esac
+          npm --version
 
       - name: Install SignalK server ${{ matrix.signalk-server-version }}
         run: |
@@ -1671,8 +1736,10 @@ jobs:
 
       - name: Install plugins declared in signalk.requires
         shell: bash
+        env:
+          PLUGIN_DIR: ${{ inputs.working-directory }}
         run: |
-          REQUIRES=$(jq -r '.signalk.requires // [] | .[]' "${{ github.workspace }}/package.json" 2>/dev/null || true)
+          REQUIRES=$(jq -r '.signalk.requires // [] | .[]' "$GITHUB_WORKSPACE/$PLUGIN_DIR/package.json" 2>/dev/null || true)
           if [ -z "$REQUIRES" ]; then
             exit 0
           fi
@@ -1707,9 +1774,11 @@ jobs:
           npm install "/tmp/$(basename "$PLUGIN_TGZ")"
 
       - name: Configure plugin to auto-start
+        env:
+          PLUGIN_DIR: ${{ inputs.working-directory }}
         run: |
           cd /tmp/sk-test
-          PLUGIN_PKG_NAME=$(node -e "console.log(require('${{ github.workspace }}/package.json').name)")
+          PLUGIN_PKG_NAME=$(node -e "console.log(require(process.argv[1]).name)" "$GITHUB_WORKSPACE/$PLUGIN_DIR/package.json")
 
           # Derive plugin ID the same way signalk-server does (src/pluginid.ts)
           PLUGIN_ID=$(node -e "
@@ -1726,6 +1795,7 @@ jobs:
       - name: Start SignalK server and verify plugin
         env:
           SIGNALK_URL: 'http://localhost:3000'
+          PLUGIN_DIR: ${{ inputs.working-directory }}
         run: |
           cd /tmp/sk-test
           export SIGNALK_NODE_CONFIG_DIR=/tmp/sk-test
@@ -1758,7 +1828,7 @@ jobs:
           echo "SignalK server is ready (PID $SK_PID)"
 
           # Verify plugin is loaded
-          PLUGIN_PKG_NAME=$(node -e "console.log(require('${{ github.workspace }}/package.json').name)")
+          PLUGIN_PKG_NAME=$(node -e "console.log(require(process.argv[1]).name)" "$GITHUB_WORKSPACE/$PLUGIN_DIR/package.json")
           PLUGINS_JSON=$(curl -sf http://localhost:3000/skServer/plugins)
 
           echo "Loaded plugins:"
@@ -1814,7 +1884,7 @@ jobs:
           fi
 
           # Run integration tests from the plugin repo if they exist
-          cd "${{ github.workspace }}"
+          cd "$GITHUB_WORKSPACE/$PLUGIN_DIR"
           HAS_INTEGRATION=$(node -e "
             const pkg = require('./package.json');
             if (pkg.scripts && pkg.scripts['test:integration']) process.exit(0);
@@ -1837,22 +1907,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [desktop, armv7, signalk-integration]
+    needs: [validate-inputs, desktop, signalk-integration]
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout plugin
         uses: actions/checkout@v7
         with:
-          sparse-checkout: package.json
+          # Non-cone mode so the pattern selects the single manifest rather
+          # than a whole directory. A leading "./" matches nothing in non-cone
+          # mode, so the root default is spelled without one.
+          sparse-checkout: ${{ inputs.working-directory == '.' && '/package.json' || format('/{0}/package.json', inputs.working-directory) }}
+          sparse-checkout-cone-mode: false
 
       - name: Write CI summary report
         env:
           DESKTOP_RESULT: ${{ needs.desktop.result }}
-          # Prefer the armv7 test-step outcome when the job ran — it records
-          # whether the advisory tests actually passed. Falls back to
-          # needs.armv7.result when the job was skipped/cancelled and no
-          # step outcome exists.
-          ARMV7_RESULT: ${{ needs.armv7.outputs.advisory-outcome || needs.armv7.result }}
           INTEGRATION_RESULT: ${{ needs.signalk-integration.result }}
+          VALIDATE_RESULT: ${{ needs.validate-inputs.result }}
         shell: bash
         run: |
           icon() {
@@ -1869,7 +1942,7 @@ jobs:
           PLUGIN_VER=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "?")
 
           OVERALL="pass"
-          if [[ "$DESKTOP_RESULT" == "failure" ]] || [[ "$INTEGRATION_RESULT" == "failure" ]]; then
+          if [[ "$VALIDATE_RESULT" != "success" ]] || [[ "$DESKTOP_RESULT" == "failure" ]] || [[ "$INTEGRATION_RESULT" == "failure" ]]; then
             OVERALL="FAIL"
           fi
 
@@ -1884,7 +1957,6 @@ jobs:
             echo "| Job | Result | Notes |"
             echo "|-----|--------|-------|"
             echo "| Desktop (Linux, Linux arm64, macOS, Windows) | $(icon "$DESKTOP_RESULT") | Node 22, 24 |"
-            echo "| armv7 — Cerbo GX (QEMU) | $(icon "$ARMV7_RESULT") | Node 20 (Venus OS 3.70) — advisory, non-blocking |"
             if [[ "$INTEGRATION_RESULT" != "skipped" ]]; then
               echo "| SignalK integration | $(icon "$INTEGRATION_RESULT") | Server install + plugin load |"
             fi
@@ -1895,7 +1967,7 @@ jobs:
             echo "- **package.json** — \`signalk-node-server-plugin\` keyword, \`main\`/\`exports\` field, \`engines.node\`"
             echo "- **Entry point** — Plugin exports a constructor function"
             echo "- **plugin.schema()** — Returns valid JSON Schema without crashing"
-            echo "- **Lifecycle** — start()/stop()/restart cycle works without errors"
+            echo "- **Lifecycle** — start()/stop()/restart cycle works without errors, and the plugin does not crash the process asynchronously afterwards"
             echo "- **API usage** — No deprecated (\`setProviderStatus\`), internal (\`app.server\`), file storage, or security anti-patterns"
             echo "- **Node built-in modules** — \`node:sqlite\` requires \`engines.node >= 22.5.0\` declared in package.json"
             echo "- **npm pack** — All files referenced by \`main\`/\`exports\` are included in the package"
@@ -1917,17 +1989,8 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          if [[ "$ARMV7_RESULT" == "failure" ]]; then
-            {
-              echo ""
-              echo "> **Note**: armv7 (Cerbo GX) failed but this is non-blocking."
-              echo "> Your plugin may not work on 32-bit ARM devices (Cerbo GX, Raspberry Pi OS 32-bit)."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
-
           echo ""
           echo "Desktop:              $DESKTOP_RESULT"
-          echo "armv7 (Cerbo GX):     $ARMV7_RESULT"
           echo "SignalK integration:  $INTEGRATION_RESULT"
 
           # Desktop is mandatory
@@ -1935,12 +1998,6 @@ jobs:
             echo "::error::Desktop tests failed"
             exit 1
           fi
-
-          # armv7 is advisory (non-blocking)
-          case "$ARMV7_RESULT" in
-            failure) echo "::warning::armv7 (Cerbo GX) tests failed — plugin may not work on 32-bit ARM devices" ;;
-            skipped) echo "armv7 tests were skipped" ;;
-          esac
 
           # Integration is mandatory if enabled
           if [[ "$INTEGRATION_RESULT" == "failure" ]]; then

@@ -24,7 +24,6 @@ on:
         default: true
 
 permissions:
-  id-token: write # Required for OIDC
   contents: read
 
 env:
@@ -34,11 +33,14 @@ env:
 
 jobs:
   build_and_publish:
+    permissions:
+      contents: read
+      id-token: write
     if: github.repository == 'SignalK/signalk-server'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
@@ -58,48 +60,6 @@ jobs:
             cd packages/server-admin-ui-dependencies
             npm publish --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish server-admin-ui
-        run: |
-          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/server-admin-ui/package.json)
-          if ! npm view @signalk/server-admin-ui@$LOCAL_VERSION version &>/dev/null; then
-            cd packages/server-admin-ui
-            npm publish --access public
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish server-api
-        run: |
-          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/server-api/package.json)
-          if ! npm view @signalk/server-api@$LOCAL_VERSION version &>/dev/null; then
-            cd packages/server-api
-            npm publish --access public
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish streams
-        run: |
-          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/streams/package.json)
-          if ! npm view @signalk/streams@$LOCAL_VERSION version &>/dev/null; then
-            cd packages/streams
-            npm publish --access public
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish resources-provider
-        run: |
-          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/resources-provider-plugin/package.json)
-          if ! npm view @signalk/resources-provider@$LOCAL_VERSION version &>/dev/null; then
-            cd packages/resources-provider-plugin
-            npm publish --access public
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish path-metadata
         run: |
@@ -108,8 +68,38 @@ jobs:
             cd packages/path-metadata
             npm publish --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish server-admin-ui
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/server-admin-ui/package.json)
+          if ! npm view @signalk/server-admin-ui@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/server-admin-ui
+            npm publish --access public
+          fi
+
+      - name: Publish server-api
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/server-api/package.json)
+          if ! npm view @signalk/server-api@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/server-api
+            npm publish --access public
+          fi
+
+      - name: Publish streams
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/streams/package.json)
+          if ! npm view @signalk/streams@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/streams
+            npm publish --access public
+          fi
+
+      - name: Publish resources-provider
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/resources-provider-plugin/package.json)
+          if ! npm view @signalk/resources-provider@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/resources-provider-plugin
+            npm publish --access public
+          fi
 
       - name: Publish typedoc-signalk-theme
         run: |
@@ -118,8 +108,6 @@ jobs:
             cd packages/typedoc-theme
             npm publish --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish assemblyscript-plugin-sdk
         run: |
@@ -128,8 +116,6 @@ jobs:
             cd packages/assemblyscript-plugin-sdk
             npm publish --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Set tag variable
         id: vars
@@ -143,8 +129,6 @@ jobs:
             else
               npm publish
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   release:
     permissions:
@@ -181,6 +165,28 @@ jobs:
       variant_matrix: ${{ steps.matrix.outputs.variant_matrix }}
       any_enabled: ${{ steps.matrix.outputs.any_enabled }}
     steps:
+      # The Docker images install the release from the npm registry, as end
+      # users do, so the release and its whole dependency tree must resolve.
+      - name: Wait for signalk-server on npm
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version="${GITHUB_REF#refs/*/v}"
+          check_dir="$RUNNER_TEMP/npm-install-check"
+          mkdir -p "$check_dir"
+          deadline=$((SECONDS + NPM_WAIT_TIMEOUT_SECONDS))
+          until npm view "signalk-server@$version" version 2>/dev/null | grep -qxF "$version" \
+            && npm install --dry-run --prefer-online --no-audit --no-fund \
+              --prefix "$check_dir" "signalk-server@$version" >/dev/null 2>&1; do
+            if (( SECONDS >= deadline )); then
+              echo "signalk-server@$version not installable from npm after ${NPM_WAIT_TIMEOUT_SECONDS}s" >&2
+              exit 1
+            fi
+            echo "Waiting for signalk-server@$version on npm..."
+            sleep "$NPM_WAIT_INTERVAL_SECONDS"
+          done
+        env:
+          NPM_WAIT_TIMEOUT_SECONDS: 900
+          NPM_WAIT_INTERVAL_SECONDS: 15
       - name: Checkout
         uses: actions/checkout@v7
       - name: Compute matrices

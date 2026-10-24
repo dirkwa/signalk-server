@@ -1,7 +1,7 @@
 const chai = require('chai')
 chai.Should()
 chai.use(require('chai-things'))
-const { freeport } = require('./ts-servertestutilities')
+const { freeport, SERVER_START_TIMEOUT } = require('./ts-servertestutilities')
 const path = require('path')
 const WebSocket = require('ws')
 const jwt = require('jsonwebtoken')
@@ -73,7 +73,7 @@ describe('Security', () => {
   let previousHttpRateLimits
 
   before(async function () {
-    this.timeout(20000)
+    this.timeout(SERVER_START_TIMEOUT)
     previousHttpRateLimits = process.env.HTTP_RATE_LIMITS
     process.env.HTTP_RATE_LIMITS = 'api=1000,loginStatus=1000,login=1000'
 
@@ -945,6 +945,46 @@ describe('Security', () => {
     const json = await result.json()
     json.message.should.equal('User already exists')
   })
+  it('Device access request with unsafe clientId fails', async function () {
+    for (const clientId of ['../../outside', 'a\\b', '..']) {
+      const result = await fetch(`${url}/signalk/v1/access/requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, description: 'Traversal Sensor' })
+      })
+      result.status.should.equal(400)
+      const json = await result.json()
+      json.message.should.contain('Identifier must not')
+    }
+  })
+
+  it('User registration with unsafe userId fails', async function () {
+    const result = await fetch(`${url}/signalk/v1/access/requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: '../../outside', password: 'secret' })
+    })
+    result.status.should.equal(400)
+    const json = await result.json()
+    json.message.should.contain('Identifier must not')
+  })
+
+  it('Admin adding user with unsafe username fails', async function () {
+    const result = await fetch(
+      `${url}/skServer/security/users/${encodeURIComponent('../outside')}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: `JAUTHENTICATION=${adminToken}`
+        },
+        body: JSON.stringify({ password: 'test', type: 'readwrite' })
+      }
+    )
+    result.status.should.equal(400)
+    const text = await result.text()
+    text.should.contain('Identifier must not')
+  })
 })
 
 describe('Access Request Limit', () => {
@@ -952,7 +992,7 @@ describe('Access Request Limit', () => {
   let previousHttpRateLimits
 
   before(async function () {
-    this.timeout(20000)
+    this.timeout(SERVER_START_TIMEOUT)
     previousHttpRateLimits = process.env.HTTP_RATE_LIMITS
     process.env.HTTP_RATE_LIMITS = 'api=1000,loginStatus=1000'
 
@@ -1087,7 +1127,7 @@ describe('WS Access Request IP reporting', () => {
   let previousHttpRateLimits
 
   beforeEach(async function () {
-    this.timeout(20000)
+    this.timeout(SERVER_START_TIMEOUT)
     previousHttpRateLimits = process.env.HTTP_RATE_LIMITS
     process.env.HTTP_RATE_LIMITS = 'api=1000,loginStatus=1000'
     port = await freeport()
@@ -1185,7 +1225,7 @@ describe('Plugin route permissions', () => {
   let previousHttpRateLimits
 
   before(async function () {
-    this.timeout(20000)
+    this.timeout(SERVER_START_TIMEOUT)
     previousHttpRateLimits = process.env.HTTP_RATE_LIMITS
     process.env.HTTP_RATE_LIMITS = 'api=1000,loginStatus=1000,login=1000'
 

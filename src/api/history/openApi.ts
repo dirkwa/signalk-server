@@ -129,7 +129,7 @@ historyApiDoc.paths = {
           name: 'paths',
           in: 'query',
           description:
-            "Comma separated list of Signal K paths whose data should be retrieved, optional aggregation methods for each path as postfix separated by a colon, and optional source reference separated by a pipe (|). Aggregation methods: 'average' | 'min' | 'max' | 'first' | 'last' | 'mid' | 'middle_index' | 'sma' | 'ema'. The 'sma' (simple moving average) and 'ema' (exponential moving average) methods accept an optional numeric parameter separated by colon: for sma it is the number of samples, for ema it is the alpha value (0-1). If not provided, implementations should use sensible defaults. The source reference after | filters data to that specific source.",
+            "Comma separated list of Signal K paths whose data should be retrieved, optional aggregation methods for each path as postfix separated by a colon, and optional source reference separated by a pipe (|). Aggregation methods: 'average' | 'min' | 'max' | 'first' | 'last' | 'mid' | 'middle_index' | 'sma' | 'ema'. The 'sma' (simple moving average) and 'ema' (exponential moving average) methods accept an optional numeric parameter separated by colon: for sma it is the number of samples, for ema it is the alpha value (0-1). If not provided, implementations should use sensible defaults. For a path whose units are rad (headings, courses, wind angles), average, sma and ema use the circular mean — the angle of the mean sine and cosine — so 359° and 1° average to 0°, not 180°, and the result keeps the path's convention ([0, 2π) or (−π, π]). Samples that cancel — 0° and 180° in equal measure — have no mean direction, and the bucket is null. The source reference after | filters data to that specific source.",
           example:
             'navigation.speedOverGround:sma:5|n2k-on-ve.can0.115,navigation.speedThroughWater:max',
           schema: { type: 'string' },
@@ -149,6 +149,13 @@ historyApiDoc.paths = {
           description:
             "Length of data sample time window in seconds or as a time expression ('1s', '1m', '1h', '1d'). If resolution is not specified the server should provide data in a reasonable time resolution, depending on the time range in the request.",
           schema: { type: 'number', format: 'integer' }
+        },
+        {
+          name: 'sourcePolicy',
+          in: 'query',
+          description:
+            "Controls how multiple historical sources are handled. With 'all', providers should return values split by source and include $source in the values metadata. A sourceRef specified on an individual path remains an explicit filter; 'all' only expands paths that do not already specify a source.",
+          schema: { type: 'string', enum: ['all'] }
         },
         { $ref: '#/components/parameters/ProviderIdQuery' }
       ],
@@ -198,10 +205,10 @@ historyApiDoc.paths = {
                           type: 'string',
                           description: 'Aggregation method'
                         },
-                        sourceRef: {
+                        $source: {
                           type: 'string',
                           description:
-                            'Source reference, present when the query specified a source filter for this path'
+                            'Source reference for this value series, present when source-aware history is requested, including sourcePolicy=all'
                         }
                       }
                     }
@@ -270,11 +277,18 @@ historyApiDoc.paths = {
     get: {
       summary: 'Get paths that have some historical data',
       description:
-        'Returns an array of path that have some historical data to query with /values for the specified time range',
+        'Returns an array of paths that have some historical data to query with /values for the specified time range. Providers that support context filtering return only paths for the specified context; other providers may return paths from all contexts.',
       parameters: [
         { $ref: '#/components/parameters/TimeRangeFrom' },
         { $ref: '#/components/parameters/TimeRangeDuration' },
         { $ref: '#/components/parameters/TimeRangeTo' },
+        {
+          name: 'context',
+          in: 'query',
+          description: 'Optional Signal K context to filter available paths',
+          example: 'vessels.urn:mrn:imo:mmsi:123456789',
+          schema: { type: 'string' }
+        },
         { $ref: '#/components/parameters/ProviderIdQuery' }
       ],
       responses: {

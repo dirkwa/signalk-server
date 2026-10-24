@@ -291,6 +291,51 @@ describe('Deltacache', () => {
     sourceMeta['gps.backup'].lastSeen.should.be.above(0)
   })
 
+  it('ingestDelta drops a delta whose context is a prototype key', function () {
+    const deltaCache = theServer.app.deltaCache
+    deltaCache.ingestDelta({
+      context: '__proto__',
+      updates: [
+        {
+          $source: 'poc',
+          timestamp: '2024-01-15T10:30:02.000Z',
+          values: [{ path: 'pocPollutedFlag', value: 'pwned' }]
+        }
+      ]
+    })
+    // chai's have.property walks the prototype chain, so a polluted
+    // Object.prototype would make this bare object appear to have the key.
+    ;({}).should.not.have.property('pocPollutedFlag')
+  })
+
+  it('ingestDelta drops a delta whose path is a prototype key', function () {
+    const deltaCache = theServer.app.deltaCache
+    deltaCache.ingestDelta({
+      context: 'vessels.self',
+      updates: [
+        {
+          $source: 'poc',
+          timestamp: '2024-01-15T10:30:03.000Z',
+          values: [{ path: '__proto__.enabled', value: true }]
+        }
+      ]
+    })
+    ;({}).should.not.have.property('enabled')
+  })
+
+  it('onValue drops a delta whose context is a prototype key', function () {
+    const deltaCache = theServer.app.deltaCache
+    deltaCache.onValue({
+      context: '__proto__',
+      path: 'pocPollutedFlag2',
+      value: 'pwned',
+      $source: 'poc',
+      timestamp: '2024-01-15T10:30:04.000Z',
+      isMeta: false
+    })
+    ;({}).should.not.have.property('pocPollutedFlag2')
+  })
+
   it('getCachedDeltas fans out unrouted multi-source paths', function () {
     // With no priority configuration, every cached source is delivered
     // — preferredSources stays empty for unrouted paths so the
@@ -343,6 +388,31 @@ describe('Deltacache', () => {
     magVarDeltas.length.should.equal(2)
     const sources = magVarDeltas.map((d) => d.updates[0].$source).sort()
     sources.should.deep.equal(['gps.backup', 'gps.primary'])
+  })
+
+  it('getCachedDeltasForContexts over getMatchingContexts equals getCachedDeltas', function () {
+    // subscribe enumerates matching contexts once and reuses them across
+    // paths — the split path must return exactly what the single-call
+    // path does, for every key mode (all paths, root values, one path)
+    const selfContext = 'vessels.' + theServer.app.selfId
+    const contextFilter = (d) => d.context === selfContext
+    const cache = theServer.app.deltaCache
+
+    for (const key of [undefined, '', 'navigation.speedOverGround']) {
+      const direct = cache.getCachedDeltas(contextFilter, null, key)
+      const viaContexts = cache.getCachedDeltasForContexts(
+        cache.getMatchingContexts(contextFilter),
+        null,
+        key
+      )
+      direct.length.should.be.greaterThan(0)
+      viaContexts.should.deep.equal(direct)
+    }
+
+    cache.getMatchingContexts(() => false).should.deep.equal([])
+    cache
+      .getCachedDeltasForContexts(cache.getMatchingContexts(() => false))
+      .should.deep.equal([])
   })
 
   it('getMultiSourcePaths excludes notifications', function () {

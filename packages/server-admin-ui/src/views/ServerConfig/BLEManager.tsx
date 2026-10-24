@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import { useEffect } from 'react'
 import Badge from 'react-bootstrap/Badge'
 import Card from 'react-bootstrap/Card'
 import Col from 'react-bootstrap/Col'
@@ -312,7 +312,7 @@ export default function BLEManager() {
           {!hasConsumers ? (
             <p className="text-body-secondary mb-0">
               No consumer plugins registered. Install a BLE consumer plugin such
-              as bt-sensors-plugin-sk.
+              as signalk-victron-ble-consumer.
             </p>
           ) : (
             <Table hover responsive striped size="sm">

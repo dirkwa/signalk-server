@@ -10,7 +10,7 @@ import { faCirclePlus } from '@fortawesome/free-solid-svg-icons/faCirclePlus'
 import { faCircleDot } from '@fortawesome/free-regular-svg-icons/faCircleDot'
 import { useStore } from '../../store'
 
-import BasicProvider from './BasicProvider'
+import BasicProvider, { isMxpgnBusOrder } from './BasicProvider'
 import set from 'lodash.set'
 
 interface Provider {
@@ -41,7 +41,6 @@ function stripFilterKeys(provider: Provider): void {
     if (!subOpts || !Array.isArray(subOpts.filters)) continue
     subOpts.filters = (subOpts.filters as Array<Record<string, unknown>>).map(
       (f) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { _key, ...rest } = f
         return rest
       }
@@ -200,7 +199,15 @@ const ProvidersConfiguration: React.FC = () => {
 
     const isNew = selectedProvider.isNew
     const wasDiscovered = selectedProvider.wasDiscovered
-    const providerToSave = structuredClone(selectedProvider)
+    const savedProvider = structuredClone(selectedProvider)
+    // Store the default explicitly: a connection without one reads bus order
+    if (isNew && savedProvider.type === 'NMEA0183') {
+      savedProvider.options.mxpgnBusOrder = isMxpgnBusOrder(
+        savedProvider.options,
+        true
+      )
+    }
+    const providerToSave = structuredClone(savedProvider)
     delete providerToSave.json
     // Strip the client-only React-key tag from N2K filter rows so it
     // doesn't bleed into the persisted settings.json. The server's
@@ -223,7 +230,7 @@ const ProvidersConfiguration: React.FC = () => {
     )
 
     if (response.ok) {
-      const provider = structuredClone(selectedProvider)
+      const provider = savedProvider
       delete provider.isNew
       delete provider.wasDiscovered
 

@@ -414,9 +414,14 @@ interface PluginData {
   [key: string]: unknown
 }
 
+// A plugin's schema is arbitrary JSON Schema. Only `description` and
+// `properties` are named because they are read directly below; everything
+// else — `dependencies`, `oneOf`, `allOf`, `required`, … — is forwarded
+// untouched, so plugins can use conditional schemas.
 interface PluginSchema {
   description?: string
   properties?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 interface Plugin {
@@ -440,11 +445,10 @@ export default function PluginConfigurationForm({
   // Build the schema object with proper types
   const formSchema: RJSFSchema = {
     type: 'object',
-    ...(plugin.statusMessage && {
-      description: `Status: ${plugin.statusMessage}`
-    }),
     properties: {
       configuration: {
+        // Spread rather than cherry-pick: forwards conditional keywords and `required`.
+        ...(plugin.schema as RJSFSchema),
         type: 'object',
         title: ' ',
         description: plugin.schema.description,

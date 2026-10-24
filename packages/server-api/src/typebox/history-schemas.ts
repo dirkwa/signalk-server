@@ -19,7 +19,7 @@ export const AggregateMethodSchema = Type.Union(
   {
     $id: 'AggregateMethod',
     description:
-      "Aggregation method for historical data. The 'sma' (Simple Moving Average) and 'ema' (Exponential Moving Average) methods accept an optional numeric parameter separated by colon: for sma it is the number of samples, for ema it is the alpha value (0-1)."
+      "Aggregation method for historical data. In a path expression (path:method:parameter) the 'sma' (Simple Moving Average) and 'ema' (Exponential Moving Average) methods accept an optional numeric parameter after a second colon: for sma it is the number of samples, for ema it is the alpha value (0-1). For a path whose units are rad (headings, courses, wind angles), average, sma and ema use the circular mean — the angle of the mean sine and cosine — so 359° and 1° average to 0°, not 180°, and the result keeps the path's convention ([0, 2π) or (−π, π]). Samples that cancel — 0° and 180° in equal measure — have no mean direction, and the bucket is null."
   }
 )
 export type AggregateMethodSchemaType = Static<typeof AggregateMethodSchema>
@@ -45,7 +45,13 @@ export const ValuesResponseSchema = Type.Object(
     values: Type.Array(
       Type.Object({
         path: Type.String({ description: 'Signal K path' }),
-        method: Type.String({ description: 'Aggregation method' })
+        method: Type.String({ description: 'Aggregation method' }),
+        $source: Type.Optional(
+          Type.String({
+            description:
+              'Source reference for this value column, present when the values are source-specific'
+          })
+        )
       })
     ),
     data: Type.Array(
@@ -80,7 +86,13 @@ export const PathSpecSchema = Type.Object(
     parameter: Type.Array(Type.String(), {
       description:
         'Additional parameters for the aggregation method (e.g., sample count for sma, alpha for ema)'
-    })
+    }),
+    sourceRef: Type.Optional(
+      Type.String({
+        description:
+          'Optional source reference to filter this path to a single source'
+      })
+    )
   },
   {
     $id: 'PathSpec',

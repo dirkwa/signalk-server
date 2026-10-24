@@ -1,9 +1,12 @@
 node_modules
 !test/plugin-test-config/node_modules/
+!test/plugin-stop-config/node_modules/
 
 package-lock.json
 
 *.tsbuildinfo
+
+.eslintcache
 
 lib/
 dist/
@@ -31,6 +34,14 @@ test/plugin-test-config/ssl-cert.pem
 test/plugin-test-config/ssl-key.pem
 test/plugin-test-config/baseDeltas.json
 test/plugin-test-config/unitpreferences/
+test/shutdown-test-config/.npmrc
+test/shutdown-test-config/package.json
+test/shutdown-test-config/unitpreferences/
+test/shutdown-test-config/*.tmp
+test/plugin-stop-config/.npmrc
+test/plugin-stop-config/package.json
+test/plugin-stop-config/unitpreferences/
+test/plugin-stop-config/*.tmp
 
 test/server-test-config/applicationData/
 test/server-test-config/unitpreferences/
@@ -38,6 +49,7 @@ test/server-test-config/ssl-cert.pem
 test/server-test-config/ssl-key.pem
 test/server-test-config/plugin-config-data/
 test/server-test-config/sources-cache.json
+test/server-test-config/baseDeltas.json
 test/server-test-config/appstore-cache/
 
 docs/built
@@ -60,3 +72,5 @@ nul
 # debug artefacts
 *.sln
 test/server-test-config/debug
+# Per-developer local Makefile (deploy shortcuts, scratch targets)
+Makefile.local

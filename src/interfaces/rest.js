@@ -20,40 +20,34 @@ const express = require('express')
 const { getMetadata } = require('@signalk/path-metadata')
 const ports = require('../ports')
 const { serveStaticFiles } = require('../staticfiles')
-const {
-  resolveDisplayUnits,
-  getDefaultCategory
-} = require('../unitpreferences')
+const { resolvePathDisplayUnits } = require('../unitpreferences')
 
-function enhanceMetadataResponse(metadata, signalkPath, username) {
+// An editor needs to tell a path-specific display unit override from the
+// preset's setting; nothing else does, so the answer comes only when asked for.
+function wantsDisplayUnitsOverride(req) {
+  return req.query.displayUnitsOverride === 'true'
+}
+
+function enhanceMetadataResponse(
+  metadata,
+  signalkPath,
+  username,
+  includeOverride
+) {
   if (!metadata) return metadata
 
-  let storedDisplayUnits = metadata.displayUnits
-
-  if (!storedDisplayUnits?.category && signalkPath) {
-    const defaultCategory = getDefaultCategory(
+  try {
+    const enhanced = resolvePathDisplayUnits(
       signalkPath,
-      metadata.units,
-      username
+      metadata,
+      username,
+      includeOverride
     )
-    if (defaultCategory) {
-      storedDisplayUnits = { category: defaultCategory }
+    if (enhanced) {
+      metadata.displayUnits = enhanced
     }
-  }
-
-  if (storedDisplayUnits?.category) {
-    try {
-      const enhanced = resolveDisplayUnits(
-        storedDisplayUnits,
-        metadata.units,
-        username
-      )
-      if (enhanced) {
-        metadata.displayUnits = enhanced
-      }
-    } catch (err) {
-      debug('Error enhancing metadata with displayUnits:', err)
-    }
+  } catch (err) {
+    debug('Error enhancing metadata with displayUnits:', err)
   }
 
   return metadata
@@ -69,17 +63,22 @@ const SKIP_KEYS = new Set([
   'values'
 ])
 
-function enhanceTreeMetadata(node, pathParts, username) {
+function enhanceTreeMetadata(node, pathParts, username, includeOverride) {
   if (node === null || typeof node !== 'object') return
   if (node.meta) {
     const signalkPath = pathParts.join('.')
     const metaCopy = structuredClone(node.meta)
-    enhanceMetadataResponse(metaCopy, signalkPath, username)
+    enhanceMetadataResponse(metaCopy, signalkPath, username, includeOverride)
     node.meta = metaCopy
   }
   for (const key in node) {
     if (!SKIP_KEYS.has(key)) {
-      enhanceTreeMetadata(node[key], pathParts.concat(key), username)
+      enhanceTreeMetadata(
+        node[key],
+        pathParts.concat(key),
+        username,
+        includeOverride
+      )
     }
   }
 }
@@ -195,8 +194,14 @@ module.exports = function (app) {
             const result = {}
             const username = req.skPrincipal?.identifier
             collectMeta(vessel, [], result)
+            const includeOverride = wantsDisplayUnitsOverride(req)
             for (const skPath in result) {
-              enhanceMetadataResponse(result[skPath], skPath, username)
+              enhanceMetadataResponse(
+                result[skPath],
+                skPath,
+                username,
+                includeOverride
+              )
             }
             res.json(result)
           } else {
@@ -213,7 +218,14 @@ module.exports = function (app) {
             const metaCopy = structuredClone(meta)
             const signalkPath = metaPath.replace(/^vessels\.[^.]+\./, '')
             const username = req.skPrincipal?.identifier
-            res.json(enhanceMetadataResponse(metaCopy, signalkPath, username))
+            res.json(
+              enhanceMetadataResponse(
+                metaCopy,
+                signalkPath,
+                username,
+                wantsDisplayUnitsOverride(req)
+              )
+            )
             return
           }
         }
@@ -249,7 +261,12 @@ module.exports = function (app) {
               aPath[0] === 'vessels' && aPath.length >= 2
                 ? aPath.slice(2)
                 : aPath.slice()
-            enhanceTreeMetadata(last, baseParts, username)
+            enhanceTreeMetadata(
+              last,
+              baseParts,
+              username,
+              wantsDisplayUnitsOverride(req)
+            )
           }
 
           return res.json(last)

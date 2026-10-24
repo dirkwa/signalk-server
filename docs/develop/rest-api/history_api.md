@@ -25,7 +25,7 @@ The time range for queries can be defined as a combination of **from**, **to** a
 To retrieve historical data series for specific paths, submit a HTTP `GET` request to `/signalk/v2/api/history/values`.
 
 ```typescript
-HTTP GET 'http://hostname:3000/signalk/v2/api/history/values?paths=navigation.speedOverGround&duration=PT1H'
+HTTP GET 'http://hostname:3000/signalk/v2/api/history/values?paths=navigation.speedOverGround,navigation.position:first&duration=PT1H'
 ```
 
 ### Query Parameters
@@ -39,6 +39,8 @@ HTTP GET 'http://hostname:3000/signalk/v2/api/history/values?paths=navigation.sp
 | `to`         | End of the time range                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | No       |
 | `duration`   | Duration of the time range                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | No       |
 | `provider`   | Plugin id of the history provider to direct the request to. If not specified, the default provider is used. See [Providers](#providers).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | No       |
+
+A path whose units are `rad` in the path metadata — a heading, a course, a wind angle — is averaged as a vector: `average`, `sma` and `ema` take the angle of the mean sine and cosine, so 359° and 1° average to 0°, not 180°. The result keeps the path's own convention, `[0, 2π)` or `(−π, π]`; samples that cancel, 0° and 180° in equal measure, have no mean direction and the bucket is `null`. `min`, `max` and `mid` are arithmetic.
 
 ### Response Format
 
@@ -55,16 +57,22 @@ The response contains the requested data series with header information.
     {
       "path": "navigation.speedOverGround",
       "method": "average"
+    },
+    {
+      "path": "navigation.position",
+      "method": "first"
     }
   ],
   "data": [
-    ["2023-11-09T02:45:38.160Z", 13.2],
-    ["2023-11-09T02:45:39.160Z", 13.4]
+    ["2023-11-09T02:45:38.160Z", 13.2, [24.94, 60.17]],
+    ["2023-11-09T02:45:39.160Z", 13.4, null]
   ]
 }
 ```
 
 The `data` array contains arrays where the first element is the timestamp in ISO 8601 format, and subsequent elements correspond to the values for the requested paths in order. Missing data for a path is returned as `null`.
+
+A `navigation.position` value is a `[longitude, latitude]` pair, in GeoJSON coordinate order — not the `{"latitude", "longitude"}` object the path carries in the data model.
 
 ## Listing Available Contexts
 
@@ -93,6 +101,12 @@ To get a list of paths that have some historical data available for a specified 
 HTTP GET 'http://hostname:3000/signalk/v2/api/history/paths?duration=P1D'
 ```
 
+The optional `context` parameter requests paths for a specific Signal K context,
+for example `/signalk/v2/api/history/paths?duration=P1D&context=vessels.self`.
+Providers that support context filtering return only paths recorded for that
+context. Providers that do not support it may still return paths from all
+contexts. When `context` is omitted, paths from all contexts are returned.
+
 ### Response Format
 
 Returns an array of path strings.
@@ -110,7 +124,7 @@ Returns an array of path strings.
 
 The History API supports the registration of multiple history provider plugins.
 
-The first plugin registered is set as the _default_ provider and all requests will be directed to it.
+The first plugin registered is set as the _default_ provider, the setting is saved and all requests that don't specify the provider will be directed to it.
 
 Requests can be directed to a specific provider by using the `provider` parameter in the request with the _id_ of the provider plugin.
 

@@ -11,6 +11,7 @@
 import fs from 'fs'
 import path from 'path'
 import { createDebug } from '../debug'
+import { fetchFromCdn } from './cdn'
 import { safeName } from './safe-name'
 
 const debug = createDebug('signalk-server:appstore:icon-bytes')
@@ -40,13 +41,18 @@ export interface StoredIcon {
   contentType: string
   size: number
   writtenAt: number
+  /** Version this icon was downloaded for, taken from the filename. */
+  version: string
 }
 
 export interface IconBytesCache {
   storeRoot(): string
   /** Resolve a stored icon for the given plugin (latest version wins). */
   read(pkgName: string): StoredIcon | undefined
-  /** Download and persist the icon bytes. Returns the stored record or null on failure. */
+  /**
+   * Download and persist the icon bytes from the package CDN. Returns the
+   * stored record, or null on failure or when cdnUrl is not a CDN URL.
+   */
   download(
     pkgName: string,
     version: string,
@@ -126,6 +132,12 @@ export function createIconBytesCache(cacheDir: string): IconBytesCache {
     const full = path.join(root, best.entry)
     const ext = best.entry.split('.').pop() || ''
     const contentType = guessContentTypeFromExt(ext)
+    // Filenames are `${safeName(pkg)}@${version}.${ext}`, so the version is
+    // whatever sits between the prefix and the extension.
+    const version = best.entry.slice(
+      prefix.length,
+      best.entry.length - (ext.length + 1)
+    )
     // Re-stat for the size: a concurrent purgeOldVersions or a manual
     // /appstore/refresh between the loop and here could have removed
     // the file. Treat that as "not stored" rather than throwing.
@@ -140,7 +152,8 @@ export function createIconBytesCache(cacheDir: string): IconBytesCache {
       path: full,
       contentType,
       size,
-      writtenAt: best.mtime
+      writtenAt: best.mtime,
+      version
     }
   }
 
@@ -152,7 +165,7 @@ export function createIconBytesCache(cacheDir: string): IconBytesCache {
     let contentType: string
     let bytes: Uint8Array
     try {
-      const res = await fetch(cdnUrl, {
+      const res = await fetchFromCdn(cdnUrl, {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
       })
       if (!res.ok) {
@@ -211,7 +224,8 @@ export function createIconBytesCache(cacheDir: string): IconBytesCache {
         path: full,
         contentType: contentType.split(';')[0].trim(),
         size: bytes.byteLength,
-        writtenAt: Date.now()
+        writtenAt: Date.now(),
+        version
       }
     } catch (err) {
       debug.enabled && debug('write %s failed: %O', full, err)

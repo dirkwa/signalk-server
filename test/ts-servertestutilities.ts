@@ -13,6 +13,16 @@ import { Delta, hasValues, PathValue, Value } from '@signalk/server-api'
 
 export const DATETIME_REGEX = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)Z?$/
 
+/**
+ * Budget for a hook that starts a server. Whichever suite runs first pays a
+ * one-off cost that dwarfs the start itself - loading dist/ and the first
+ * plugin scan take tens of seconds, while every later start is a few hundred
+ * milliseconds. Which suite pays it depends on file ordering, so every suite
+ * that starts a server needs the larger budget even though it will usually
+ * finish in well under a second.
+ */
+export const SERVER_START_TIMEOUT = 120000
+
 const emptyConfigDirectory = () =>
   Promise.all(
     [SERVERSTATEDIRNAME, 'resources', 'plugin-config-data', 'baseDeltas.json']
@@ -81,6 +91,7 @@ export const startServer = async (extraSettings: object = {}) => {
         body: JSON.stringify(body),
         headers: { 'Content-Type': 'application/json' }
       }),
+    del: (path: string) => fetch(`${api}${path}`, { method: 'DELETE' }),
     selfGetJson: (path: string) =>
       fetch(`${api}/vessels/self/${path}`).then((r) => r.json()),
     selfGetJsonV1: (path: string) =>
