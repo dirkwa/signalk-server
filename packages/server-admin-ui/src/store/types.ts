@@ -137,6 +137,7 @@ export interface NodeInfo {
   nodeVersion?: string
   npmVersion?: string
   recommendedNodeVersion?: string
+  testedNodeVersions?: number[]
 }
 
 export interface SourcePriority {
