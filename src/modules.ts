@@ -133,7 +133,7 @@ function findModulesInDir(dir: string, keyword: string): ModuleData[] {
 }
 
 // Extract unique directory paths from app object.
-function getModulePaths(config: Config) {
+export function getModulePaths(config: Config) {
   // appPath is the app working directory.
   const { appPath, configPath } = config
   return (appPath === configPath ? [appPath] : [configPath, appPath]).map(
@@ -169,6 +169,44 @@ function installModule(
   onClose: (code: number) => any
 ) {
   runNpm(config, name, version, 'install', onData, onErr, onClose)
+}
+
+// Bounds how long a plugin's stop() may hold up its removal: installs and
+// removals run one at a time, so a stop() that never settles would hold up
+// every one queued behind it.
+const STOP_BEFORE_REMOVE_TIMEOUT_MS = 10 * 1000
+
+// npm removes a plugin's package but not its running instance, which keeps
+// going until the next restart, so stop it while its code is still loaded
+// and can release what it holds (containers, sockets, timers). Never
+// rejects: a failed or overdue stop() is logged and the removal goes ahead.
+export async function stopBeforeRemove(
+  stopPlugin: (id: string) => Promise<void>,
+  pluginId: string | undefined,
+  timeoutMs: number = STOP_BEFORE_REMOVE_TIMEOUT_MS
+): Promise<void> {
+  if (!pluginId) {
+    return
+  }
+  let timer: NodeJS.Timeout | undefined
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      console.error(
+        `${pluginId}: stop() did not finish within ${timeoutMs}ms, removing anyway`
+      )
+      resolve()
+    }, timeoutMs)
+  })
+  const stopped = Promise.resolve()
+    .then(() => stopPlugin(pluginId))
+    .catch((err: unknown) => {
+      console.error(`${pluginId}: stop() failed before removal:`, err)
+    })
+  try {
+    await Promise.race([stopped, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function removeModule(
@@ -698,6 +736,7 @@ module.exports = {
   modulesWithKeyword,
   installModule,
   removeModule,
+  stopBeforeRemove,
   isTheServerModule,
   findModulesWithKeyword,
   fetchDistTagsForPackages,
@@ -705,6 +744,7 @@ module.exports = {
   checkForNewServerVersion,
   getAuthor,
   getKeywords,
+  getModulePaths,
   restoreModules,
   importOrRequire,
   runNpm,

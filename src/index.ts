@@ -55,6 +55,7 @@ import {
 import { filterStaticSelfData } from './staticDataFilter'
 import { incDeltaStatistics, startDeltaStatistics } from './deltastats'
 import { checkForNewServerVersion } from './modules'
+import { ConnectionTracker } from './connectionTracker'
 import { getExternalPort, getPrimaryPort, getSecondaryPort } from './ports'
 import {
   getCertificateOptions,
@@ -130,6 +131,8 @@ class Server {
   // migration scheduled before a restart cannot fire on a torn-down app.
   pendingSourceRefMigrations?: Set<NodeJS.Timeout>
   private providerStatusEmitter: ThrottledCaller
+  private connections?: ConnectionTracker
+  private redirectConnections?: ConnectionTracker
 
   constructor(opts: { securityConfig: SecurityConfig }) {
     checkNodeVersion()
@@ -643,7 +646,7 @@ class Server {
     })
 
     installProcessErrorHandlers(app)
-    installShutdownHandlers(this)
+    app.stopAndExit = installShutdownHandlers(this)
   }
 
   start() {
@@ -750,6 +753,7 @@ class Server {
           return
         }
         app.server = server
+        this.connections = new ConnectionTracker(server)
         app.interfaces = {}
         app.clients = 0
 
@@ -780,9 +784,10 @@ class Server {
           startRedirectToSsl(
             secondaryPort,
             getExternalPort(app),
-            (anErr: any, aServer: any) => {
+            (anErr: any, aServer: any, connections: ConnectionTracker) => {
               if (!anErr) {
                 app.redirectServer = aServer
+                this.redirectConnections = connections
               }
             }
           )
@@ -793,7 +798,6 @@ class Server {
 
   reload(mixed: any) {
     let settings
-    const self = this
 
     if (typeof mixed === 'string') {
       try {
@@ -811,31 +815,37 @@ class Server {
       this.app.config.settings = settings
     }
 
-    this.stop().catch((e) => console.error(e))
-
-    setTimeout(() => {
-      self.start().catch((e) => console.error(e))
-    }, 1000)
+    // stop() resolves only once the plugins have stopped and the HTTP server
+    // has closed; a start() before that would lose its port and its timers to
+    // the stop still running.
+    this.stop()
+      .catch((e) => console.error(e))
+      .then(() => this.start())
+      .catch((e) => console.error(e))
 
     return this
   }
 
   async stop(cb?: () => void) {
     this.providerStatusEmitter.cancel()
-    if (!this.app.started) {
+    const { connections, redirectConnections } = this
+    if (!this.app.started || !connections) {
       return this
     }
 
     try {
-      _.each(this.app.interfaces, (intf: any) => {
-        if (
+      // The plugins interface resolves once every plugin's stop() has, and a
+      // shutdown exits as soon as this method resolves: without the wait, a
+      // plugin's asynchronous cleanup is cut off by process.exit.
+      await Promise.all(
+        _.map(this.app.interfaces, (intf: any, name: string) =>
           intf !== null &&
           typeof intf === 'object' &&
           typeof intf.stop === 'function'
-        ) {
-          intf.stop()
-        }
-      })
+            ? stopInterface(name, intf)
+            : undefined
+        )
+      )
 
       this.app.intervals.forEach((interval) => {
         clearInterval(interval)
@@ -867,13 +877,14 @@ class Server {
 
       const that = this
       return new Promise((resolve, reject) => {
-        this.app.server.close(() => {
+        connections.close(CONNECTION_CLOSE_GRACE_MS, () => {
           debug('Server closed')
-          if (that.app.redirectServer) {
+          if (redirectConnections) {
             try {
-              that.app.redirectServer.close(() => {
+              redirectConnections.close(CONNECTION_CLOSE_GRACE_MS, () => {
                 debug('Redirect server closed')
                 delete that.app.redirectServer
+                delete that.redirectConnections
                 that.app.started = false
                 cb && cb()
                 resolve(that)
@@ -911,6 +922,42 @@ function identifyPluginFromStack(
 // Below a container runtime's default stop grace period, so the process can
 // exit on its own before the runtime escalates to SIGKILL.
 const SHUTDOWN_TIMEOUT_MS = 8000
+// Time a shutdown keeps after the interfaces to clear timers, end providers
+// and close the HTTP server before SHUTDOWN_TIMEOUT_MS forces the exit.
+const TEARDOWN_RESERVE_MS = 2000
+const INTERFACE_STOP_TIMEOUT_MS = SHUTDOWN_TIMEOUT_MS - TEARDOWN_RESERVE_MS
+// How long closing a server waits for its open connections to end before
+// destroying them. The ws interface ends its clients 500 ms after it stops,
+// so a client that answers still gets a clean close; closing the server and
+// then the redirect server stays within TEARDOWN_RESERVE_MS.
+const CONNECTION_CLOSE_GRACE_MS = 900
+
+// Settles when the interface has stopped, has failed to, or has not within
+// INTERFACE_STOP_TIMEOUT_MS, so that one interface can neither end the wait
+// for the others nor keep Server.stop() from finishing.
+function stopInterface(
+  name: string,
+  intf: { stop: () => unknown }
+): Promise<void> {
+  let timer: NodeJS.Timeout | undefined
+  const timedOut = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      console.error(
+        `Interface ${name} did not stop within ${INTERFACE_STOP_TIMEOUT_MS}ms`
+      )
+      resolve()
+    }, INTERFACE_STOP_TIMEOUT_MS)
+  })
+  const stopped = Promise.resolve()
+    .then(() => intf.stop())
+    .then(
+      () => undefined,
+      (err: unknown) => {
+        console.error(`Error stopping interface ${name}:`, err)
+      }
+    )
+  return Promise.race([stopped, timedOut]).finally(() => clearTimeout(timer))
+}
 
 let currentShutdownHandlers:
   { sigterm: () => void; sigint: () => void } | undefined
@@ -933,14 +980,9 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
 
   let shuttingDown = false
 
-  const shutdown = (signal: NodeJS.Signals) => {
-    // A repeated signal means the caller is no longer waiting for an orderly
-    // shutdown, so stop waiting for one.
-    if (shuttingDown) {
-      process.exit(128 + (signal === 'SIGINT' ? 2 : 15))
-    }
+  const stopAndExit = (reason: string) => {
     shuttingDown = true
-    console.log(`${signal} received, shutting down`)
+    console.log(`${reason}, shutting down`)
 
     // Bounded: a provider or interface whose stop() never settles must not
     // turn a graceful shutdown into an indefinite one. The deadline sits
@@ -969,11 +1011,31 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
       })
   }
 
+  const shutdown = (signal: NodeJS.Signals) => {
+    // A repeated signal means the caller is no longer waiting for an orderly
+    // shutdown, so stop waiting for one.
+    if (shuttingDown) {
+      process.exit(128 + (signal === 'SIGINT' ? 2 : 15))
+    }
+    stopAndExit(`${signal} received`)
+  }
+
   const sigterm = () => shutdown('SIGTERM')
   const sigint = () => shutdown('SIGINT')
-  currentShutdownHandlers = { sigterm, sigint }
+  const handlers = { sigterm, sigint }
+  currentShutdownHandlers = handlers
   process.on('SIGTERM', sigterm)
   process.on('SIGINT', sigint)
+
+  // A restart from the admin UI relies on the process supervisor to bring
+  // the server back, and must stop it the same way a signal does so plugins
+  // and providers get to close. Like the signal handlers, it belongs to the
+  // most recently constructed Server only.
+  return () => {
+    if (currentShutdownHandlers === handlers && !shuttingDown) {
+      stopAndExit('Restart requested')
+    }
+  }
 }
 
 function installProcessErrorHandlers(app: any) {
@@ -1025,7 +1087,7 @@ function createServer(app: any, cb: (err: any, server?: any) => void) {
 function startRedirectToSsl(
   port: number,
   redirectPort: number,
-  cb: (e: unknown, server: any) => void
+  cb: (e: unknown, server: any, connections: ConnectionTracker) => void
 ) {
   const redirectApp = express()
   redirectApp.use((req: Request, res: Response) => {
@@ -1033,9 +1095,10 @@ function startRedirectToSsl(
     res.redirect(`https://${host}:${redirectPort}${req.path}`)
   })
   const server = http.createServer(redirectApp)
+  const connections = new ConnectionTracker(server)
   server.listen(port, () => {
     console.log(`Redirect server running on port ${port.toString()}`)
-    cb(null, server)
+    cb(null, server, connections)
   })
 }
 
