@@ -38,6 +38,7 @@ import {
   sendWasmHttpResponse,
   setupPluginSpecificRoutes
 } from '../src/wasm/loader/plugin-routes'
+import { WithSecurityStrategy } from '../src/security'
 import { tcpSocketManager } from '../src/wasm/bindings/socket-manager'
 import { stopWasmPlugin } from '../src/wasm/loader/plugin-lifecycle'
 import { wasmPlugins } from '../src/wasm/loader/plugin-registry'
@@ -61,6 +62,7 @@ interface PluginInfo {
 interface ServerInstance {
   stop: () => Promise<void>
   app: {
+    handleMessage: (providerId: string, delta: object) => void
     config: {
       configPath: string
       settings: {
@@ -1526,7 +1528,8 @@ describe('WASM buffer ABI', () => {
       router: express.Router(),
       instance: { instance: { exports: fake.exports } }
     } as unknown as WasmPlugin
-    setupPluginSpecificRoutes(plugin)
+    // The endpoint declares no access level, so security is never consulted
+    setupPluginSpecificRoutes({} as WithSecurityStrategy, plugin)
     expect(plugin.endpointRouter).to.not.equal(undefined)
 
     const app = express()
