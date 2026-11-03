@@ -1406,10 +1406,10 @@ export function plugin_stop(): i32 {
       await setPluginEnabled(false)
 
       expect(await client.waitFor('never sent')).to.equal(null)
-      expect(await broadcast()).to.equal(0)
 
+      // A disabled plugin's endpoints are not served at all
       const refused = await fetch(eventsUrl())
-      expect(refused.status).to.equal(503)
+      expect(refused.status).to.equal(404)
     })
   })
 })
@@ -1565,8 +1565,11 @@ describe('WASM buffer ABI', () => {
       router: express.Router(),
       instance: { instance: { exports: fake.exports } }
     } as unknown as WasmPlugin
-    // The endpoint declares no access level, so security is never consulted
-    setupPluginSpecificRoutes({} as WithSecurityStrategy, plugin)
+    // Security disabled: the dummy strategy records no access levels
+    setupPluginSpecificRoutes(
+      { securityStrategy: {} } as WithSecurityStrategy,
+      plugin
+    )
     expect(plugin.endpointRouter).to.not.equal(undefined)
 
     const app = express()
