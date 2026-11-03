@@ -264,33 +264,50 @@ const ROUTE_ACCESS_LEVELS: ReadonlySet<string> = new Set<RouteAccessLevel>([
 ])
 
 /**
- * Record a non-admin access level for one WASM endpoint with the security
- * strategy, mirroring `router.access()` for Node plugins. Endpoints without
- * a recognised level are left unregistered so the /plugins gate keeps them
- * admin-only.
+ * The non-admin access level one WASM endpoint declares, mirroring
+ * `router.access()` for Node plugins. Endpoints without a recognised level
+ * have none, so the /plugins gate keeps them admin-only.
  */
-function registerEndpointAccess(
-  app: WithSecurityStrategy,
-  pluginId: string,
+function toRoutePermission(
   endpoint: WasmHttpEndpoint
-): void {
+): RoutePermission | undefined {
   if (endpoint.access === undefined) {
-    return
+    return undefined
   }
   if (!ROUTE_ACCESS_LEVELS.has(endpoint.access)) {
     debug(
       `Ignoring unknown access level "${endpoint.access}" for ${endpoint.method} ${endpoint.path}, route stays admin-only`
     )
-    return
+    return undefined
   }
+  return {
+    method: endpoint.method.toUpperCase() as RoutePermission['method'],
+    path: endpoint.path,
+    permission: endpoint.access
+  }
+}
+
+interface EndpointRoutes {
+  router: IRouter
+  permissions: RoutePermission[]
+}
+
+/**
+ * Serve the endpoints of the loaded binary and replace the access levels
+ * recorded for the previous one, so a level the new binary drops or
+ * changes no longer applies
+ */
+function installEndpointRoutes(
+  app: WithSecurityStrategy,
+  plugin: WasmPlugin,
+  routes: EndpointRoutes | undefined
+): void {
   // Absent when security is disabled, where every route is reachable anyway
-  app.securityStrategy.registerPluginRoutePermissions?.(pluginId, [
-    {
-      method: endpoint.method.toUpperCase() as RoutePermission['method'],
-      path: endpoint.path,
-      permission: endpoint.access
-    }
-  ])
+  app.securityStrategy.replacePluginRoutePermissions?.(
+    plugin.id,
+    routes?.permissions ?? []
+  )
+  plugin.endpointRouter = routes?.router
 }
 
 /**
@@ -302,13 +319,17 @@ export function setupPluginSpecificRoutes(
   app: WithSecurityStrategy,
   plugin: WasmPlugin
 ): void {
-  plugin.endpointRouter = undefined
+  installEndpointRoutes(app, plugin, undefined)
   if (!plugin.instance) {
     debug(`No instance for ${plugin.id}`)
     return
   }
   try {
-    plugin.endpointRouter = buildEndpointRouter(app, plugin, plugin.instance)
+    installEndpointRoutes(
+      app,
+      plugin,
+      buildEndpointRoutes(plugin, plugin.instance)
+    )
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     debug(`Failed to register HTTP endpoints: ${errorMsg}`)
@@ -316,15 +337,15 @@ export function setupPluginSpecificRoutes(
 }
 
 /**
- * Build the router for the HTTP endpoints `instance` declares. Throws if the
- * declaration cannot be read. Handlers call into `plugin.instance` at
- * request time, so the router belongs with the instance it was built from.
+ * Build the router and access levels for the HTTP endpoints `instance`
+ * declares. Throws if the declaration cannot be read. Handlers call into
+ * `plugin.instance` at request time, so the router belongs with the
+ * instance it was built from.
  */
-function buildEndpointRouter(
-  app: WithSecurityStrategy,
+function buildEndpointRoutes(
   plugin: WasmPlugin,
   instance: WasmPluginInstance
-): IRouter | undefined {
+): EndpointRoutes | undefined {
   // Check for http_endpoints in either AssemblyScript loader or raw WASM exports
   const hasAsEndpoints =
     instance.asLoader &&
@@ -375,6 +396,7 @@ function buildEndpointRouter(
 
   const endpoints: WasmHttpEndpoint[] = JSON.parse(endpointsJson)
   debug(`Registering ${endpoints.length} HTTP endpoints for ${plugin.id}`)
+  const permissions: RoutePermission[] = []
 
   for (const endpoint of endpoints) {
     const { method, path: endpointPath, handler } = endpoint
@@ -387,7 +409,10 @@ function buildEndpointRouter(
     }
 
     debug(`Registering ${method} ${endpointPath} -> ${handler}`)
-    registerEndpointAccess(app, plugin.id, endpoint)
+    const permission = toRoutePermission(endpoint)
+    if (permission) {
+      permissions.push(permission)
+    }
 
     router[routeMethod](endpointPath, async (req: Request, res: Response) => {
       // Set a timeout to catch hangs (declare outside try so catch can access it)
@@ -574,7 +599,7 @@ function buildEndpointRouter(
   }
 
   debug(`Added plugin-specific routes for ${plugin.id}`)
-  return router
+  return { router, permissions }
 }
 
 /**
@@ -688,12 +713,12 @@ export function setupWasmPluginRoutes(
 
           let pluginName: string
           let schema: object
-          let endpointRouter: IRouter | undefined
+          let endpointRoutes: EndpointRoutes | undefined
           try {
             pluginName = instance.exports.name()
             const schemaJson = instance.exports.schema()
             schema = schemaJson ? JSON.parse(schemaJson) : {}
-            endpointRouter = buildEndpointRouter(app, plugin, instance)
+            endpointRoutes = buildEndpointRoutes(plugin, instance)
           } catch (error) {
             // loadPlugin already pointed the live providers at the
             // replacement, so hand them back to the instance still in use
@@ -721,7 +746,7 @@ export function setupWasmPluginRoutes(
 
           plugin.name = pluginName
           plugin.schema = schema
-          plugin.endpointRouter = endpointRouter
+          installEndpointRoutes(app, plugin, endpointRoutes)
 
           debug(`Successfully loaded WASM binary for ${plugin.id}`)
 
@@ -774,8 +799,11 @@ export function setupWasmPluginRoutes(
   plugin.router = router
 
   // Delegate per request, so endpoints follow the currently loaded binary
+  // A disabled plugin keeps its instance, but must not answer requests
   router.use((req, res, next) =>
-    plugin.endpointRouter ? plugin.endpointRouter(req, res, next) : next()
+    plugin.enabled && plugin.endpointRouter
+      ? plugin.endpointRouter(req, res, next)
+      : next()
   )
   setupPluginSpecificRoutes(app, plugin)
 
