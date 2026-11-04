@@ -17,7 +17,6 @@
 
 import { spawn } from 'child_process'
 import fs from 'fs'
-import _ from 'lodash'
 import path from 'path'
 import semver, { SemVer } from 'semver'
 import { atomicWriteFileSync } from './atomicWrite'
@@ -221,22 +220,38 @@ const getModuleSortName = (x: ModuleData) =>
 const priorityPrefix = (a: ModuleData, b: ModuleData) =>
   getModuleSortName(a).localeCompare(getModuleSortName(b))
 
-/**
- * Searches for installed modules that contain `keyword`. The config dir is
- * searched first, so a copy installed there by the App Store takes
- * precedence over the one the server bundles.
- */
+function newerModule(a: ModuleData, b: ModuleData) {
+  const versionA = (a.metadata as Package).version
+  const versionB = (b.metadata as Package).version
+  if (semver.valid(versionA) && semver.valid(versionB)) {
+    return semver.gt(versionB, versionA) ? b : a
+  }
+  return a
+}
+
+// Searches for installed modules that contain `keyword`.
+// A module can be installed both in the config directory (by the appstore)
+// and in the app directory or next to it (shipped with the server). Use the newest
+// version; when the versions are the same or can't be compared, the copy
+// in the config directory wins, as it comes first.
 export function modulesWithKeyword(config: Config, keyword: string) {
-  return _.uniqBy(
-    // _.flatten since values are inside an array. [[modules...], [modules...]]
-    _.flatten([
-      ...getModulePaths(config).map((pathOption) =>
-        findModulesInDir(pathOption, keyword)
-      ),
-      findBundledModulesNextToApp(config.appPath, keyword)
-    ]),
-    (moduleData) => moduleData.module
-  ).sort(priorityPrefix)
+  const modules = new Map<string, ModuleData>()
+  const found = [
+    ...getModulePaths(config).map((pathOption) =>
+      findModulesInDir(pathOption, keyword)
+    ),
+    findBundledModulesNextToApp(config.appPath, keyword)
+  ]
+  found.forEach((moduleList) => {
+    moduleList.forEach((moduleData) => {
+      const other = modules.get(moduleData.module)
+      modules.set(
+        moduleData.module,
+        other ? newerModule(other, moduleData) : moduleData
+      )
+    })
+  })
+  return Array.from(modules.values()).sort(priorityPrefix)
 }
 function installModule(
   config: Config,
@@ -703,6 +718,14 @@ async function fetchDistTagsForPackages(
   return result
 }
 
+/**
+ * The dist-tags of the last completed fetchDistTagsForPackages sweep,
+ * without waiting for a new one.
+ */
+function cachedDistTags(): Record<string, NpmDistTags> {
+  return distTagsCache.data
+}
+
 function doFetchDistTags() {
   return fetch(
     'https://registry.npmjs.org/-/package/signalk-server/dist-tags',
@@ -818,6 +841,7 @@ module.exports = {
   isTheServerModule,
   findModulesWithKeyword,
   fetchDistTagsForPackages,
+  cachedDistTags,
   getLatestServerVersion,
   checkForNewServerVersion,
   getAuthor,

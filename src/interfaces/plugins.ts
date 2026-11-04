@@ -1087,6 +1087,9 @@ module.exports = (theApp: any) => {
           command.excludeSelf,
           plugin.id
         )
+        // Plugin subscriptions get live deltas unfiltered and plugins read
+        // the whole model through getPath, so the cache bootstrap is
+        // filtered only for a subscription made on behalf of a user.
         app.subscriptionmanager.subscribe(
           command,
           unsubscribes,
@@ -1094,7 +1097,8 @@ module.exports = (theApp: any) => {
           safeCallback,
           user,
           command.sourcePolicy,
-          excludeSources
+          excludeSources,
+          !user
         )
       },
       unsubscribe: (msg: UnsubscribeMessage, unsubscribes: Unsubscribes) => {
