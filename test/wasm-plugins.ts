@@ -38,7 +38,11 @@ import {
   sendWasmHttpResponse,
   setupPluginSpecificRoutes
 } from '../src/wasm/loader/plugin-routes'
-import type { SecurityStrategy, WithSecurityStrategy } from '../src/security'
+import type {
+  PluginRoutePermission,
+  SecurityStrategy,
+  WithSecurityStrategy
+} from '../src/security'
 import { tcpSocketManager } from '../src/wasm/bindings/socket-manager'
 import { stopWasmPlugin } from '../src/wasm/loader/plugin-lifecycle'
 import { wasmPlugins } from '../src/wasm/loader/plugin-registry'
@@ -854,6 +858,12 @@ export function plugin_stop(): i32 {
   })
 
   describe('Endpoint access levels', () => {
+    // The example plugin's endpoints as the loader records them
+    const EXAMPLE_PERMISSIONS: PluginRoutePermission[] = [
+      { method: 'GET', path: '/api/info', permission: 'readonly' },
+      { method: 'GET', path: '/api/about', permission: 'readwrite' },
+      { method: 'GET', path: '/api/status', permission: 'admin' }
+    ]
     let server: ServerInstance | null = null
     let url: string
     let readToken: string
@@ -953,12 +963,39 @@ export function plugin_stop(): i32 {
           200
         )
       } finally {
-        strategy.replacePluginRoutePermissions!(examplePluginId, [
-          { method: 'GET', path: '/api/info', permission: 'readonly' },
-          { method: 'GET', path: '/api/about', permission: 'readwrite' }
-        ])
+        strategy.replacePluginRoutePermissions!(
+          examplePluginId,
+          EXAMPLE_PERMISSIONS
+        )
       }
       expect((await getEndpoint('/api/info', readToken)).status).to.equal(200)
+    })
+
+    it('an admin-only endpoint stays admin-only before a readonly pattern', async function () {
+      const strategy = (
+        server!.app as unknown as { securityStrategy: SecurityStrategy }
+      ).securityStrategy
+      strategy.replacePluginRoutePermissions!(examplePluginId, [
+        { method: 'GET', path: '/api/status', permission: 'admin' },
+        { method: 'GET', path: '/api/:name', permission: 'readonly' }
+      ])
+      try {
+        expect((await getEndpoint('/api/status', readToken)).status).to.equal(
+          401
+        )
+        expect((await getEndpoint('/api/status', writeToken)).status).to.equal(
+          401
+        )
+        expect((await getEndpoint('/api/info', readToken)).status).to.equal(200)
+        expect((await getEndpoint('/api/status', adminToken)).status).to.equal(
+          200
+        )
+      } finally {
+        strategy.replacePluginRoutePermissions!(
+          examplePluginId,
+          EXAMPLE_PERMISSIONS
+        )
+      }
     })
 
     it('a disabled plugin no longer serves its endpoints', async function () {
