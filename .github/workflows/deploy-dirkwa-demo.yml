@@ -1,0 +1,53 @@
+name: Deploy the showcase to Dirk's Fly app
+
+# Runs on Dirk's fork only: builds the showcase assets on the runner and
+# deploys fly_io/latest_signalk_org to his own Fly organisation.
+on:
+  push:
+    branches:
+      - dirk-demo-deploy
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dirkwa-demo
+  cancel-in-progress: true
+
+env:
+  FLY_ORG: victron-energy
+  FLY_APP: signalk-showcase
+  SK_VERSION: v2.36.0
+
+jobs:
+  deploy:
+    if: github.repository == 'dirkwa/signalk-server'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Create the Fly app if it is missing
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if ! flyctl status -a "$FLY_APP" > /dev/null 2>&1; then
+            flyctl apps create "$FLY_APP" --org "$FLY_ORG"
+          fi
+      - name: Build the demo plugin, charts and tidal data
+        working-directory: ./fly_io/latest_signalk_org
+        run: node build-assets.ts "$SK_VERSION"
+      - name: Deploy
+        working-directory: ./fly_io/latest_signalk_org
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only -a "$FLY_APP" --build-arg SK_VERSION="$SK_VERSION" --ha=false
