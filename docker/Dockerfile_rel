@@ -69,6 +69,10 @@ RUN npm_install() { \
        && dbus_next_spec=$(node -p "require('signalk-server/package.json').optionalDependencies['@jellybrick/dbus-next']") \
        && npm_install $npm_flags "@signalk/server-admin-ui@$adminui_spec" "serialport@$serialport_spec" "@naugehyde/node-ble@$node_ble_spec" "@jellybrick/dbus-next@$dbus_next_spec"; \
      fi \
+  && if [ ! -f node_modules/@signalk/server-admin-ui/public/index.html ]; then \
+       echo "@signalk/server-admin-ui missing — npm skips an optional dependency it cannot resolve, e.g. a version not yet visible on the registry" >&2; \
+       exit 1; \
+     fi \
   && can_socket=$(find node_modules -path '*/@canboat/canboatjs/build/Release/canSocket.node' -print -quit) \
   && if [ -z "$can_socket" ]; then \
        echo "canSocket.node missing — canboatjs install script did not build the native CAN addon (npm allow-scripts gate skipped it, or node-gyp rebuild failed)" >&2; \
