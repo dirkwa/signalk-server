@@ -95,6 +95,12 @@ The server automatically detects which container runtime is being used (Docker, 
 
 Supported runtimes: `docker`, `podman`, `kubernetes`, `containerd`, `crio`, `lxc`
 
+## GPIO
+
+The images include libgpiod's command line tools (`gpioset`, `gpioget`, `gpioinfo`, `gpiodetect`, `gpiomon`), so a plugin can switch a relay or a buzzer on a Raspberry Pi GPIO pin without a native module. They work through the kernel's GPIO character devices (`/dev/gpiochip*`), which is the only GPIO interface that works on a Raspberry Pi 5: the sysfs GPIO interface and `/dev/gpiomem`-based libraries do not support its RP1 chip. The base images do not all carry the same libgpiod major version, and `gpioset` takes different arguments across major versions, so a plugin should check `gpioset --version` before calling it.
+
+The container needs the GPIO chip passed in as a device, and membership of the host group that owns it (`gpio` on Raspberry Pi OS). `gpioinfo` on the host lists the chips and their lines.
+
 ## Release images
 
 Release images `docker/Dockerfile_rel` are size optimized and there are only mandatory files in the images. During the release process updated npm packages in the server repo are built and published to npmjs. Release docker image is then built from the published npm packages like Signal K server is installed normally from npmjs.
@@ -119,7 +125,7 @@ The core image omits these packages — all declared in `package.json` `optional
 - Webapps: `@signalk/freeboard-sk`, `@signalk/instrumentpanel`, `@mxtommy/kip`, `@signalk/app-dock`
 - Plugins and bridges: `@signalk/set-system-time`, `@signalk/signalk-to-nmea0183`, `@signalk/udp-nmea-plugin`, `signalk-n2kais-to-nmea0183`, `signalk-to-nmea2000`
 
-What the core image ships: the Signal K server, the admin UI (`@signalk/server-admin-ui`) and its app store, serial-port support (`serialport`), local Bluetooth support (`@naugehyde/node-ble`, `@jellybrick/dbus-next`), `@signalk/server-api`, `@signalk/streams`, `@signalk/signalk-schema`, `@signalk/course-provider`, `@signalk/resources-provider`, and the NMEA0183 / NMEA2000 parser libraries (`@signalk/nmea0183-signalk`, `@signalk/n2k-signalk`).
+What the core image ships: the Signal K server, the admin UI (`@signalk/server-admin-ui`) and its app store, serial-port support (`serialport`), local Bluetooth support (`@naugehyde/node-ble`, `@jellybrick/dbus-next`), `@signalk/server-api`, `@signalk/streams`, `@signalk/signalk-schema`, `@signalk/resources-provider`, `@signalk/course-provider`, and the NMEA0183 / NMEA2000 parser libraries (`@signalk/nmea0183-signalk`, `@signalk/n2k-signalk`).
 
 The admin UI, `serialport`, and the Bluetooth packages are themselves declared `optionalDependencies`, so `--omit=optional` strips them too — but the core image **reinstates** them, because they cannot be added back at the config-directory layer: the server serves the admin UI from a fixed path inside its own install and it `require`s `serialport`, `node-ble`, and `dbus-next` directly. (`serialport` stays optional rather than a hard dependency so direct npm installs degrade gracefully on unsupported platforms.)
 
