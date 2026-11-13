@@ -520,6 +520,32 @@ describe('device and AIS paths the NMEA parsers write', () => {
     expect(units(self('propulsion.port.trip.fuelUsed'))).to.equal('m3')
   })
 
+  it('gives AC buses and generators averages and totals over the phases', () => {
+    expect(
+      units(self('electrical.generators.16.average.lineLineVoltage'))
+    ).to.equal('V')
+    expect(units(self('electrical.ac.24.average.frequency'))).to.equal('Hz')
+    expect(units(self('electrical.ac.24.average.current'))).to.equal('A')
+    expect(units(self('electrical.generators.main.total.realPower'))).to.equal(
+      'W'
+    )
+    expect(units(self('electrical.ac.24.total.reactivePower'))).to.equal('VAR')
+    expect(units(self('electrical.ac.24.total.energyExport'))).to.equal('J')
+    expect(units(self('electrical.ac.24.total.powerFactor'))).to.equal('ratio')
+    expect(units(self('electrical.ac.24.phase.A.powerFactor'))).to.equal(
+      'ratio'
+    )
+    expect(units(self('electrical.inverters.0.ac.powerFactor'))).to.equal(
+      'ratio'
+    )
+    expect(
+      getMetadata(self('electrical.generators.1.total.powerFactorLagging'))
+        ?.enum
+    ).to.include('lagging')
+    expect(getMetadata(self('electrical.inverters.0.ac.total.realPower'))).to.be
+      .undefined
+  })
+
   it('gives the input fields to AC buses and the waveform to inverters', () => {
     expect(
       units(self('electrical.inverters.0.ac.phase.C.breaker.ratedCurrent'))
@@ -545,6 +571,16 @@ describe('device and AIS paths the NMEA parsers write', () => {
   it('lists both the NMEA 2000 and the older charging modes', () => {
     const modes = getMetadata(self('electrical.chargers.1.chargingMode'))?.enum
     expect(modes).to.include.members(['absorption', 'acceptance', 'no float'])
+  })
+
+  it('gives alternators and solar controllers the charger modes', () => {
+    const modes = getMetadata(self('electrical.chargers.1.chargingMode'))?.enum
+    for (const path of [
+      'electrical.alternators.1.chargingMode',
+      'electrical.solar.1.chargingMode'
+    ]) {
+      expect(getMetadata(self(path))?.enum, path).to.deep.equal(modes)
+    }
   })
 
   it('tells satellites used from satellites in view', () => {
