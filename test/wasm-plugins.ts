@@ -806,23 +806,27 @@ export function plugin_stop(): i32 {
         { method: 'POST', path: '/:name', permission: 'readonly' }
       ])
       try {
-        for (const prefix of ['', '/skServer']) {
-          const save = await fetch(
-            `${url}${prefix}/plugins/${examplePluginId}/config`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${readToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ enabled: false, configuration: {} })
-            }
-          )
+        const configPaths = [
+          `/plugins/${examplePluginId}/config`,
+          `/plugins/${examplePluginId}/CONFIG`,
+          `/plugins/${examplePluginId.toUpperCase()}/Config`
+        ]
+        for (const configPath of configPaths.flatMap((p) => [
+          p,
+          `/skServer${p}`
+        ])) {
+          const save = await fetch(`${url}${configPath}`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${readToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ enabled: false, configuration: {} })
+          })
           expect(save.status).to.equal(401)
-          const read = await fetch(
-            `${url}${prefix}/plugins/${examplePluginId}/config`,
-            { headers: { Authorization: `Bearer ${readToken}` } }
-          )
+          const read = await fetch(`${url}${configPath}`, {
+            headers: { Authorization: `Bearer ${readToken}` }
+          })
           expect(read.status).to.equal(401)
         }
       } finally {
