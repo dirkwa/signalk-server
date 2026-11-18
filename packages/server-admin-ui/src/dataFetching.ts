@@ -3,6 +3,7 @@ import {
   GNSS_API_PATH,
   sanitizeGnssConfig
 } from './store/slices/gnssPositionSlice'
+import type { AppStoreState, LoginStatus } from './store/types'
 
 declare global {
   interface Window {
@@ -12,13 +13,15 @@ declare global {
 
 const LOGIN_URL = '/signalk/v1/auth/login'
 
-// A 401 from any authenticated REST call means the server no longer
-// recognises our cookie — typically after a reinstall regenerates
-// `secretKey`. Flip the store into `notLoggedIn` so ProtectedRoute
-// auto-renders <Login />. Skipped for the login endpoint itself so
-// a bad-password attempt propagates as a normal 401 to loginAction.
-// Other LoginStatus fields (authenticationRequired, oidc*, etc.) are
-// server settings, not credential state — preserve them.
+// The server answers 401 both when our cookie is no longer valid
+// (typically after a reinstall regenerates `secretKey`) and when a
+// logged-in user lacks the permission an endpoint needs, such as a
+// readonly user on an admin-only route. Only the first is a logout, so
+// a 401 makes us ask /loginStatus, which never rejects a session, and
+// adopt its answer if it says we are no longer logged in; ProtectedRoute
+// then renders <Login />. Concurrent 401s share one check. Skipped for
+// the login endpoint itself so a bad-password attempt propagates as a
+// normal 401 to loginAction.
 export const authFetch = async (
   url: string,
   options?: RequestInit
@@ -28,18 +31,44 @@ export const authFetch = async (
     credentials: 'include'
   })
 
-  if (response.status === 401 && !isLoginUrl(url)) {
-    const { loginStatus, setLoginStatus } = useStore.getState()
-    if (loginStatus.status === 'loggedIn') {
-      setLoginStatus({
-        ...loginStatus,
-        status: 'notLoggedIn',
-        username: undefined
-      })
-    }
+  if (
+    response.status === 401 &&
+    !isLoginUrl(url) &&
+    useStore.getState().loginStatus.status === 'loggedIn'
+  ) {
+    await verifySession()
   }
 
   return response
+}
+
+let sessionCheck: Promise<void> | undefined
+
+function verifySession(): Promise<void> {
+  sessionCheck ??= checkSession().finally(() => {
+    sessionCheck = undefined
+  })
+  return sessionCheck
+}
+
+async function checkSession(): Promise<void> {
+  const checkedStatus = useStore.getState().loginStatus
+  try {
+    const response = await fetch(`${window.serverRoutesPrefix}/loginStatus`, {
+      credentials: 'include'
+    })
+    if (response.status !== 200) {
+      return
+    }
+    const data: LoginStatus = await response.json()
+    // A login or logout during the check is newer than its answer.
+    const { loginStatus, setLoginStatus } = useStore.getState()
+    if (data.status !== 'loggedIn' && loginStatus === checkedStatus) {
+      setLoginStatus(data)
+    }
+  } catch (error) {
+    console.error('Failed to verify session after 401:', error)
+  }
 }
 
 function isLoginUrl(url: string): boolean {
@@ -62,13 +91,17 @@ export async function fetchLoginStatus(): Promise<void> {
 // seconds later. Re-fetching when the user lands on /apps/store
 // surfaces those hydrated icons without needing a full page reload.
 export async function fetchAppStore(): Promise<void> {
+  // An answer for a session that logged in or out meanwhile carries the
+  // wrong install state.
+  const askedAs = useStore.getState().loginStatus
   try {
     const response = await authFetch(
       `${window.serverRoutesPrefix}/appstore/available`
     )
     if (response.status === 200) {
       const data = await response.json()
-      useStore.getState().setAppStore(data)
+      const { loginStatus, setAppStore } = useStore.getState()
+      if (loginStatus === askedAs) setAppStore(data)
     }
   } catch (error) {
     console.error('Failed to fetch /appstore/available:', error)
@@ -78,7 +111,7 @@ export async function fetchAppStore(): Promise<void> {
 export async function fetchAllData(): Promise<void> {
   const fetchAndSet = async <T>(
     endpoint: string,
-    setter: (data: T) => void,
+    setter: (data: T) => void | Promise<void>,
     prefix?: string
   ) => {
     try {
@@ -87,7 +120,7 @@ export async function fetchAllData(): Promise<void> {
       )
       if (response.status === 200) {
         const data = await response.json()
-        setter(data)
+        await setter(data)
       }
     } catch (error) {
       console.error(`Failed to fetch ${endpoint}:`, error)
@@ -96,12 +129,18 @@ export async function fetchAllData(): Promise<void> {
 
   const state = useStore.getState()
 
+  // The store list is applied for the role the server answered it for,
+  // so the matching login status has to be in place first.
+  const loginStatusSet = fetchAndSet('/loginStatus', state.setLoginStatus)
   await Promise.all([
     fetchAndSet('/plugins', state.setPlugins),
     fetchAndSet('/webapps', state.setWebapps),
     fetchAndSet('/addons', state.setAddons),
-    fetchAndSet('/appstore/available', state.setAppStore),
-    fetchAndSet('/loginStatus', state.setLoginStatus),
+    fetchAndSet('/appstore/available', async (data: AppStoreState) => {
+      await loginStatusSet
+      state.setAppStore(data)
+    }),
+    loginStatusSet,
     fetchAndSet('/signalk', state.setServerSpecification, ''),
     fetchAndSet('/security/access/requests', state.setAccessRequests),
     fetchAndSet('/security/devices', state.setDevices),

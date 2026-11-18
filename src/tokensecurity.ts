@@ -32,6 +32,8 @@ import ms, { StringValue } from 'ms'
 import cookieParser from 'cookie-parser'
 import { createHash, randomBytes } from 'crypto'
 
+const APPSTORE_BROWSE_PATHS = /^\/(available|plugin|icon)(\/|$)/
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pathToRegexp: (path: string) => RegExp = require('path-to-regexp')
 import { createDebug } from './debug'
@@ -286,6 +288,16 @@ function tokenSecurityFactory(
       })
     }
     return entries
+  }
+
+  // Express routing and pathToRegexp are case-insensitive, so this must be too
+  function isReservedPluginPath(pluginId: string, requestPath: string) {
+    const prefix = `/plugins/${pluginId}`.toLowerCase()
+    const path = requestPath.toLowerCase()
+    return (
+      path.startsWith(prefix) &&
+      RESERVED_PLUGIN_PATHS.includes(path.slice(prefix.length) || '/')
+    )
   }
 
   strategy.registerPluginRoutePermissions = function (
@@ -689,7 +701,9 @@ function tokenSecurityFactory(
         (entry) => entry.method === req.method && entry.regex.test(requestPath)
       )
 
-      if (match) {
+      // A declared pattern such as /:name also matches the server's own
+      // routes for the plugin, which stay admin-only.
+      if (match && !isReservedPluginPath(match.pluginId, requestPath)) {
         if (match.permission === 'readonly') {
           const skReq = req as SKRequest
           if (skReq.skIsAuthenticated) {
@@ -860,16 +874,28 @@ function tokenSecurityFactory(
     ;[
       '/restart',
       '/runDiscovery',
-      '/appstore',
       '/security',
       '/settings',
       '/backup',
       '/restore',
       '/providers',
-      '/vessel',
       '/serialports'
     ].forEach((p) =>
       app.use(`${SERVERROUTESPREFIX}${p}`, adminAuthenticationMiddleware(false))
+    )
+
+    // Browsing the store is open to read-only users; every other appstore
+    // route, including any added later, stays with the admin.
+    const appstoreAdmin = adminAuthenticationMiddleware(false)
+    app.use(
+      `${SERVERROUTESPREFIX}/appstore`,
+      (req: Request, res: Response, next: NextFunction) => {
+        if (req.method === 'GET' && APPSTORE_BROWSE_PATHS.test(req.path)) {
+          next()
+        } else {
+          appstoreAdmin(req, res, next)
+        }
+      }
     )
 
     app.use('/plugins', http_authorize(false))

@@ -327,7 +327,12 @@ export default function Full() {
                 />
                 <Route
                   path="/data/preferences"
-                  element={<ProtectedRoute component={PreferencesPage} />}
+                  element={
+                    <ProtectedRoute
+                      component={PreferencesPage}
+                      supportsReadOnly
+                    />
+                  }
                 />
                 <Route
                   path="/data/fiddler"
@@ -356,11 +361,13 @@ export default function Full() {
                 />
                 <Route
                   path="/apps/store/plugin/:name"
-                  element={<ProtectedRoute component={DetailView} />}
+                  element={
+                    <ProtectedRoute component={DetailView} supportsReadOnly />
+                  }
                 />
                 <Route
                   path="/apps/store/*"
-                  element={<ProtectedRoute component={Apps} />}
+                  element={<ProtectedRoute component={Apps} supportsReadOnly />}
                 />
                 <Route
                   path="/apps/configuration/:pluginid"
@@ -405,7 +412,9 @@ export default function Full() {
                 />
                 <Route
                   path="/data/blemanager"
-                  element={<ProtectedRoute component={BLEManager} />}
+                  element={
+                    <ProtectedRoute component={BLEManager} supportsReadOnly />
+                  }
                 />
                 <Route
                   path="/security/settings"

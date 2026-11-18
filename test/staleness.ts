@@ -1,6 +1,13 @@
-import { Delta, PathValue, Timestamp, Update } from '@signalk/server-api'
+import {
+  Delta,
+  NormalizedDelta,
+  PathValue,
+  Timestamp,
+  Update
+} from '@signalk/server-api'
 import { expect } from 'chai'
 
+import DeltaCache from '../src/deltacache'
 import { STALENESS_PLUGIN_ID, StalenessEnforcer } from '../src/staleness'
 
 interface CapturedMessage {
@@ -235,6 +242,38 @@ describe('StalenessEnforcer', () => {
     expect(app.captured).to.have.lengthOf(0)
   })
 
+  it('skips resources.* paths: a resource delta announces a change, not a reading', () => {
+    const app = makeMockApp({ defaultTimeout: 60 })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'resources.charts.nautical-charts',
+      'charts-provider',
+      isoSecondsAgo(3600),
+      { name: 'Nautical Charts', type: 'tilelayer', bounds: [18, 59, 31, 66] }
+    )
+    const enforcer = makeEnforcer(app)
+    runTick(enforcer)
+    expect(app.captured).to.have.lengthOf(0)
+  })
+
+  it('skips an event-subtree path that has no registry entry', () => {
+    // navigation.home ships no metadata, so the contract can only come from
+    // the subtree declaration.
+    const app = makeMockApp({ defaultTimeout: 60 })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.home.position',
+      'plugin.home',
+      isoSecondsAgo(3600),
+      { latitude: 1, longitude: 2 }
+    )
+    const enforcer = makeEnforcer(app)
+    runTick(enforcer)
+    expect(app.captured).to.have.lengthOf(0)
+  })
+
   it('skips paths classified updateContract=event via per-path meta', () => {
     const app = makeMockApp({
       defaultTimeout: 60,
@@ -253,6 +292,28 @@ describe('StalenessEnforcer', () => {
     const enforcer = makeEnforcer(app)
     runTick(enforcer)
     expect(app.captured).to.have.lengthOf(0)
+  })
+
+  it('times out a periodic path whose meta holds an unknown contract', () => {
+    const app = makeMockApp({
+      defaultTimeout: 60,
+      metaByPath: {
+        'environment.depth.belowKeel': {
+          updateContract: 'manual' as unknown as 'event'
+        }
+      }
+    })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'environment.depth.belowKeel',
+      'depth.1',
+      isoSecondsAgo(3600),
+      4.2
+    )
+    const enforcer = makeEnforcer(app)
+    runTick(enforcer)
+    expect(app.captured).to.have.lengthOf(1)
   })
 
   it('honours an explicit numeric meta.timeout per path', () => {
@@ -442,7 +503,7 @@ describe('StalenessEnforcer', () => {
     })
   })
 
-  it('skips string-valued leaves (identity fields collide with FullSignalK)', () => {
+  it('skips the uuid identity path, which FullSignalK cannot represent', () => {
     const app = makeMockApp({ defaultTimeout: 60 })
     seedLeaf(
       app,
@@ -457,7 +518,7 @@ describe('StalenessEnforcer', () => {
     expect(app.captured).to.have.lengthOf(0)
   })
 
-  it('skips boolean-valued leaves (state flags, not measurements)', () => {
+  it('times out a boolean-valued leaf', () => {
     const app = makeMockApp({ defaultTimeout: 60 })
     seedLeaf(
       app,
@@ -469,7 +530,9 @@ describe('StalenessEnforcer', () => {
     )
     const enforcer = makeEnforcer(app)
     runTick(enforcer)
-    expect(app.captured).to.have.lengthOf(0)
+    expect(app.captured).to.have.lengthOf(1)
+    expect(app.captured[0].value).to.equal(null)
+    expect(app.captured[0].state?.lastValue?.value).to.equal(true)
   })
 
   describe('meta.timeout: "auto"', () => {
@@ -589,6 +652,43 @@ describe('StalenessEnforcer', () => {
       expect(app.captured).to.have.lengthOf(1)
     })
 
+    it('derives a timeout when the global default is zero', () => {
+      const app = makeMockApp({
+        defaultTimeout: 0,
+        metaByPath: { 'environment.wind.speedTrue': { timeout: 'auto' } }
+      })
+      const enforcer = makeEnforcer(app)
+      seedLeaf(
+        app,
+        SELF_CONTEXT,
+        'environment.wind.speedTrue',
+        'wind.1',
+        new Date(virtualNow - 6_000).toISOString(),
+        2.5
+      )
+      runTick(enforcer)
+      expect(app.captured).to.have.lengthOf(0)
+
+      for (let i = 0; i < 11; i++) {
+        enforcer.onIncoming(
+          SELF_CONTEXT,
+          'environment.wind.speedTrue',
+          'wind.1'
+        )
+        advance(1000)
+      }
+      seedLeaf(
+        app,
+        SELF_CONTEXT,
+        'environment.wind.speedTrue',
+        'wind.1',
+        new Date(virtualNow - 6_000).toISOString(),
+        2.5
+      )
+      runTick(enforcer)
+      expect(app.captured).to.have.lengthOf(1)
+    })
+
     it('clamps the derived timeout to the 2..300s envelope', () => {
       const app = makeMockApp({
         defaultTimeout: 60,
@@ -647,5 +747,239 @@ describe('StalenessEnforcer', () => {
       runTick(enforcer)
       expect(app.captured).to.have.lengthOf(0)
     })
+  })
+
+  it('times out a string enum path such as navigation.gnss.methodQuality', () => {
+    const app = makeMockApp({ defaultTimeout: 60 })
+    const ts = isoSecondsAgo(120)
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.gnss.methodQuality',
+      'gps.1',
+      ts,
+      'GNSS Fix'
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.have.lengthOf(1)
+    const [msg] = app.captured
+    expect(msg.providerId).to.equal(STALENESS_PLUGIN_ID)
+    expect(msg.path).to.equal('navigation.gnss.methodQuality')
+    expect(msg.value).to.equal(null)
+    expect(msg.state?.timedOut).to.equal(true)
+    expect(msg.state?.lastValue?.value).to.equal('GNSS Fix')
+  })
+
+  it('honours a plugin-declared meta.timeout on a string path', () => {
+    // metaByPath models persisted baseDeltas meta, the only store the
+    // enforcer consults for a per-path timeout.
+    const app = makeMockApp({
+      defaultTimeout: 60,
+      metaByPath: { 'navigation.gnss.methodQuality': { timeout: 900 } }
+    })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.gnss.methodQuality',
+      'gps.1',
+      isoSecondsAgo(120),
+      'GNSS Fix'
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.be.empty
+  })
+
+  it('never times out the navigational state', () => {
+    // A declared state stands until the next declaration, however long its
+    // source stays silent.
+    const app = makeMockApp({ defaultTimeout: 60 })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.state',
+      'autostate',
+      isoSecondsAgo(3600),
+      'moored'
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.be.empty
+  })
+
+  it('times out the navigational state its source declares periodic', () => {
+    // A plugin that restates its state on a schedule can still have it expire
+    // once the plugin falls silent.
+    const app = makeMockApp({
+      defaultTimeout: 60,
+      metaByPath: {
+        'navigation.state': { updateContract: 'periodic', timeout: 900 }
+      }
+    })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.state',
+      'autostate',
+      isoSecondsAgo(1000),
+      'moored'
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.have.lengthOf(1)
+    expect(app.captured[0].path).to.equal('navigation.state')
+  })
+
+  it('still times out a path whose last segment is an identity name', () => {
+    // The exclusion is on the whole path, not a trailing segment: a nested
+    // `...url` is an ordinary leaf and must not inherit the exemption.
+    const app = makeMockApp({ defaultTimeout: 60 })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'network.services.signalk.url',
+      'srv.1',
+      isoSecondsAgo(120),
+      'http://example.com'
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.have.lengthOf(1)
+    expect(app.captured[0].path).to.equal('network.services.signalk.url')
+  })
+
+  it('never times out a path inheriting an event contract', () => {
+    // navigation.anchor is declared event-driven in the metadata registry and
+    // the position under it inherits that, so silence is not a failure.
+    const app = makeMockApp({ defaultTimeout: 60 })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.anchor.position',
+      'gps.1',
+      isoSecondsAgo(3600),
+      { latitude: 1, longitude: 2 }
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.be.empty
+  })
+
+  it('still times out a sibling path no subtree declares', () => {
+    const app = makeMockApp({ defaultTimeout: 60 })
+    seedLeaf(
+      app,
+      SELF_CONTEXT,
+      'navigation.speedOverGround',
+      'gps.1',
+      isoSecondsAgo(3600),
+      4.2
+    )
+    const enforcer = makeEnforcer(app)
+
+    runTick(enforcer)
+
+    expect(app.captured).to.have.lengthOf(1)
+    expect(app.captured[0].path).to.equal('navigation.speedOverGround')
+  })
+})
+
+describe('StalenessEnforcer fed by the delta cache', () => {
+  const PATH = 'navigation.speedOverGround'
+  const SOURCE = 'gps.backup'
+
+  // A source the priority engine filters out reaches the delta cache only
+  // through ingestDelta: the preferred stream that drives onValue never
+  // carries its values.
+  const makeCacheWithEnforcer = () => {
+    const app = makeMockApp({ defaultTimeout: 60 })
+    const cacheApp = {
+      selfContext: SELF_CONTEXT,
+      signalk: { sources: {}, sourceMeta: {} },
+      config: {},
+      on: () => undefined,
+      emit: () => undefined,
+      stalenessEnforcer: undefined as StalenessEnforcer | undefined
+    }
+    const streambundle = { keys: { onValue: () => undefined } }
+    type CacheCtor = new (app: unknown, streambundle: unknown) => DeltaCache
+    const NewCache = DeltaCache as unknown as CacheCtor
+    const deltaCache = new NewCache(cacheApp, streambundle)
+    app.deltaCache = deltaCache
+    const enforcer = makeEnforcer(app)
+    cacheApp.stalenessEnforcer = enforcer
+    return { app, deltaCache, enforcer }
+  }
+
+  const sourceDelta = (
+    timestamp: string,
+    value: number | null,
+    state?: PathValue['state']
+  ) => ({
+    context: SELF_CONTEXT,
+    updates: [
+      { $source: SOURCE, timestamp, values: [{ path: PATH, value, state }] }
+    ]
+  })
+
+  it('times out a filtered-out source again after it recovered', () => {
+    const { app, deltaCache, enforcer } = makeCacheWithEnforcer()
+
+    deltaCache.ingestDelta(sourceDelta(isoSecondsAgo(120), 5.5))
+    runTick(enforcer)
+    expect(app.captured).to.have.lengthOf(1)
+
+    deltaCache.ingestDelta(sourceDelta(isoSecondsAgo(0), 6.0))
+    seedLeaf(app, SELF_CONTEXT, PATH, SOURCE, isoSecondsAgo(120), 6.0)
+    runTick(enforcer)
+    expect(app.captured).to.have.lengthOf(2)
+  })
+
+  it('does not take its own timeout looping back as a recovery', () => {
+    const { app, deltaCache, enforcer } = makeCacheWithEnforcer()
+
+    deltaCache.ingestDelta(sourceDelta(isoSecondsAgo(120), 5.5))
+    runTick(enforcer)
+    deltaCache.ingestDelta(
+      sourceDelta(isoSecondsAgo(0), null, { timedOut: true })
+    )
+    seedLeaf(app, SELF_CONTEXT, PATH, SOURCE, isoSecondsAgo(120), 5.5)
+    runTick(enforcer)
+    expect(app.captured).to.have.lengthOf(1)
+  })
+
+  it('notifies the enforcer once for a value that reaches the preferred stream', () => {
+    const { deltaCache, enforcer } = makeCacheWithEnforcer()
+    let notifications = 0
+    const onIncoming = enforcer.onIncoming.bind(enforcer)
+    enforcer.onIncoming = (context, path, sourceRef) => {
+      notifications++
+      onIncoming(context, path, sourceRef)
+    }
+    const timestamp = isoSecondsAgo(0)
+
+    deltaCache.ingestDelta(sourceDelta(timestamp, 6.0))
+    deltaCache.onValue({
+      context: SELF_CONTEXT,
+      path: PATH,
+      $source: SOURCE,
+      timestamp,
+      value: 6.0,
+      isMeta: false
+    } as NormalizedDelta)
+    expect(notifications).to.equal(1)
   })
 })

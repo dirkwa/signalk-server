@@ -27,6 +27,7 @@ import { WithSecurityStrategy } from '../../security'
 import { Responses } from '..'
 import {
   buildKey,
+  checkLocation,
   NotificationManager,
   NotificationKey
 } from './notificationManager'
@@ -151,6 +152,16 @@ export class NotificationApi {
 
   /** Initialise API endpoints */
   private initNotificationRoutes() {
+    // Every write goes through the ACL, as in the other v2 APIs: a user
+    // allowed to write elsewhere must not raise or clear alarms for all.
+    this.app.use(NOTI_API_PATH, (req: Request, res: Response, next) => {
+      if (req.method === 'GET' || this.updateAllowed(req)) {
+        next()
+      } else {
+        res.status(403).json(Responses.unauthorised)
+      }
+    })
+
     // Return list of notifications
     this.app.get(`${NOTI_API_PATH}`, async (req: Request, res: Response) => {
       debug(`** ${req.method} ${req.path}`)
@@ -410,6 +421,15 @@ export class NotificationApi {
     return this.notificationManager
   }
 
+  private updateAllowed(request: Request): boolean {
+    return this.app.securityStrategy.shouldAllowPut(
+      request,
+      'vessels.self',
+      null,
+      'notifications'
+    )
+  }
+
   private rejectIfDisabled(res: Response): boolean {
     if (this.notificationManager) {
       return false
@@ -490,6 +510,7 @@ export class NotificationApi {
         'Notification `path` is required when core notification management is disabled.'
       )
     }
+    checkLocation(options.location)
     const id = uuid.v4() as NotificationId
     const basePath = String(options.path).startsWith('notifications.')
       ? String(options.path)
@@ -501,6 +522,9 @@ export class NotificationApi {
       message: options.message,
       method: [ALARM_METHOD.visual, ALARM_METHOD.sound],
       id
+    }
+    if (options.location?.trim()) {
+      value.location = options.location
     }
     if (options.includePosition || options.state === ALARM_STATE.emergency) {
       value.position =

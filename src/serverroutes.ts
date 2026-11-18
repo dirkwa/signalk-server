@@ -41,6 +41,7 @@ import util from 'util'
 import { mountSwaggerUi } from './api/swagger'
 import { serveStaticFiles } from './staticfiles'
 import {
+  BASE_DELTAS_SOURCE,
   ConfigApp,
   readDefaultsFile,
   sendBaseDeltas,
@@ -84,6 +85,7 @@ import {
 import { Type } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 import { HullTypeSchema, type HullType } from '@signalk/server-api/typebox'
+import { ManufacturerCodeValues } from '@canboat/ts-pgns'
 
 const readdir = util.promisify(fs.readdir)
 const debug = createDebug('signalk-server:serverroutes')
@@ -896,7 +898,11 @@ module.exports = function (
           app.config.settings.notifications?.manageNotifications ?? true
       },
       staleness: {
-        enforceDataTimeouts: app.config.settings.enforceDataTimeouts === true
+        enforceDataTimeouts: app.config.settings.enforceDataTimeouts === true,
+        // Sent as stored, so a settings page that echoes them back does not
+        // turn the server's defaults into saved values
+        useDefaultTimeouts: app.config.settings.useDefaultTimeouts,
+        defaultTimeout: app.config.settings.defaultTimeout
       }
     }
 
@@ -1515,7 +1521,14 @@ module.exports = function (
       }
     })
 
+    // Replaying the base deltas only sets the fields still there; a cleared
+    // one would keep its last value in the data model and the delta cache.
+    // The name is a plain field of the vessel there, not a source's leaf.
+    app.deltaCache.removeSource(BASE_DELTAS_SOURCE)
     sendBaseDeltas(app)
+    if (isUndefined(de.getSelfValue('name')) && app.signalk.self) {
+      delete app.signalk.self.name
+    }
 
     if (app.config.hasOldDefaults) {
       writeOldDefaults(req, res)
@@ -1823,6 +1836,19 @@ module.exports = function (
       listAllSerialPorts()
         .then((ports) => res.json(ports))
         .catch(next)
+    }
+  )
+
+  // The NMEA 2000 manufacturer names and codes, for a connection's
+  // manufacturer filter (canboat/canboatjs#588).
+  app.get(
+    `${SERVERROUTESPREFIX}/n2kManufacturers`,
+    (_req: Request, res: Response) => {
+      res.json(
+        Object.entries(ManufacturerCodeValues as Record<string, number>)
+          .map(([name, code]) => ({ name, code }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      )
     }
   )
 
@@ -2174,10 +2200,9 @@ module.exports = function (
 
   app.securityStrategy.addAdminWriteMiddleware(`${SERVERROUTESPREFIX}/debug`)
 
-  // Register middleware before the routes so every method picks up auth.
-  // Match the /priorities pattern: source topology is admin-only across
-  // the board. (GNSS antenna config has moved to the v2 sensors API.)
-  app.securityStrategy.addAdminMiddleware(
+  // The GNSS preferences page lists these for read-only users too; the
+  // same $source refs are already readable in the data model.
+  app.securityStrategy.addAdminWriteMiddleware(
     `${SERVERROUTESPREFIX}/positionSources`
   )
 

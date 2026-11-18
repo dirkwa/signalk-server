@@ -2,6 +2,7 @@ import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import Badge from 'react-bootstrap/Badge'
 import type { AppInfo } from '../../../store/types'
+import { useIsAdmin } from '../../../store'
 import ActionCellRenderer from '../Grid/cell-renderers/ActionCellRenderer'
 import { hasPendingInstall } from '../projectAppInfo'
 import PluginIcon from './PluginIcon'
@@ -34,6 +35,7 @@ const PluginRow: React.FC<PluginRowProps> = ({
   detailLinkBase = '/apps/store/plugin'
 }) => {
   const navigate = useNavigate()
+  const isAdmin = useIsAdmin()
   const isInstalled = !!app.installedVersion
   const showDeprecated = app.deprecated && isInstalled
   const handleAuthorClick = () => {
@@ -87,7 +89,11 @@ const PluginRow: React.FC<PluginRowProps> = ({
           </Badge>
         )}
         {showDeprecated && (
-          <Badge bg="danger" className="plugin-row__badge">
+          <Badge
+            bg="danger"
+            className="plugin-row__badge"
+            title={app.deprecationMessage}
+          >
             DEPRECATED
           </Badge>
         )}
@@ -113,7 +119,7 @@ const PluginRow: React.FC<PluginRowProps> = ({
         </div>
       </div>
       <div className="plugin-row__action-slot">
-        <ActionCellRenderer data={app} />
+        {isAdmin && <ActionCellRenderer data={app} />}
       </div>
     </div>
   )

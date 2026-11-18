@@ -7,7 +7,7 @@ import Card from 'react-bootstrap/Card'
 import Nav from 'react-bootstrap/Nav'
 import Spinner from 'react-bootstrap/Spinner'
 import Tab from 'react-bootstrap/Tab'
-import { useAppStore } from '../../../store'
+import { useAppStore, useIsAdmin } from '../../../store'
 import type { AppStoreState, AppInfo } from '../../../store/types'
 import ActionCellRenderer from '../Grid/cell-renderers/ActionCellRenderer'
 import PluginIcon from '../components/PluginIcon'
@@ -34,6 +34,7 @@ interface DetailPayload {
   installedScreenshotUrls?: string[]
   official: boolean
   deprecated: boolean
+  deprecationMessage?: string
   description?: string
   author?: string
   categories?: string[]
@@ -83,6 +84,7 @@ const DetailView: React.FC = () => {
   }, [appStore, decodedName])
 
   const isInstalled = !!listEntry?.installedVersion
+  const readOnly = !useIsAdmin()
 
   const installingByName = useMemo(() => {
     const map: Record<string, { isInstalling: boolean; isWaiting: boolean }> =
@@ -149,7 +151,9 @@ const DetailView: React.FC = () => {
     return () => {
       controller.abort()
     }
-  }, [decodedName])
+    // The detail holds install state only an admin may see, so a role
+    // change loads it again.
+  }, [decodedName, readOnly])
 
   if (!decodedName) {
     return (
@@ -425,36 +429,38 @@ const DetailView: React.FC = () => {
                     )
                   })()}
                 </div>
-                <div className="plugin-detail__header-actions d-flex flex-column align-items-stretch gap-2">
-                  {!isInstalled && missingRequired.length > 0 && (
-                    <Button
-                      variant="warning"
-                      onClick={handleInstallWithDeps}
-                      disabled={thisIsBusy}
-                      title={`Installs this plugin plus ${missingRequired.length} required dependencies`}
-                    >
-                      {thisIsBusy ? (
-                        <>
-                          <Spinner
-                            as="span"
-                            animation="border"
-                            size="sm"
-                            role="status"
-                            aria-hidden="true"
-                            className="me-2"
-                          />
-                          Installing…
-                        </>
-                      ) : (
-                        <>
-                          Install required plugins ({missingRequired.length + 1}
-                          )
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  <ActionCellRenderer data={actionApp} />
-                </div>
+                {!readOnly && (
+                  <div className="plugin-detail__header-actions d-flex flex-column align-items-stretch gap-2">
+                    {!isInstalled && missingRequired.length > 0 && (
+                      <Button
+                        variant="warning"
+                        onClick={handleInstallWithDeps}
+                        disabled={thisIsBusy}
+                        title={`Installs this plugin plus ${missingRequired.length} required dependencies`}
+                      >
+                        {thisIsBusy ? (
+                          <>
+                            <Spinner
+                              as="span"
+                              animation="border"
+                              size="sm"
+                              role="status"
+                              aria-hidden="true"
+                              className="me-2"
+                            />
+                            Installing…
+                          </>
+                        ) : (
+                          <>
+                            Install required plugins (
+                            {missingRequired.length + 1})
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    <ActionCellRenderer data={actionApp} />
+                  </div>
+                )}
               </div>
 
               <DependenciesSection
@@ -514,6 +520,13 @@ const DetailView: React.FC = () => {
             <Alert variant="danger" className="mt-4">
               <strong>This plugin is deprecated.</strong> The author no longer
               recommends it for new installations.
+              {detail.deprecationMessage && (
+                <>
+                  {' '}
+                  The author&apos;s note: &ldquo;{detail.deprecationMessage}
+                  &rdquo;
+                </>
+              )}
               {isInstalled && (
                 <>
                   {' '}

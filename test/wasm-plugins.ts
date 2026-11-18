@@ -50,6 +50,7 @@ import { WasmCapabilities, WasmPluginInstance } from '../src/wasm/types'
 import { WasmPlugin } from '../src/wasm/loader/types'
 import net, { AddressInfo } from 'net'
 import { createEnvImports } from '../src/wasm/bindings/env-imports'
+import { reloadWasmPlugin } from '../dist/wasm/loader'
 
 interface PluginInfo {
   id: string
@@ -820,6 +821,19 @@ export function plugin_stop(): i32 {
       expect((await metaOne.json()).supportsPut).to.equal(false)
     })
 
+    it('serves the endpoints of the binary a reload loads', async function () {
+      expect(await reload('two')).to.equal(200)
+      expect(await waitForStatus('build two')).to.equal('build two')
+
+      buildProbe('five')
+      await reloadWasmPlugin(server!.app, packageName)
+
+      const five = await getBuildEndpoint('five')
+      expect(five.status).to.equal(200)
+      expect(await five.text()).to.equal('five')
+      expect((await getBuildEndpoint('two')).status).to.equal(404)
+    })
+
     /** Rebuild the probe as `build`, then disable and enable it */
     async function reload(
       build: string,
@@ -996,6 +1010,48 @@ export function plugin_stop(): i32 {
           EXAMPLE_PERMISSIONS
         )
       }
+    })
+
+    it('a declared pattern does not open the plugin configuration routes', async function () {
+      const strategy = (
+        server!.app as unknown as { securityStrategy: SecurityStrategy }
+      ).securityStrategy
+      strategy.replacePluginRoutePermissions!(examplePluginId, [
+        { method: 'GET', path: '/:name', permission: 'readonly' },
+        { method: 'POST', path: '/:name', permission: 'readonly' }
+      ])
+      try {
+        for (const [prefix, configPath] of [
+          ['', 'config'],
+          ['/skServer', 'config'],
+          ['/skServer', 'CONFIG'],
+          ['/skServer', 'Config']
+        ]) {
+          const save = await fetch(
+            `${url}${prefix}/plugins/${examplePluginId}/${configPath}`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${readToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ enabled: false, configuration: {} })
+            }
+          )
+          expect(save.status).to.equal(401)
+          const read = await fetch(
+            `${url}${prefix}/plugins/${examplePluginId}/${configPath}`,
+            { headers: { Authorization: `Bearer ${readToken}` } }
+          )
+          expect(read.status).to.equal(401)
+        }
+      } finally {
+        strategy.replacePluginRoutePermissions!(
+          examplePluginId,
+          EXAMPLE_PERMISSIONS
+        )
+      }
+      expect((await getEndpoint('/api/info', readToken)).status).to.equal(200)
     })
 
     it('a disabled plugin no longer serves its endpoints', async function () {

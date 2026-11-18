@@ -32,6 +32,23 @@ let iconProbeLastRunAt = 0
 // reflects.
 let iconProbeGeneration = 0
 const ICON_PROBE_COOLDOWN_MS = 5 * 60 * 1000
+const INSTALL_STATE_FIELDS = [
+  'id',
+  'installedVersion',
+  'pendingVersion',
+  'isWaiting',
+  'isInstalling',
+  'isRemoving',
+  'isRemove',
+  'installFailed',
+  'updateDisabled',
+  'installedIconUrl',
+  'installedScreenshotUrls',
+  'installedOnly',
+  // Dist-tags are fetched only for installed packages, so a prerelease
+  // offer marks the package as installed.
+  'prereleaseVersion'
+]
 const _ = require('lodash')
 const semver = require('semver')
 const { gt } = semver
@@ -299,7 +316,7 @@ module.exports = function (app) {
             ([[plugins, webapps], serverVersion, distTagsMap, regIndex]) => {
               const result = getAllModuleInfo(
                 withPublishedVersions(plugins, distTagsMap),
-                webapps,
+                withPublishedVersions(webapps, distTagsMap),
                 serverVersion,
                 distTagsMap,
                 regIndex
@@ -320,12 +337,13 @@ module.exports = function (app) {
             }
             scheduleInstalledDetailRefresh()
             scheduleIconProbe(plugins, webapps)
-            res.json(result)
+            res.json(seesInstalled(req) ? result : catalogOnly(result))
           })
           .catch((error) => {
             console.log(error.message)
             debug.enabled && debug(error.stack)
-            res.json(buildOfflineResponse(app, cache))
+            const offline = buildOfflineResponse(app, cache)
+            res.json(seesInstalled(req) ? offline : catalogOnly(offline))
           })
       })
 
@@ -340,8 +358,12 @@ module.exports = function (app) {
             name = req.params.org + '/' + name
           }
 
+          const publicOnly = !seesInstalled(req)
           try {
-            const detail = await loadPluginDetail(name)
+            const detail =
+              publicOnly && (await isInstalledOnly(name))
+                ? null
+                : await loadPluginDetail(name)
             if (!detail) {
               res.status(404).json({
                 error: 'Plugin not found',
@@ -350,13 +372,25 @@ module.exports = function (app) {
               })
               return
             }
-            res.json(detail)
+            res.json(seesInstalled(req) ? detail : withoutInstallState(detail))
           } catch (err) {
             console.log(err.message)
             debug.enabled && debug(err.stack)
-            const cached = readDetailFromCache(cache, name)
+            // Offline nothing tells an installed-only package from a
+            // published one, so visitors get no detail of anything installed.
+            const cached =
+              publicOnly && (getPlugin(name) || getWebApp(name))
+                ? undefined
+                : readDetailFromCache(cache, name)
             if (cached) {
-              res.json({ ...cached, storeAvailable: false, fromCache: true })
+              const offline = {
+                ...cached,
+                storeAvailable: false,
+                fromCache: true
+              }
+              res.json(
+                seesInstalled(req) ? offline : withoutInstallState(offline)
+              )
               return
             }
             res.status(503).json({
@@ -501,18 +535,6 @@ module.exports = function (app) {
     // plugin's entry as fresh indefinitely, so without it a newly
     // published release would never reach the detail page.
     const cachedDetail = readDetailFromCache(cache, name)
-    // An entry cached while the README was unreachable is rebuilt once
-    // the installed copy can supply it, and so is an entry without
-    // isWasm, which the detail page needs for the WASM badge.
-    if (
-      cachedDetail &&
-      cachedDetail.version === pkg.version &&
-      typeof cachedDetail.isWasm === 'boolean' &&
-      !(isInstalled && !cachedDetail.readme && installedReadmeFor(pkg)?.trim())
-    ) {
-      return cachedDetail
-    }
-    let pkgForEnrichment = pkg
     // Always try the npm registry first — it has the signalk.* key for
     // the LATEST available version, which is what the detail page
     // represents (header version, Update button target, changelog entries).
@@ -526,12 +548,44 @@ module.exports = function (app) {
     } catch (err) {
       debug.enabled && debug('npm metadata fetch for %s failed: %O', name, err)
     }
+    // The detail page shows the deprecation notice of the version it
+    // offers, which can differ from the installed one the list entry
+    // carries.
+    const npmNotice = registryMeta
+      ? typeof registryMeta.deprecated === 'string'
+        ? registryMeta.deprecated.trim()
+        : ''
+      : undefined
+    // An entry cached while the README was unreachable is rebuilt once
+    // the installed copy can supply it, and so is an entry without
+    // isWasm, which the detail page needs for the WASM badge, and one
+    // whose npm deprecation notice is no longer the current one.
+    if (
+      cachedDetail &&
+      cachedDetail.version === pkg.version &&
+      typeof cachedDetail.isWasm === 'boolean' &&
+      !(
+        isInstalled &&
+        !cachedDetail.readme &&
+        installedReadmeFor(pkg)?.trim()
+      ) &&
+      (npmNotice === undefined ||
+        (cachedDetail.deprecationMessage ?? '') === npmNotice)
+    ) {
+      return cachedDetail
+    }
+    let pkgForEnrichment = registryMeta
+      ? { ...pkg, deprecated: registryMeta.deprecated }
+      : pkg
     if (registryMeta && registryMeta.signalk) {
-      pkgForEnrichment = { ...pkg, signalk: registryMeta.signalk }
+      pkgForEnrichment = { ...pkgForEnrichment, signalk: registryMeta.signalk }
     } else if (isInstalled) {
       const installedMeta = getInstalledPackageMetadata(name)
       if (installedMeta && installedMeta.signalk) {
-        pkgForEnrichment = { ...pkg, signalk: installedMeta.signalk }
+        pkgForEnrichment = {
+          ...pkgForEnrichment,
+          signalk: installedMeta.signalk
+        }
       }
     }
 
@@ -610,6 +664,7 @@ module.exports = function (app) {
           screenshots: ext.screenshots || [],
           official: ext.official,
           deprecated: ext.deprecated,
+          deprecationMessage: ext.deprecationMessage,
           description: pkg.description,
           author: getAuthor(pkg),
           categories: getCategories(pkgForEnrichment),
@@ -1035,33 +1090,82 @@ module.exports = function (app) {
       findModulesWithKeyword(NODE_PLUGIN_KEYWORD),
       findModulesWithKeyword('signalk-embeddable-webapp'),
       findModulesWithKeyword('signalk-webapp')
-    ]).then(([npmPlugins, embeddableWebapps, webapps]) => {
-      // An installed WASM plugin published without the Node plugin keyword
-      // is missing from the search, but must stay updatable and removable.
-      const listed = new Set(npmPlugins.map((p) => p.package.name))
-      const notInSearch = getInstalledAsPackageEntries(NODE_PLUGIN_KEYWORD)
-        .filter(
-          (p) =>
-            !listed.has(p.package.name) && isWasmPackage(p.package.keywords)
-        )
-        .map((p) => ({ ...p, installedVersion: p.package.version }))
-      // Discovery reads the dist-tags the store list last fetched instead of
-      // waiting for npm; the store list applies the ones it fetches itself.
-      const plugins = withPublishedVersions(
-        npmPlugins.concat(notInSearch),
-        cachedDistTags()
-      )
-      const allWebapps = []
+    ]).then(async ([npmPlugins, embeddableWebapps, webapps]) => {
+      const searchedWebapps = []
         .concat(embeddableWebapps)
         .concat(webapps)
         .filter((m) => !bundledAdminUIs.includes(m.package.name))
+      // An installed WASM plugin published without the Node plugin keyword
+      // is missing from the search, and so is every package whose current
+      // version npm marks deprecated. Both must stay visible, updatable and
+      // removable.
+      const publicWebapps = new Map(
+        [...embeddableWebapps, ...webapps].map((w) => [w.package.name, w])
+      )
+      const [pluginsNotInSearch, webappsNotInSearch] = await Promise.all([
+        installedNotInSearch(NODE_PLUGIN_KEYWORD, npmPlugins, publicWebapps),
+        installedNotInSearch('signalk-webapp', searchedWebapps)
+      ])
+      // Discovery reads the dist-tags the store list last fetched instead of
+      // waiting for npm; the store list applies the ones it fetches itself.
+      const distTags = cachedDistTags()
       return [
-        plugins,
-        _.uniqBy(allWebapps, (plugin) => {
-          return plugin.package.name
-        })
+        withPublishedVersions(npmPlugins.concat(pluginsNotInSearch), distTags),
+        withPublishedVersions(
+          _.uniqBy(searchedWebapps.concat(webappsNotInSearch), (webapp) => {
+            return webapp.package.name
+          }),
+          distTags
+        )
       ]
     })
+  }
+
+  // A WASM plugin npm lists as a webapp keeps that public entry; anything
+  // else comes from the local install only.
+  async function installedNotInSearch(keyword, searched, publicEntries) {
+    const listed = new Set(searched.map((p) => p.package.name))
+    const candidates = getInstalledAsPackageEntries(keyword).filter(
+      (p) =>
+        !listed.has(p.package.name) && !bundledAdminUIs.includes(p.package.name)
+    )
+    const entries = await Promise.all(
+      candidates.map(async (p) => {
+        const deprecated = await npmDeprecationOf(
+          p.package.name,
+          p.package.version
+        )
+        // A deprecated latest release hides the package from the search
+        // just as a deprecated installed version does.
+        if (
+          !deprecated &&
+          !isWasmPackage(p.package.keywords) &&
+          !(await npmDeprecationOf(p.package.name, 'latest'))
+        ) {
+          return undefined
+        }
+        const published = !deprecated && publicEntries?.get(p.package.name)
+        if (published) return published
+        return {
+          ...p,
+          package: deprecated ? { ...p.package, deprecated } : p.package,
+          installedVersion: p.package.version,
+          installedOnly: true
+        }
+      })
+    )
+    return entries.filter(Boolean)
+  }
+
+  async function npmDeprecationOf(name, version) {
+    if (!version) return undefined
+    try {
+      const meta = await npmMetadata.get(name, version)
+      return typeof meta?.deprecated === 'string' ? meta.deprecated : undefined
+    } catch (err) {
+      debug.enabled && debug('npm metadata for %s failed: %O', name, err)
+      return undefined
+    }
   }
 
   function getInstalledAsPackageEntries(keyword) {
@@ -1250,6 +1354,7 @@ module.exports = function (app) {
       const pluginInfo = {
         name: name,
         version: version,
+        installedOnly: plugin.installedOnly === true,
         description: plugin.package.description,
         author: getAuthor(plugin.package),
         categories: getCategories(plugin.package),
@@ -1277,6 +1382,7 @@ module.exports = function (app) {
             : undefined,
         official: ext.official,
         deprecated: ext.deprecated,
+        deprecationMessage: ext.deprecationMessage,
         githubUrl: ext.githubUrl,
         issuesUrl: ext.issuesUrl,
         requires: ext.requires,
@@ -1399,6 +1505,68 @@ module.exports = function (app) {
 
       return result
     })
+  }
+
+  // Which plugins run here, and at which version, tells an attacker
+  // which known flaws to try, so only the admin learns it.
+  function seesInstalled(req) {
+    return (
+      app.securityStrategy.isDummy() || app.securityStrategy.allowConfigure(req)
+    )
+  }
+
+  function withoutInstallState(entry) {
+    const catalogEntry = { ...entry }
+    for (const field of INSTALL_STATE_FIELDS) {
+      delete catalogEntry[field]
+    }
+    for (const deps of ['requires', 'recommends']) {
+      if (Array.isArray(catalogEntry[deps])) {
+        // The catalog lists names, the plugin detail dependency objects.
+        catalogEntry[deps] = catalogEntry[deps].map((dependency) => {
+          if (typeof dependency !== 'object' || dependency === null) {
+            return dependency
+          }
+          const { installed: _installed, ...reference } = dependency
+          return reference
+        })
+      }
+    }
+    return catalogEntry
+  }
+
+  // Without npm and without a cached list, the offline answer lists what is
+  // installed as available. A list cached before entries were marked cannot
+  // tell installed-only packages apart.
+  function listsOnlyInstalled(appStore) {
+    if (appStore.storeAvailable !== false) return false
+    return (
+      appStore.fromCache === false ||
+      appStore.available.some(
+        (entry) => typeof entry.installedOnly !== 'boolean'
+      )
+    )
+  }
+
+  async function isInstalledOnly(name) {
+    const [plugins] = await findPluginsAndWebapps()
+    return plugins.some((p) => p.package.name === name && p.installedOnly)
+  }
+
+  function catalogOnly(appStore) {
+    const available = listsOnlyInstalled(appStore)
+      ? []
+      : appStore.available.filter((entry) => !entry.installedOnly)
+    const catalog = {
+      ...appStore,
+      available: available.map(withoutInstallState),
+      installed: [],
+      updates: [],
+      installing: [],
+      canUpdateServer: false
+    }
+    delete catalog.serverUpdate
+    return catalog
   }
 
   function addIfNotDuplicate(theArray, moduleInfo) {
