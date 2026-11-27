@@ -25,6 +25,8 @@ import {
   DeltaInputHandler,
   FullSignalK,
   getSourceId,
+  hasForbiddenPathSegment,
+  hasUnsafeSourceKey,
   Path,
   PropertyValues,
   SKVersion,
@@ -66,6 +68,10 @@ import {
   WithSecurityStrategy
 } from './security.js'
 import { setupCors } from './cors'
+import {
+  createExposureObserver,
+  observeClientAddresses
+} from './exposureWarning'
 import SubscriptionManager from './subscriptionmanager'
 import { PluginId, PluginManager } from './interfaces/plugins'
 import { OpenApiDescription, OpenApiRecord } from './api/swagger'
@@ -140,6 +146,9 @@ class Server {
     const FILEUPLOADSIZELIMIT = process.env.FILEUPLOADSIZELIMIT || '10mb'
     const bodyParser = require('body-parser')
     const app = express() as any
+    // First, so that requests CORS or the body parsers end are noted too.
+    app.noteClientAddress = createExposureObserver(app)
+    app.use(observeClientAddresses(app.noteClientAddress))
     app.use(require('compression')())
     app.use(
       helmet({
@@ -520,12 +529,29 @@ class Server {
           data.context = ('vessels.' + app.selfId) as Context
         }
 
+        if (
+          typeof data.context === 'string' &&
+          hasForbiddenPathSegment(data.context)
+        ) {
+          console.warn(
+            `Discarding delta from ${providerId}: prototype key in context`
+          )
+          return
+        }
+
         const now = new Date()
         data.updates = data.updates
           .map((update: Partial<Update>) => {
             if (!isValidUpdate(update)) {
               console.warn(
                 `Discarding update from ${providerId}: invalid values entry (null or missing path)`
+              )
+              return undefined
+            }
+
+            if (hasPrototypeKey(update)) {
+              console.warn(
+                `Discarding update from ${providerId}: prototype key in source or path`
               )
               return undefined
             }
@@ -777,7 +803,9 @@ class Server {
         debug(`primary port:${primaryPort}`)
         server.listen(primaryPort, () => {
           console.log(
-            'signalk-server running at 0.0.0.0:' + primaryPort.toString() + '\n'
+            typeof primaryPort === 'number'
+              ? `signalk-server running at 0.0.0.0:${primaryPort}\n`
+              : `signalk-server running on systemd socket fd ${primaryPort.fd}\n`
           )
           app.started = true
           app.stalenessEnforcer?.start()
@@ -1090,7 +1118,7 @@ function createServer(app: any, cb: (err: any, server?: any) => void) {
 }
 
 function startRedirectToSsl(
-  port: number,
+  port: number | { fd: number },
   redirectPort: number,
   cb: (e: unknown, server: any, connections: ConnectionTracker) => void
 ) {
@@ -1102,7 +1130,11 @@ function startRedirectToSsl(
   const server = http.createServer(redirectApp)
   const connections = new ConnectionTracker(server)
   server.listen(port, () => {
-    console.log(`Redirect server running on port ${port.toString()}`)
+    console.log(
+      typeof port === 'number'
+        ? `Redirect server running on port ${port}`
+        : `Redirect server running on systemd socket fd ${port.fd}`
+    )
     cb(null, server, connections)
   })
 }
@@ -1233,4 +1265,31 @@ function isValidUpdate(update: unknown): update is Partial<Update> {
     return false
   }
   return true
+}
+
+// Sources and paths become object keys throughout the server, so one that
+// names a prototype member must not get past the boundary.
+function hasPrototypeKey(update: Partial<Update>): boolean {
+  if (hasUnsafeSourceKey(update)) {
+    return true
+  }
+  const { values, meta } = update as {
+    values?: Array<{ path: string }>
+    meta?: unknown
+  }
+  if (values) {
+    for (const v of values) {
+      if (hasForbiddenPathSegment(v.path)) {
+        return true
+      }
+    }
+  }
+  if (Array.isArray(meta)) {
+    for (const m of meta) {
+      if (typeof m?.path === 'string' && hasForbiddenPathSegment(m.path)) {
+        return true
+      }
+    }
+  }
+  return false
 }
